@@ -29,10 +29,13 @@ class EndOfSpeechDetector(private val config: Config = Config()) {
         val hangoverMs: Int = 700,
         val minSpeechMs: Int = 240,
         val maxUtteranceMs: Int = 30_000,
-        /** Absolute floor for the speech threshold (RMS of PCM16). */
-        val minRms: Double = 350.0,
-        /** Speech must be this many times louder than the tracked room noise. */
-        val noiseRatio: Double = 3.0,
+        /**
+         * Absolute floor for the speech threshold (RMS of PCM16, about -49 dBFS). The kit's mic is quiet: measured
+         * 2026-10-10, room floor about -45 dBFS and speech only about 10 dB above it, so these are low on purpose.
+         */
+        val minRms: Double = 120.0,
+        /** Speech must be this many times louder (6 dB) than the tracked room noise. Starting values, tune on kit clips. */
+        val noiseRatio: Double = 2.0,
         /** At the start the room is learned for this long (a fan that is already on is not speech). */
         val calibrationMs: Int = 300,
         /** A frame louder than this is speech, never room noise, even during calibration. */

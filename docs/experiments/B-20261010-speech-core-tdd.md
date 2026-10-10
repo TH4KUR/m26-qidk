@@ -23,11 +23,18 @@
 | `WavDecoder` | `testing` | rejects stereo, non-16 kHz, 8-bit/float, truncated and data-less files |
 
 ## Results (with denominators)
-- Clean `:core:test`: **489 tests, 0 failures, 0 errors, 1 skipped** (the skipped test is C's pre-registered holdout-three).
-- Mine: `speech` 59 + `signals` 14 + `testing` 36 = **109 tests**.
+- Clean `:core:test`: **490 tests (489 before the quiet-mic test), 0 failures, 0 errors, 1 skipped** (the skipped test is C's pre-registered holdout-three).
+- Mine: `speech` 60 + `signals` 14 + `testing` 36 = **110 tests**.
 - Red-first: for `EndOfSpeechDetector` (including the loud-fan bug found while reviewing a test that passed for the wrong reason), `VoiceCommandParser`, `SummaryText`, `AckTemplates`, `SignalSources`, `SpeechEngineContract`, `WhisperKitFeed`, `WavDecoder` and `TranscriptAgreement`, the tests were run and seen failing (unresolved reference, or an assertion for the loud fan) before the implementation.
 - **Exception, disclosed:** `HandsFreeLoopTest` was written before the implementation but first run after it. To recover the evidence I mutated the implementation three ways and confirmed the matching tests fail: no `mute()` call (3 tests fail), no blank-transcript guard (1 test), no final flush when the mic stops (1 test); the file was then restored byte-identical and all 8 pass.
 - Two test mistakes were caught by arithmetic before implementing (`TranscriptAgreement`: nine words, not eight).
+
+## Finding that changed the design: the kit's mic is quiet (00:10 IST)
+A measured the mic path on the kit at 22:48 (stock Sound Recorder, 14 s): mean -39 dBFS, speech peaks -35 to -30 dBFS, floor about -45 dBFS, i.e. **only about 10 dB of speech over the noise floor** (see `docs/device/qidk-device-profile-2026-10-10.md` on master). In RMS terms the floor is about 184 and speech about 490 to 1040.
+- My first detector defaults (`minRms` 350, `noiseRatio` 3) put the speech threshold near 552. A new test built from those measured levels (floor amplitude 260, speech amplitude 700) **failed with no events at all** (`expected [SPEECH_STARTED, SPEECH_ENDED] but was []`): the app would not have heard ordinary speech on the kit.
+- Defaults are now `minRms` 120 (about -49 dBFS) and `noiseRatio` 2.0 (6 dB); the new test and all 490 `:core` tests pass.
+- Caveats: the measurement was one recording through the Sound Recorder (AMR-NB, 8 kHz), not our `AudioRecord` path (`VOICE_RECOGNITION`, 16 kHz), whose gain may differ. The new thresholds trade more false starts on noise for not missing speech; a false start is cheap (a blank transcript is handled) but must be checked on E's fan-noise clips. **Both values are starting points, not tuned.**
+- Open idea, not built: peak-normalising each utterance before the engine (quiet input may cost accuracy). To be tested with and without gain on the accent-contest clips before it is used.
 
 ## Verdict and limits
 - These are unit tests on synthetic tones and fakes. **Nothing here has touched a real microphone, a real speech engine, or the kit.** The detector thresholds (`minRms` 350, `noiseRatio` 3, calibration 300 ms) are starting values that must be tuned on E's kit recordings (fan noise, stressed speech).

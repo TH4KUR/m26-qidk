@@ -70,6 +70,17 @@ class EndOfSpeechDetectorTest {
     }
 
     @Test
+    fun theKitsQuietMicStillGetsItsSpeechDetected() {
+        // Measured on the kit (2026-10-10): floor about -45 dBFS (RMS ~184, amplitude ~260) and speech only about
+        // 10 dB above it (RMS ~490, amplitude ~700). Speech that quiet must still count, and the floor alone must not.
+        val detector = EndOfSpeechDetector()
+        assertTrue(feed(detector, tone(2000, 260)).isEmpty(), "the quiet room alone must not count as speech")
+
+        val events = feed(detector, tone(900, 700) + tone(1500, 260))
+        assertEquals(listOf(VadEvent.SPEECH_STARTED, VadEvent.SPEECH_ENDED), events.map { it.second })
+    }
+
+    @Test
     fun aBlipShorterThanTheMinimumIsDiscardedNotEnded() {
         // A 60 ms click is not an utterance; sending it to the engine would waste the NPU.
         val events = feed(EndOfSpeechDetector(), silence(300) + tone(60, 6000) + silence(1500))
