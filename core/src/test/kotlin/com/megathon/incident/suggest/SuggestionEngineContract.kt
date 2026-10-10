@@ -23,8 +23,8 @@ abstract class SuggestionEngineContract {
     protected abstract fun engine(): SuggestionEngine
 
     protected companion object {
-        const val DECK = "There was a water leak near seminar hall to around 10 AM. Maintenance has already isolated the area."
-        val HEARD = FieldValue("seminar hall to", ValueStatus.REPORTED, "near seminar hall to")
+        const val DECK = "There was a water leak near conference room to around 10 AM. Maintenance has already isolated the area."
+        val HEARD = FieldValue("conference room to", ValueStatus.REPORTED, "near conference room to")
 
         fun stateWithLocation(value: FieldValue): ReportState {
             val empty = ReportState.empty("r1", 0)
@@ -37,10 +37,10 @@ abstract class SuggestionEngineContract {
     private fun deckChip() = engine().suggest(DECK_STATE, DECK).single { it.field == Field.LOCATION }
 
     @Test
-    fun deckExampleOffersSeminarHall2ForWhatWasHeard() {
+    fun deckExampleOffersConferenceRoom2ForWhatWasHeard() {
         val chip = deckChip()
-        assertEquals("seminar hall to", chip.original)
-        assertEquals("Seminar Hall 2", chip.proposed)
+        assertEquals("conference room to", chip.original)
+        assertEquals("Conference Room 2", chip.proposed)
         assertTrue(chip.reason.isNotBlank())
     }
 
@@ -49,7 +49,7 @@ abstract class SuggestionEngineContract {
         val chip = deckChip()
         val after = engine().accept(DECK_STATE, chip)
 
-        assertEquals(FieldValue("Seminar Hall 2", ValueStatus.USER_CONFIRMED, "near seminar hall to"), after.report.value(Field.LOCATION))
+        assertEquals(FieldValue("Conference Room 2", ValueStatus.USER_CONFIRMED, "near conference room to"), after.report.value(Field.LOCATION))
         val entry = after.journal.single()
         assertEquals(JournalKind.SUGGESTION_ACCEPTED, entry.kind)
         assertEquals(Field.LOCATION, entry.field)

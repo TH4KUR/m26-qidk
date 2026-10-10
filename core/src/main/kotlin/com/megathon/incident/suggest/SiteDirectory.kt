@@ -45,7 +45,7 @@ class SiteDirectory(val entries: List<SiteEntry>) {
             return byKey
         }
 
-        /** "H-105", "h 105" and "H105." all become "h105". */
+        /** "N-105", "n 105" and "N105." all become "n105". */
         fun key(text: String): String =
             Normalizer.normalize(text, Normalizer.Form.NFC).lowercase().replace(NOT_ALNUM, "")
 

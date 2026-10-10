@@ -18,11 +18,11 @@ class SuggestionFixturesTest {
         return Json.decodeFromString(text)
     }
 
-    /** The deck's sentence with a real campus place: "water leak near seminar hall to". */
+    /** The deck's own sentence as Whisper may write it: "water leak near conference room to". */
     @Test
-    fun deckExampleChipSnapsHallToToSeminarHall2() {
+    fun deckExampleChipSnapsRoomToToConferenceRoom2() {
         assertEquals(
-            listOf(Suggestion(Field.LOCATION, "seminar hall to", "Seminar Hall 2", "Heard \"hall to\"; the site has Seminar Hall 2.", Source.GAZETTEER)),
+            listOf(Suggestion(Field.LOCATION, "conference room to", "Conference Room 2", "Heard \"room to\"; the site has Conference Room 2.", Source.GAZETTEER)),
             load("deck_example.json"),
         )
     }
@@ -30,13 +30,13 @@ class SuggestionFixturesTest {
     @Test
     fun deckExampleChipProposesARealSiteName() {
         val chip = load("deck_example.json").single()
-        assertEquals("sh-2", SiteDirectory.loadDefault().lookup(chip.proposed)?.id)
+        assertEquals("conf-2", SiteDirectory.loadDefault().lookup(chip.proposed)?.id)
     }
 
     @Test
-    fun allThreeSeminarHallsAreOnTheSite() {
+    fun allThreeConferenceRoomsAreOnTheSite() {
         val site = SiteDirectory.loadDefault()
-        assertEquals(listOf("sh-1", "sh-2", "sh-3"), listOf("SH1", "SH 2", "seminar hall three").map { site.lookup(it)?.id })
+        assertEquals(listOf("conf-1", "conf-2", "conf-3"), listOf("CR1", "CR 2", "conference room three").map { site.lookup(it)?.id })
     }
 
     @Test

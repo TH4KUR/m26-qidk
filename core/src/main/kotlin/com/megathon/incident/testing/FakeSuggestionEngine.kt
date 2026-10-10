@@ -11,8 +11,8 @@ import java.time.Clock
 
 /**
  * Scripted stand-in for the real engine so A can build the chips UI now. It knows exactly one chip:
- * a heard location of "seminar hall to" gets "Seminar Hall 2" (the deck example on our campus, same
- * as `fixtures/suggestions/deck_example.json`). Accept and reject are the real bookkeeping.
+ * a heard location of "conference room to" gets "Conference Room 2" (the deck example, same as
+ * `fixtures/suggestions/deck_example.json`). Accept and reject are the real bookkeeping.
  * Labelled SIMULATED: never show its chips as live suggestions.
  */
 class FakeSuggestionEngine(clock: Clock) : SuggestionEngine {
@@ -23,8 +23,8 @@ class FakeSuggestionEngine(clock: Clock) : SuggestionEngine {
 
     override fun suggest(state: ReportState, transcript: String): List<Suggestion> {
         val heard = state.report.value(Field.LOCATION).text ?: return emptyList()
-        if (heard.trim().lowercase() != "seminar hall to") return emptyList()
-        val chip = Suggestion(Field.LOCATION, heard, "Seminar Hall 2", "Heard \"hall to\"; the site has Seminar Hall 2.", Source.GAZETTEER)
+        if (heard.trim().lowercase() != "conference room to") return emptyList()
+        val chip = Suggestion(Field.LOCATION, heard, "Conference Room 2", "Heard \"room to\"; the site has Conference Room 2.", Source.GAZETTEER)
         return listOf(chip).filterNot { state.hasDecided(it) }
     }
 

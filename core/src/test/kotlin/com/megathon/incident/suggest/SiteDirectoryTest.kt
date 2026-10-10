@@ -15,24 +15,24 @@ class SiteDirectoryTest {
 
     @Test
     fun shippedSiteResolvesAnAliasToItsPlace() {
-        val hit = SiteDirectory.loadDefault().lookup("KRB")!!
-        assertEquals("krb", hit.id)
-        assertEquals("Kohli Research Block", hit.name)
+        val hit = SiteDirectory.loadDefault().lookup("RB")!!
+        assertEquals("research-block", hit.id)
+        assertEquals("Research Block", hit.name)
         assertEquals(EntryKind.PLACE, hit.kind)
     }
 
     @Test
     fun shippedSiteResolvesAnAssetAlias() {
         val hit = SiteDirectory.loadDefault().lookup("chilla")!!
-        assertEquals("CHL-KRB-01", hit.id)
+        assertEquals("CHL-RB-01", hit.id)
         assertEquals(EntryKind.ASSET, hit.kind)
     }
 
     @Test
     fun lookupIgnoresCaseSpacingAndPunctuation() {
-        val dir = SiteDirectory.fromJson(site(places = """{"id":"h105","name":"Himalaya 105","kind":"room","aliases":["H-105"]}"""))
-        assertEquals("h105", dir.lookup("h 105")?.id)
-        assertEquals("h105", dir.lookup("HIMALAYA-105.")?.id)
+        val dir = SiteDirectory.fromJson(site(places = """{"id":"n105","name":"North 105","kind":"room","aliases":["N-105"]}"""))
+        assertEquals("n105", dir.lookup("n 105")?.id)
+        assertEquals("n105", dir.lookup("NORTH-105.")?.id)
     }
 
     @Test
@@ -63,8 +63,8 @@ class SiteDirectoryTest {
 
     @Test
     fun aliasesThatOnlyDifferInPunctuationAlsoClash() {
-        val a = """{"id":"a","name":"SH-1","kind":"hall","aliases":[]}"""
-        val b = """{"id":"b","name":"SH 1","kind":"hall","aliases":[]}"""
+        val a = """{"id":"a","name":"CR-1","kind":"room","aliases":[]}"""
+        val b = """{"id":"b","name":"CR 1","kind":"room","aliases":[]}"""
         assertFailsWith<IllegalArgumentException> { SiteDirectory.fromJson(site(places = "$a,$b")) }
     }
 

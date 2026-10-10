@@ -1,9 +1,9 @@
 [
   {
     "field": "LOCATION",
-    "original": "seminar hall to",
-    "proposed": "Seminar Hall 2",
-    "reason": "Heard \"hall to\"; the site has Seminar Hall 2.",
+    "original": "conference room to",
+    "proposed": "Conference Room 2",
+    "reason": "Heard \"room to\"; the site has Conference Room 2.",
     "source": "GAZETTEER"
   }
 ]

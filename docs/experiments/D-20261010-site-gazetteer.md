@@ -1,7 +1,7 @@
 # D · 2026-10-10 · Site gazetteer research (`site.json`)
 
 - **Who:** D
-- **Goal:** real campus names for `core/src/main/resources/site/site.json` (lead's decision: real buildings, not a fictional site), used by the suggestion engine's gazetteer snap (spec D16).
+- **Goal:** real campus names for the site gazetteer (lead's decision: real buildings, not a fictional site), used by the suggestion engine's gazetteer snap (spec D16).
 - **Status:** place list **confirmed by the team on 2026-10-10** (`"verified": true`). Himalaya rooms 101-105, 201-205 and 301-305 added from that check. Assets and people remain demo values.
 
 ## Setup
@@ -37,3 +37,6 @@
 - Place names are confirmed by the team; they can be presented as real site data. Asset IDs and people must still be described as demo values.
 - Optional later additions: room numbers in Nilgiri, KRB and Vindhya, and which building houses the HPC data centre.
 - Add real Whisper mishearings from E's recordings as aliases when they arrive.
+
+## Update 2026-10-11 00:45: real list moved out of the submission
+The lead ruled that the submission must not reveal the college (lead-to-D, section 3). The real list moved to `dev/site/campus.json` (not a mirrored folder, so it never reaches the submission repo). The default `core/src/main/resources/site/site.json` is now a **fictional** site (North/South/Lab/Research blocks, Conference Rooms 1-3, Room 2 and Room 20 for the "must not snap" test, fictional hostels), and every test and fixture uses fictional names. `DevCampusSiteTest` still checks that the real file loads whenever it is present. A scan of `core/ app/ gradle/ tools/` with the current blindcheck words plus every campus name above found no hits.
