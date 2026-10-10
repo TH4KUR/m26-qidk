@@ -1,0 +1,11 @@
+# One extended regex per line (case-insensitive). Blank lines and # comments are ignored.
+# ADD EVERY TEAMMATE'S NAME, GITHUB USERNAME AND EMAIL BELOW before the first real check.
+iiit
+hyderabad
+ready ?or ?not
+th4kur
+thakur
+eashaan
+karma
+skz
+[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.(com|org|net|edu|ac|in|io|dev|co|me|ai|info)\b
