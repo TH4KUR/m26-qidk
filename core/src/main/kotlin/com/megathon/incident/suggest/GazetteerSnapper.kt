@@ -69,8 +69,8 @@ class GazetteerSnapper(
 
     /**
      * Spelling fixes only: the same number of words, each word close to its partner (score = the
-     * weakest pair). Adding or dropping words is not a spelling fix: "felicity ground gate" is a more
-     * specific place than "felicity ground", not a misspelling of it.
+     * weakest pair). Adding or dropping words is not a spelling fix: "sports ground gate" is a more
+     * specific place than "sports ground", not a misspelling of it.
      */
     private fun fuzzy(reading: List<String>, kind: EntryKind): SiteEntry? {
         val (ids, text) = split(reading)

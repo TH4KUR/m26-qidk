@@ -40,3 +40,6 @@
 
 ## Update 2026-10-11 00:45: real list moved out of the submission
 The lead ruled that the submission must not reveal the college (lead-to-D, section 3). The real list moved to `dev/site/campus.json` (not a mirrored folder, so it never reaches the submission repo). The default `core/src/main/resources/site/site.json` is now a **fictional** site (North/South/Lab/Research blocks, Conference Rooms 1-3, Room 2 and Room 20 for the "must not snap" test, fictional hostels), and every test and fixture uses fictional names. `DevCampusSiteTest` still checks that the real file loads whenever it is present. A scan of `core/ app/ gradle/ tools/` with the current blindcheck words plus every campus name above found no hits.
+
+## Update 2026-10-11 01:00: real list is no longer committed
+User decision (lead-to-D, 00:35): real names are for the live demo only and the real list is never committed to `master`. `dev/site/campus.json` was removed from git (`git rm --cached`) and kept on D's laptop only, hidden by `.git/info/exclude`. It is still in this branch's history (commits `c34020d`..`80bd605`), but not in the tree that gets merged. For the demo, the app loads `filesDir/site.json` (pushed to the kit over USB) through `SiteDirectory.loadPreferring(file)`, which falls back to the bundled fictional site if the file is missing or broken.

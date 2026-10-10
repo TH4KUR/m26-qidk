@@ -43,7 +43,7 @@ class GazetteerSnapperTest {
 
     /**
      * Found by measuring on E's gold set: fuzzy matching cut a longer, more specific place down to a
-     * site name that starts the same way ("Felicity Ground gate" -> Felicity Ground). Fuzzy may only fix
+     * site name that starts the same way ("Sports Ground gate" -> Sports Ground). Fuzzy may only fix
      * spelling, never add or drop words.
      */
     @Test fun fuzzyNeverDropsWordsFromAMoreSpecificPlace() {

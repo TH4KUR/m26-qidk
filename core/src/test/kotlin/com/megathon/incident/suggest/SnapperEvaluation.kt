@@ -95,7 +95,7 @@ class SnapperEvaluation {
         return Case(id, kind, heard, listOf(heard) + alts)
     }
 
-    /** "Seminar Hall 2" -> "seminar hall to", "Vindhya C4" -> "vindhya see four"; null when nothing changes. */
+    /** "Conference Room 2" -> "conference room to", "Lab C4" -> "lab see four"; null when nothing changes. */
     private fun spokenForm(value: String): String? {
         val out = value.lowercase().split(' ').flatMap { word ->
             when {
