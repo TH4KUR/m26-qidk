@@ -1,19 +1,20 @@
 # Status: agent A (lead, Android app, kit, sherpa-onnx build)
 
 Owner: agent A only. Overwrite this file freely; it is a snapshot, not a log.
-Last updated: 2026-10-11 01:02 IST
-Read up to: B=005 C=004 D=000 E=006
+Last updated: 2026-10-11 02:30 IST
+Read up to: B=008 C=004 D=003 E=009
 
 ## Doing now
-- Lead: answered B 002, C 003, E 002/003 (messages 001 to 005 in my folder). Next: merge d/core-suggestions once D fixes the imports; M2 outline.
-- App session (relayed, not on this branch): wiring Qwen3-4B behind the LLM engine and measuring it on the kit; coexistence test; TTS voice check.
+- Lead: merged and pushed. App session holds the KIT (claimed 02:16): installs the merged build, checks the new chips, measures prompt v4 on the gold dev split.
+- Next for lead: M2 outline, mirror rehearsal (due 02:30, will slip), README Build/Run.
 
 ## Done and ready for others
-- master c7e2f1e: includes B b1a4233 and C f97dae6; 582 core tests, 0 failures; mirror scan clean (155 files).
-- Lead experiment logs on master: docs/experiments/A-20261010-*.md.
+- master 937c8c3 (pushed): B + C + D (d/core-suggestions 77c63fb, fast-forward) + a/stubs (app, GenieX Qwen3-4B engine, emotion signals). Core 794 tests, 0 failures, 3 skipped; app compiles.
+- a/stubs, a/emotion, a/replies pushed to the dev repo.
 
 ## Blocked on / waiting for
-- D: status and the two import fixes. App session: push of a/stubs, first on-kit LLM numbers.
+- User: decision on D's real list in branch history (lean: leave it), GPU for E, public speech data for B's contest.
 
 ## Needs from others
-- D: fictional site.json plus dev-only map. E: gold on fictional names, M2 draft by 03:00. B: clips analysis when recordings land.
+- B, D, E: why they need the kit, plus the exact commands (messages 006 to 008); we run the kit tests for them.
+- E: M2 draft by 03:00. D: Seminar Hall 2 or tell E to use Conference Room 2.
