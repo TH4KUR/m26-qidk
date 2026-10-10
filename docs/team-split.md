@@ -45,7 +45,7 @@ Date: 2026-10-10. Status: proposed; the open decisions in §7 need team agreemen
 - **Hour 16–19:** spoken safety advice table and the "call 112" line.
 
 ### E: data, evaluation, pitch
-- **Hour 0–1.5:** a recording plan: every teammate records about 8 incident reports on their phone (clean and stressed takes, accents, fan noise, six self-corrections), converted to 16 kHz mono WAV; type the correct answers for each (Task 0b).
+- **Hour 0–1.5:** a recording plan. The **gold set is recorded on the kit itself** (booked session with A, using the exact mic setup and distance of the demo), because the demo uses that microphone path and the mic path is still unproven. `tinycap` (`/system/bin`) and the Sound Recorder app (`com.android.soundrecorder`) are present on the kit [V, listed, not tested]; once the app has a recorder mode, use that (same 16 kHz mono capture path as the app). Every teammate records about 8 incident reports (clean and stressed takes, accents, fan noise, six self-corrections), converted to 16 kHz mono WAV. Extra clips may be recorded on phones in parallel but must be labelled as phone audio. Type the correct answers for each (Task 0b).
 - **Hour 1.5–9:** scorer for word error rate and per-field accuracy; run the LLM candidate contest (Qwen3-1.7B, Gemma 4 4B, NuExtract-2.0-2B) on the GPU server (S3); prepare the Judge Bench data.
 - **Hour 10–14:** on-device evaluation with A (Task 12); prompt iteration.
 - **Hour 16–21:** final numbers, demo script, slides, backup video.
@@ -71,6 +71,8 @@ For the first 90 minutes nobody depends on A's skeleton: everyone starts with pr
 3. **Interface changes** go through C (types) and are announced in the team chat before merging.
 4. **Tests first** for `:core` code; the commands are `./gradlew :core:test`.
 5. **Each person's Claude Code starter prompt:** "Read `docs/team-split.md`, the spec (D1–D21) and the plan (Addendum A). I am person X. Do my tasks test-first, stay in my folders, and ask before changing shared types."
+
+Each person's handoff file is on their own branch: `docs/handoff/<letter>-<role>.md` (branches `a/lead-kit-app`, `b/speech-engines`, `c/core-rules`, `d/core-suggestions`, `e/data-eval`).
 
 ## 6. Before the event
 - Accept the Hugging Face terms for `theshivam7/whisper-*-aesrc-indian-english` and their `-seeds` repos on each account that will download them.
