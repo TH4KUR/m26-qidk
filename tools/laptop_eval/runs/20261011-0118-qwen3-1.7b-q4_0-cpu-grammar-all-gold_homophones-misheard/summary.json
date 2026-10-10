@@ -3,29 +3,29 @@
  "n_missing_predictions": 0,
  "fields": {
   "incident_type": {
-   "correct": 2,
+   "correct": 4,
    "wrong": 2,
-   "miss": 4,
+   "miss": 2,
    "hallucination": 0,
    "correct_empty": 0,
    "gold_values": 8,
-   "filled": 4,
+   "filled": 6,
    "precision": {
-    "num": 2,
-    "den": 4,
-    "value": 0.5,
+    "num": 4,
+    "den": 6,
+    "value": 0.6666666666666666,
     "ci95": [
-     0.15003570882017148,
-     0.8499642911798285
+     0.29998832134152864,
+     0.9032306674407831
     ]
    },
    "recall": {
-    "num": 2,
+    "num": 4,
     "den": 8,
-    "value": 0.25,
+    "value": 0.5,
     "ci95": [
-     0.07147768885802763,
-     0.5907301208974108
+     0.21521252682444186,
+     0.7847874731755582
     ]
    },
    "hallucination_rate": {
@@ -69,29 +69,29 @@
    }
   },
   "location": {
-   "correct": 1,
+   "correct": 2,
    "wrong": 4,
-   "miss": 3,
+   "miss": 2,
    "hallucination": 0,
    "correct_empty": 0,
    "gold_values": 8,
-   "filled": 5,
+   "filled": 6,
    "precision": {
-    "num": 1,
-    "den": 5,
-    "value": 0.2,
+    "num": 2,
+    "den": 6,
+    "value": 0.3333333333333333,
     "ci95": [
-     0.03622316096978745,
-     0.6244717358814613
+     0.09676933255921683,
+     0.7000116786584712
     ]
    },
    "recall": {
-    "num": 1,
+    "num": 2,
     "den": 8,
-    "value": 0.125,
+    "value": 0.25,
     "ci95": [
-     0.02241690886329617,
-     0.4708948057698615
+     0.07147768885802763,
+     0.5907301208974108
     ]
    },
    "hallucination_rate": {
@@ -102,29 +102,29 @@
    }
   },
   "date_time": {
-   "correct": 2,
+   "correct": 3,
    "wrong": 0,
-   "miss": 4,
+   "miss": 3,
    "hallucination": 0,
    "correct_empty": 2,
    "gold_values": 6,
-   "filled": 2,
+   "filled": 3,
    "precision": {
-    "num": 2,
-    "den": 2,
+    "num": 3,
+    "den": 3,
     "value": 1.0,
     "ci95": [
-     0.34237195288961925,
+     0.43849391955098227,
      1.0
     ]
    },
    "recall": {
-    "num": 2,
+    "num": 3,
     "den": 6,
-    "value": 0.3333333333333333,
+    "value": 0.5,
     "ci95": [
-     0.09676933255921683,
-     0.7000116786584712
+     0.18761280689940868,
+     0.8123871931005913
     ]
    },
    "hallucination_rate": {
@@ -168,26 +168,29 @@
    }
   },
   "equipment_asset": {
-   "correct": 0,
+   "correct": 1,
    "wrong": 0,
-   "miss": 5,
+   "miss": 4,
    "hallucination": 0,
    "correct_empty": 3,
    "gold_values": 5,
-   "filled": 0,
+   "filled": 1,
    "precision": {
-    "num": 0,
-    "den": 0,
-    "value": null,
-    "ci95": null
+    "num": 1,
+    "den": 1,
+    "value": 1.0,
+    "ci95": [
+     0.20654329147389294,
+     1.0
+    ]
    },
    "recall": {
-    "num": 0,
+    "num": 1,
     "den": 5,
-    "value": 0.0,
+    "value": 0.2,
     "ci95": [
-     0.0,
-     0.43449149475208104
+     0.03622316096978745,
+     0.6244717358814613
     ]
    },
    "hallucination_rate": {
@@ -201,29 +204,26 @@
    }
   },
   "immediate_actions": {
-   "correct": 1,
+   "correct": 0,
    "wrong": 0,
-   "miss": 1,
+   "miss": 2,
    "hallucination": 0,
    "correct_empty": 6,
    "gold_values": 2,
-   "filled": 1,
+   "filled": 0,
    "precision": {
-    "num": 1,
-    "den": 1,
-    "value": 1.0,
-    "ci95": [
-     0.20654329147389294,
-     1.0
-    ]
+    "num": 0,
+    "den": 0,
+    "value": null,
+    "ci95": null
    },
    "recall": {
-    "num": 1,
+    "num": 0,
     "den": 2,
-    "value": 0.5,
+    "value": 0.0,
     "ci95": [
-     0.09452865480086614,
-     0.9054713451991339
+     0.0,
+     0.6576280471103807
     ]
    },
    "hallucination_rate": {
@@ -240,15 +240,18 @@
    "correct": 0,
    "wrong": 0,
    "miss": 0,
-   "hallucination": 0,
-   "correct_empty": 8,
+   "hallucination": 1,
+   "correct_empty": 7,
    "gold_values": 0,
-   "filled": 0,
+   "filled": 1,
    "precision": {
     "num": 0,
-    "den": 0,
-    "value": null,
-    "ci95": null
+    "den": 1,
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.7934567085261071
+    ]
    },
    "recall": {
     "num": 0,
@@ -257,76 +260,76 @@
     "ci95": null
    },
    "hallucination_rate": {
-    "num": 0,
+    "num": 1,
     "den": 8,
-    "value": 0.0,
+    "value": 0.125,
     "ci95": [
-     0.0,
-     0.3244156195108769
+     0.02241690886329617,
+     0.4708948057698615
     ]
    }
   }
  },
  "overall": {
-  "correct": 6,
+  "correct": 10,
   "wrong": 6,
-  "miss": 18,
-  "hallucination": 0,
-  "correct_empty": 34,
+  "miss": 14,
+  "hallucination": 1,
+  "correct_empty": 33,
   "gold_values": 30,
-  "filled": 12,
+  "filled": 17,
   "precision": {
-   "num": 6,
-   "den": 12,
-   "value": 0.5,
+   "num": 10,
+   "den": 17,
+   "value": 0.5882352941176471,
    "ci95": [
-    0.2537781703934222,
-    0.7462218296065778
+    0.36005074385515545,
+    0.7838921396086862
    ]
   },
   "recall": {
-   "num": 6,
+   "num": 10,
    "den": 30,
-   "value": 0.2,
+   "value": 0.3333333333333333,
    "ci95": [
-    0.09504978102401235,
-    0.37306047381027446
+    0.19230295526846194,
+    0.5122027418616973
    ]
   },
   "hallucination_rate": {
-   "num": 0,
+   "num": 1,
    "den": 34,
-   "value": 0.0,
+   "value": 0.029411764705882353,
    "ci95": [
-    0.0,
-    0.10151790621961015
+    0.00521077192559663,
+    0.1491590221634482
    ]
   }
  },
  "mandatory": {
-  "correct": 5,
+  "correct": 9,
   "wrong": 6,
-  "miss": 12,
+  "miss": 8,
   "hallucination": 0,
   "correct_empty": 9,
   "gold_values": 23,
-  "filled": 11,
+  "filled": 15,
   "precision": {
-   "num": 5,
-   "den": 11,
-   "value": 0.45454545454545453,
+   "num": 9,
+   "den": 15,
+   "value": 0.6,
    "ci95": [
-    0.21270957543988045,
-    0.7199122443100118
+    0.357464427565077,
+    0.8017577191740534
    ]
   },
   "recall": {
-   "num": 5,
+   "num": 9,
    "den": 23,
-   "value": 0.21739130434782608,
+   "value": 0.391304347826087,
    "ci95": [
-    0.09663835601719065,
-    0.4190388018273492
+    0.22157377982382145,
+    0.5921482039625402
    ]
   },
   "hallucination_rate": {
@@ -342,11 +345,11 @@
  "followup": {
   "precision": {
    "num": 9,
-   "den": 21,
-   "value": 0.42857142857142855,
+   "den": 17,
+   "value": 0.5294117647058824,
    "ci95": [
-    0.24469699486521043,
-    0.6345378370296754
+    0.30962897311549487,
+    0.738351988039119
    ]
   },
   "recall": {
@@ -387,8 +390,8 @@
   "grammar": true,
   "split": "all",
   "n_calls": 8,
-  "parse_ok": 5,
-  "mean_completion_tokens": 144.25,
-  "max_prompt_tokens": 445
+  "parse_ok": 7,
+  "mean_completion_tokens": 87.25,
+  "max_prompt_tokens": 444
  }
 }

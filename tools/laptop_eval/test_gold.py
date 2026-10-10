@@ -1,6 +1,7 @@
 """Schema, coverage and double-blind checks for the gold set (docs/eval-guide.md)."""
 
 import json
+import os
 import re
 from collections import Counter
 from pathlib import Path
@@ -17,6 +18,8 @@ INCIDENT_TYPES = {"water_leak_flood", "fire_smoke", "electrical", "spill_chemica
 SEVERITIES = {"none", "minor", "moderate", "severe", "critical"}
 STATUSES = {"MISSING", "UNKNOWN", "EXPLICIT_NONE", "REPORTED", "SUGGESTED"}
 SOURCES = {"handwritten", "broad", "osha", "multiturn", "homophone"}
+# Same override as tools/blindcheck.sh: BLIND_WORDS=/path/to/list (e.g. master's list before merging it).
+BLIND_WORDS = Path(os.environ.get("BLIND_WORDS", REPO / "tools/blindcheck.words"))
 
 
 @pytest.fixture(scope="module")
@@ -89,7 +92,7 @@ def test_holdout_is_about_a_third(items):
 
 
 def test_no_blindcheck_words(items):
-    words = REPO / "tools/blindcheck.words"
+    words = BLIND_WORDS
     patterns = [l.strip() for l in words.read_text(encoding="utf-8").splitlines() if l.strip() and not l.lstrip().startswith("#")]
     text = GOLD.read_text(encoding="utf-8")
     for p in patterns:
@@ -117,16 +120,30 @@ def test_homophone_set_covers_the_requested_confusions(homophones):
         assert word in misheard, word
 
 
-def test_gold_uses_site_canonical_names_somewhere(items, homophones):
+def test_gold_uses_fictional_site_names(items, homophones):
     text = json.dumps(items + homophones)
-    for name in ("Seminar Hall 2", "Vindhya C4", "Himalaya 305", "Kohli Research Block", "Kadamba Mess",
-                 "Yuktahar", "Bakul Nivas", "Parijaat", "Palash Nivas", "Aarogya Centre", "chiller"):
+    # D's fictional site.json (d/core-suggestions): the default that gets mirrored (decision 00:35).
+    for name in ("Conference Room 2", "Lab C4", "North 105", "Research Block", "Main Canteen", "Maple Hostel",
+                 "Cedar Hostel", "Pine Hostel", "Health Centre", "Admin Block", "Chiller 1"):
         assert name in text, name
 
 
 def test_homophone_file_has_no_blindcheck_words():
-    words = REPO / "tools/blindcheck.words"
+    words = BLIND_WORDS
     patterns = [l.strip() for l in words.read_text(encoding="utf-8").splitlines() if l.strip() and not l.lstrip().startswith("#")]
     text = HOMOPHONES.read_text(encoding="utf-8")
     for p in patterns:
         assert not re.search(p, text, re.IGNORECASE), p
+
+
+def test_no_real_campus_names_in_any_mirrored_eval_file():
+    """Every file under app/ and tools/laptop_eval/ is mirrored to the submission; the scan list on
+    master carries the real campus names, so none may appear (runs/ outputs included)."""
+    words = BLIND_WORDS
+    patterns = [l.strip() for l in words.read_text(encoding="utf-8").splitlines() if l.strip() and not l.lstrip().startswith("#")]
+    roots = [REPO / "app/src/main/assets/eval", REPO / "tools/laptop_eval", REPO / "docs/recording-sheets.md"]
+    files = [f for r in roots for f in ([r] if r.is_file() else r.rglob("*"))
+             if f.is_file() and "__pycache__" not in f.parts and f.suffix in {".py", ".json", ".jsonl", ".md", ".txt"}]
+    hits = [(str(f.relative_to(REPO)), p) for f in files for p in patterns
+            if re.search(p, f.read_text(encoding="utf-8", errors="ignore"), re.IGNORECASE)]
+    assert hits == []
