@@ -47,7 +47,18 @@ def word_errors(reference: list[str], hypothesis: list[str]) -> int:
     return previous[-1]
 
 
-def load_manifest(path: Path) -> list[Clip]:
+def parse_selection(values: list[str]) -> dict[str, str]:
+    filters = {}
+    for value in values:
+        key, separator, expected = value.partition("=")
+        key, expected = key.strip(), expected.strip()
+        if not separator or not key or not expected or key in filters:
+            raise ValueError(f"expected unique nonempty KEY=VALUE selection: {value!r}")
+        filters[key] = expected
+    return filters
+
+
+def load_manifest(path: Path, *, filters: dict[str, str] | None = None) -> list[Clip]:
     clips = []
     seen = set()
     for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
@@ -55,6 +66,17 @@ def load_manifest(path: Path) -> list[Clip]:
             continue
         try:
             row = json.loads(line)
+            if not isinstance(row, dict):
+                raise ValueError("expected a JSON object")
+            if filters:
+                missing = [key for key in filters if key not in row]
+                if missing:
+                    raise ValueError(f"missing selection metadata: {', '.join(missing)}")
+                invalid = [key for key in filters if not isinstance(row[key], str) or not row[key].strip()]
+                if invalid:
+                    raise ValueError(f"invalid selection metadata: {', '.join(invalid)}")
+                if any(row[key] != value for key, value in filters.items()):
+                    continue
             clip_id = row["clip_id"]
             reference = row["reference"]
             wav = (path.parent / row["wav"]).resolve()
@@ -109,6 +131,12 @@ def run_contest(
     return sorted(rows, key=lambda row: (row["wer"], row["model"])), all_predictions
 
 
+def raw_transcripts(predictions: list[dict]) -> list[dict]:
+    """Export E's wire format without normalizing text or changing legacy rows."""
+    return [{"clip_id": row["clip_id"], "model": row["model"], "text": row["prediction"]}
+            for row in predictions]
+
+
 def render_table(rows: list[dict]) -> str:
     lines = [
         "| Rank | Model | WER | Errors / reference words | Clips |",
@@ -136,11 +164,20 @@ def main() -> None:
     parser.add_argument("--manifest", type=Path, required=True, help="JSONL rows: clip_id, wav, reference")
     parser.add_argument("--output", type=Path, required=True, help="write Markdown table here")
     parser.add_argument("--predictions", type=Path, help="optional JSONL output with per-clip predictions")
+    parser.add_argument("--raw-transcripts", type=Path, help="optional JSONL output: clip_id, model, text")
+    parser.add_argument("--select", action="append", default=[], help="exact manifest metadata KEY=VALUE; repeatable")
     parser.add_argument("--model", action="append", dest="models", help="override the default four model IDs; repeatable")
     parser.add_argument("--models-dir", type=Path, help="directory containing locally downloaded model folders")
     parser.add_argument("--dataset-label", default="", help="heading for the output table, e.g. Synthetic smoke test")
     args = parser.parse_args()
-    clips = load_manifest(args.manifest)
+    try:
+        filters = parse_selection(args.select)
+    except ValueError as error:
+        parser.error(str(error))
+    outputs = [path.resolve() for path in (args.output, args.predictions, args.raw_transcripts) if path]
+    if len(set(outputs)) != len(outputs) or args.manifest.resolve() in outputs:
+        parser.error("output paths must be distinct and must not overwrite the manifest")
+    clips = load_manifest(args.manifest, filters=filters)
     models = args.models or list(DEFAULT_MODELS)
     for model in models:
         resolve_model(model, args.models_dir)
@@ -167,12 +204,20 @@ def main() -> None:
     table = render_table(rows)
     if args.dataset_label:
         table = f"# {args.dataset_label}\n\n{table}"
+    if filters:
+        table = "Selection: " + ", ".join(f"{key}={value}" for key, value in filters.items()) + "\n\n" + table
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(table, encoding="utf-8")
     if args.predictions:
         args.predictions.parent.mkdir(parents=True, exist_ok=True)
         args.predictions.write_text(
             "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in predictions),
+            encoding="utf-8",
+        )
+    if args.raw_transcripts:
+        args.raw_transcripts.parent.mkdir(parents=True, exist_ok=True)
+        args.raw_transcripts.write_text(
+            "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in raw_transcripts(predictions)),
             encoding="utf-8",
         )
     print(table, end="")
