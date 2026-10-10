@@ -111,5 +111,25 @@ class ToolCallParserTest {
     }
 
     @Test fun hintsAreOptional() = assertNull(ok("""{"tool":"update_report","arguments":{"location":"Lab"}}""").impact_hint)
+
+    // ---- duplicate writes (codex rule: never last-write-wins) -----------------------------------
+
+    @Test fun aDuplicateScalarKeyIsRejected() =
+        assertEquals(FailureCode.DUPLICATE_KEY, fail("""{"tool":"update_report","arguments":{"location":"A","location":"B"}}""").code)
+
+    @Test fun aDuplicateKeyInsideEvidenceIsRejected() = assertEquals(
+        FailureCode.DUPLICATE_KEY,
+        fail("""{"tool":"update_report","arguments":{"evidence":{"location":"a","location":"b"}}}""").code,
+    )
+
+    @Test fun theSameNameInDifferentObjectsIsNotADuplicate() {
+        val p = ok("""{"tool":"update_report","arguments":{"location":"Lab","evidence":{"location":"in the Lab"}}}""")
+        assertEquals("Lab", p.location)
+    }
+
+    @Test fun aKeyNameInsideAStringValueIsNotAKey() {
+        val p = ok("""{"tool":"update_report","arguments":{"location":"room \"location\": 2","witnesses":["a"]}}""")
+        assertEquals("room \"location\": 2", p.location)
+    }
 }
 

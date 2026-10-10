@@ -31,7 +31,7 @@ data class TemporalValue(
 class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
 
     fun resolve(text: String, capturedAt: Instant): TemporalValue? {
-        val t = EnumNormalizer.normalize(text) ?: return null
+        val t = spokenHoursAsDigits(EnumNormalizer.normalize(text) ?: return null)
         val now = capturedAt.atZone(zone)
 
         relativeOffset(t)?.let { minutes ->
@@ -79,6 +79,10 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
         }
         return TemporalValue(date, time, partOfDay, approximate = isApproximate(t), ambiguous = ambiguous, sourceText = text)
     }
+
+    /** Whisper writes "ten am" and "nau baje"; the clock patterns expect digits. */
+    private fun spokenHoursAsDigits(t: String): String =
+        HOUR_WORDS.replace(t) { m -> (HOUR_NUMBER[m.groupValues[1]] ?: m.groupValues[1]).toString() + " " + m.groupValues[2] }
 
     private enum class Day { YESTERDAY, TODAY, KAL }
 
@@ -149,6 +153,15 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
     }
 
     private companion object {
+        val HOUR_NUMBER = mapOf(
+            "one" to 1, "two" to 2, "three" to 3, "four" to 4, "five" to 5, "six" to 6, "seven" to 7, "eight" to 8,
+            "nine" to 9, "ten" to 10, "eleven" to 11, "twelve" to 12,
+            "ek" to 1, "do" to 2, "teen" to 3, "char" to 4, "paanch" to 5, "chhe" to 6, "saat" to 7, "aath" to 8,
+            "nau" to 9, "das" to 10, "gyarah" to 11, "barah" to 12,
+        )
+        val HOUR_WORDS = Regex(
+            "(?<![\\p{L}])(" + HOUR_NUMBER.keys.joinToString("|") + ")\\s*(a\\.?m\\.?|p\\.?m\\.?|o'clock|oclock|baje|बजे)",
+        )
         val APPROX = listOf("around", "about", "approximately", "approx", "roughly", "lagbhag", "kareeb", "करीब", "लगभग", "तकरीबन")
 
         val HOUR_UNITS = setOf("hour", "hours", "hr", "hrs", "ghante", "ghanta", "ghantey", "ghanto", "घंटे", "घंटा")

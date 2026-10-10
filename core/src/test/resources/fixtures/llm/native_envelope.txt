@@ -1,0 +1,3 @@
+<tool_call>
+{"name": "update_report", "arguments": {"incident_type": "fire_smoke", "location": "pantry"}}
+</tool_call>

@@ -166,4 +166,27 @@ class TemporalResolverTest {
 
     @Test
     fun keepsTheOriginalSourceText() = assertEquals("around 10 AM", r("around 10 AM").sourceText)
+
+    // ---- how Whisper actually writes times -----------------------------------------------------
+
+    @Test
+    fun numberWordHourWithAm() {
+        val v = r("around ten am")
+        assertEquals(LocalTime.of(10, 0), v.time)
+        assertTrue(v.approximate)
+    }
+
+    @Test fun numberWordHourWithPm() = assertEquals(LocalTime.of(22, 0), r("at ten pm").time)
+
+    @Test fun dottedMeridiem() = assertEquals(LocalTime.of(10, 0), r("around 10 a.m.").time)
+
+    @Test fun numberWordOClockIsAmbiguous() {
+        val v = r("at two o'clock")
+        assertEquals(LocalTime.of(2, 0), v.time)
+        assertTrue(v.ambiguous)
+    }
+
+    @Test fun hindiNumberWordBaje() = assertEquals(LocalTime.of(9, 0), r("subah nau baje").time)
+
+    @Test fun aNumberWordThatIsNotAnHourIsIgnored() = assertNull(resolver.resolve("one of the pipes near the lab", afternoon))
 }

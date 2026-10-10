@@ -1,0 +1,1 @@
+{"tool":"update_report","arguments":{"incident_type":"water_leak_flood","location":"Conference Room 2","date_time_text":"around 10 AM","immediate_actions":"isolated the area","evidence":{"incident_type":"water leak","location":"near Conference Room 2","date_time_text":"around 10 AM","immediate_actions":"already isolated the area"}}}
