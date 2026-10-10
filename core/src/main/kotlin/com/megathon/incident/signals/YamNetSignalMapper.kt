@@ -33,6 +33,9 @@ object YamNetSignalMapper {
     private val byAudioSetName: Map<String, Rule> =
         RULES.flatMap { rule -> rule.audioSetNames.map { it to rule } }.toMap()
 
+    /** Every AudioSet display name (lowercase) the rules listen for, so a test can audit them against YamNet's real class list. */
+    val audioSetNames: Set<String> get() = byAudioSetName.keys
+
     /** Strongest hazard first; one signal per hazard however many AudioSet classes fired for it. */
     fun map(scores: List<ClassScore>, segmentId: Long? = null): List<Signal> {
         val best = LinkedHashMap<Rule, Float>()
