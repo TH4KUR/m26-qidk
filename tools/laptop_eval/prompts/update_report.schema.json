@@ -52,45 +52,77 @@
      ]
     },
     "location": {
-     "type": [
-      "string",
-      "null"
+     "anyOf": [
+      {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 120
+      },
+      {
+       "type": "null"
+      }
      ]
     },
     "date_time_text": {
-     "type": [
-      "string",
-      "null"
+     "anyOf": [
+      {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 120
+      },
+      {
+       "type": "null"
+      }
      ]
     },
     "persons_involved": {
      "type": "array",
+     "maxItems": 6,
      "items": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 60
      }
     },
     "equipment_asset": {
-     "type": [
-      "string",
-      "null"
+     "anyOf": [
+      {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 120
+      },
+      {
+       "type": "null"
+      }
      ]
     },
     "immediate_actions": {
-     "type": [
-      "string",
-      "null"
+     "anyOf": [
+      {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 120
+      },
+      {
+       "type": "null"
+      }
      ]
     },
     "witnesses": {
      "type": "array",
+     "maxItems": 6,
      "items": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 60
      }
     },
     "evidence": {
      "type": "object",
      "additionalProperties": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
      }
     }
    }
