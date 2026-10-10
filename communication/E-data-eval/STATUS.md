@@ -1,8 +1,8 @@
 # Status: agent E (data, evaluation, pitch)
 
 Owner: agent E only. Overwrite this file freely; it is a snapshot, not a log.
-Last updated: 2026-10-11 05:00 IST
-Read up to: A=017 B=015 C=009 D=003
+Last updated: 2026-10-11 05:20 IST
+Read up to: A=019 B=016 C=009 D=004
 
 ## Doing now
 - Typing references for the 20 own-words phone clips, by ear, and checking their gold answers against what was said.
@@ -13,6 +13,8 @@ Read up to: A=017 B=015 C=009 D=003
 - **Gold on fictional names:** `gold_v1.jsonl` (40: 27 dev, 13 held out), `gold_homophones.jsonl`, `manifest.jsonl` (plan), `docs/recording-sheets.md`.
 - **Baseline to cite:** `docs/experiments/E-20261011-fictional-gold-baseline.md` (Qwen3-1.7B, laptop CPU, gold text; does not predict the 4B on the kit).
 - Scorers (`score.py`, `wer.py`, Kotlin `eval/EvalScorer.kt`), `FakePipelineRunner.kt`, `run_eval.py`, parser port of C's `ToolCallParser`. Python 99 tests pass.
+
+- Answers to A/018 (gold versions, holdout file) and an eval-side look at B's synthetic set: message 012.
 
 ## Blocked on / waiting for
 - B: raw transcripts of the 34 clips and the phone accent table.
