@@ -176,4 +176,20 @@ class PayloadValidatorTest {
         assertTrue("2026-10-11" in r.proposal(Field.DATE_TIME)!!.value.text!!)
         assertTrue("13:00" in r.proposal(Field.DATE_TIME)!!.value.text!!)
     }
+
+    // ---- urgency hint passes through -------------------------------------------------------------
+
+    @Test fun theHintIsReturnedForTheAdvisorAndNeverWrittenToAField() {
+        val r = validate(slide, ExtractionPayload(impact_hint = 4, ongoing = true))
+        assertEquals(com.megathon.incident.domain.LlmHint(4, true), r.hint)
+        assertTrue(r.proposals.isEmpty())
+    }
+
+    @Test fun anOutOfRangeHintIsIgnored() {
+        assertNull(validate(slide, ExtractionPayload(impact_hint = 9)).hint?.impact)
+        assertNull(validate(slide, ExtractionPayload(impact_hint = 0)).hint?.impact)
+    }
+
+    @Test fun noHintMeansNoHint() = assertNull(validate(slide, ExtractionPayload()).hint)
 }
+

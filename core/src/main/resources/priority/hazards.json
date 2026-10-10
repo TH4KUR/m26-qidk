@@ -927,5 +927,29 @@
     "हे भगवान",
     "इमरजेंसी",
     "हेल्प"
+  ],
+  "cancelCues": [
+    "false alarm",
+    "mock drill",
+    "it was a drill",
+    "only a drill",
+    "just a drill",
+    "drill",
+    "by mistake",
+    "my mistake",
+    "it was nothing",
+    "no emergency",
+    "sorry",
+    "galti se",
+    "galat alarm",
+    "jhootha alarm",
+    "drill thi",
+    "koi baat nahi",
+    "गलती से",
+    "गलत अलार्म",
+    "झूठा अलार्म",
+    "ड्रिल थी",
+    "कोई बात नहीं",
+    "मॉक ड्रिल"
   ]
 }

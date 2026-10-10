@@ -45,7 +45,7 @@ enum class ValueStatus { MISSING, UNKNOWN, EXPLICIT_NONE, REPORTED, SUGGESTED, U
 
 /** Where a signal, suggestion or reason came from; shown on every chip (spec §4b). */
 @Serializable
-enum class Source { TEXT_CUE, SENSEVOICE, YAMNET, GAZETTEER, RULE, LLM }
+enum class Source { TEXT_CUE, SENSEVOICE, YAMNET, GAZETTEER, RULE, LLM, USER }
 
 @Serializable
 data class FieldValue(
@@ -96,6 +96,10 @@ data class ExtractionPayload(
     val immediate_actions: String? = null,
     val witnesses: List<String> = emptyList(),
     val evidence: Map<String, String> = emptyMap(),
+    /** Optional urgency hint, 1..5. Never written to a field; it can only raise the priority advice. */
+    val impact_hint: Int? = null,
+    /** Optional: the model thinks the problem is still continuing. Same raise-only rule. */
+    val ongoing: Boolean? = null,
 )
 
 @Serializable
@@ -143,5 +147,20 @@ data class ReportState(val report: IncidentReport, val journal: List<JournalEntr
 
     companion object {
         fun empty(id: String, nowEpochMs: Long) = ReportState(IncidentReport.empty(id, nowEpochMs))
+    }
+}
+
+/**
+ * The on-device language model's optional opinion on urgency. It can only raise the rules' result,
+ * by at most one impact step, and cannot reach URGENT on its own (design doc, Q6).
+ */
+@Serializable
+data class LlmHint(val impact: Int? = null, val ongoing: Boolean? = null) {
+    companion object {
+        /** Out-of-range values are dropped rather than clamped: a wild number is not a signal. */
+        fun from(p: ExtractionPayload): LlmHint? {
+            val impact = p.impact_hint?.takeIf { it in 1..5 }
+            return if (impact == null && p.ongoing == null) null else LlmHint(impact, p.ongoing)
+        }
     }
 }

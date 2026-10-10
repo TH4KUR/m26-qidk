@@ -1,6 +1,7 @@
 package com.megathon.incident.priority
 
 import com.megathon.incident.domain.Aspect
+import com.megathon.incident.domain.LlmHint
 import com.megathon.incident.domain.Modality
 import com.megathon.incident.domain.Signal
 import com.megathon.incident.domain.Source
@@ -15,6 +16,7 @@ import com.megathon.incident.tam.TamDetector
 data class UrgencyInput(
     val transcript: String,
     val signals: List<Signal> = emptyList(),
+    val hint: LlmHint? = null,
 )
 
 data class HazardHit(val label: String, val impact: Int, val phrase: String, val immediacy: Int)
@@ -154,6 +156,25 @@ class UrgencyFeatureExtractor(
             reasons += UrgencyReason("people may be at risk → impact +1", Source.TEXT_CUE)
         }
 
+        // ---- the model's hint: raise-only, one step above the rules, immediacy at most 3 ------
+        input.hint?.let { h ->
+            h.impact?.let { v ->
+                val cap = minOf(5, impact + 1)
+                val raised = minOf(v, cap)
+                if (raised > impact) {
+                    reasons += UrgencyReason(
+                        "the language model suggests impact $v" + (if (v > cap) ", capped at $cap by the rules" else ""),
+                        Source.LLM,
+                    )
+                    impact = raised
+                }
+            }
+            if (h.ongoing == true && immediacy < 3) {
+                immediacy = 3
+                reasons += UrgencyReason("the language model says it is still continuing → immediacy 3", Source.LLM)
+            }
+        }
+
         // An explicit "not urgent" only applies to nuisances; a real hazard is never talked down.
         if (lowUrgency && impact <= 2) {
             immediacy = 1
@@ -205,6 +226,12 @@ class UrgencyFeatureExtractor(
             reasons = reasons,
             dangerSignals = dangerSignals,
         )
+    }
+
+    /** The cancellation phrase in [text] ("false alarm", "galti se"), longest match, or null. */
+    fun cancelCue(text: String): String? {
+        val t = java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFC).lowercase()
+        return CueMatching.find(t, cfg.cancelCues).maxByOrNull { it.phrase.length }?.phrase
     }
 
     private fun hazardImmediacy(h: Found, tam: Tam, explicitOngoing: Boolean, resolved: Boolean): Int {

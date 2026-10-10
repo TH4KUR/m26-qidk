@@ -6,6 +6,7 @@ import com.megathon.incident.domain.Field
 import com.megathon.incident.domain.FieldValue
 import com.megathon.incident.domain.GroundingValidator
 import com.megathon.incident.domain.IncidentType
+import com.megathon.incident.domain.LlmHint
 import com.megathon.incident.domain.Modality
 import com.megathon.incident.domain.PartOfDay
 import com.megathon.incident.domain.Severity
@@ -20,7 +21,12 @@ data class FieldProposal(val field: Field, val value: FieldValue, val note: Stri
 
 data class Rejection(val field: Field, val reason: String, val raw: String? = null)
 
-data class ValidationResult(val proposals: List<FieldProposal>, val rejections: List<Rejection>)
+data class ValidationResult(
+    val proposals: List<FieldProposal>,
+    val rejections: List<Rejection>,
+    /** The model's optional urgency hint, for the priority advisor. Never becomes a field. */
+    val hint: LlmHint? = null,
+)
 
 /**
  * Applies the rules of design doc 3-4 to what the LLM proposed, *before* it touches a report:
@@ -56,7 +62,7 @@ class PayloadValidator(
         dateTime(payload.date_time_text, ev["date_time_text"], transcript, clauses, capturedAt)
 
         universalNegations(clauses)
-        return ValidationResult(proposals.toList(), rejections.toList())
+        return ValidationResult(proposals.toList(), rejections.toList(), LlmHint.from(payload))
     }
 
     // ---- field handlers ------------------------------------------------------------------------

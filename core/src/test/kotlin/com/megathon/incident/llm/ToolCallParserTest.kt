@@ -91,4 +91,25 @@ class ToolCallParserTest {
         val f = fail("nonsense")
         assertTrue(f.raw.contains("nonsense"))
     }
+
+    // ---- optional urgency hints (Q6) -----------------------------------------------------------
+
+    @Test fun parsesTheOptionalUrgencyHints() {
+        val p = ok("""{"tool":"update_report","arguments":{"location":"Lab","impact_hint":4,"ongoing":true}}""")
+        assertEquals(4, p.impact_hint)
+        assertEquals(true, p.ongoing)
+    }
+
+    @Test fun aNumericStringHintIsAccepted() =
+        assertEquals(4, ok("""{"tool":"update_report","arguments":{"impact_hint":"4"}}""").impact_hint)
+
+    @Test fun anUnparseableHintIsDroppedWithoutFailingTheReport() {
+        val p = ok("""{"tool":"update_report","arguments":{"location":"Lab","impact_hint":"high","ongoing":"maybe"}}""")
+        assertEquals("Lab", p.location)
+        assertNull(p.impact_hint)
+        assertNull(p.ongoing)
+    }
+
+    @Test fun hintsAreOptional() = assertNull(ok("""{"tool":"update_report","arguments":{"location":"Lab"}}""").impact_hint)
 }
+

@@ -1,5 +1,6 @@
 package com.megathon.incident.priority
 
+import com.megathon.incident.domain.LlmHint
 import com.megathon.incident.domain.Signal
 import com.megathon.incident.domain.Source
 import com.megathon.incident.tam.TamCueLists
@@ -12,7 +13,8 @@ import kotlin.test.assertTrue
 class UrgencyFeatureExtractorTest {
     private val extractor = UrgencyFeatureExtractor(HazardLexicon.loadDefault(), TamDetector(TamCueLists.loadDefault()))
 
-    private fun f(text: String, signals: List<Signal> = emptyList()) = extractor.extract(UrgencyInput(text, signals))
+    private fun f(text: String, signals: List<Signal> = emptyList(), hint: LlmHint? = null) =
+        extractor.extract(UrgencyInput(text, signals, hint))
 
     private fun labels(text: String) = f(text).hazards.map { it.label }
 
@@ -281,4 +283,43 @@ class UrgencyFeatureExtractorTest {
     @Test fun aWeakCueCountsWhenThereIsARealHazard() = assertTrue(f("there is a spill in the corridor, please hurry").distress)
 
     @Test fun devanagariLeakWordIsRecognised() = assertTrue("leak" in labels("थोड़ा पानी लीक हो रहा है"))
+
+    // ---- Q6: the language-model hint can only raise, and only one step above the rules ---------------
+
+    @Test fun aHintRaisesAnUnrecognisedReport() {
+        val r = f("there is something strange in the basement", hint = LlmHint(impact = 4))
+        assertEquals(4, r.impact)
+        assertTrue(r.reasons.any { it.source == Source.LLM })
+    }
+
+    @Test fun aHintNeverLowersWhatTheRulesFound() =
+        assertEquals(5, f("my house is on fire", hint = LlmHint(impact = 1, ongoing = false)).impact)
+
+    @Test fun aHintOfFiveIsCappedOneStepAboveAnUnrecognisedReport() =
+        assertEquals(4, f("there is something strange in the basement", hint = LlmHint(impact = 5)).impact)
+
+    @Test fun aHintIsCappedOneStepAboveARecognisedHazard() =
+        assertEquals(4, f("there is a spill in the corridor", hint = LlmHint(impact = 5)).impact)
+
+    @Test fun anAgreeingHintChangesNothing() =
+        assertEquals(5, f("my house is on fire", hint = LlmHint(impact = 5)).impact)
+
+    @Test fun anOngoingHintLiftsAFaultToImmediacyThreeButNotFour() {
+        val r = f("there is a water leak near the stairs", hint = LlmHint(ongoing = true))
+        assertEquals(3, r.immediacy)
+    }
+
+    @Test fun anOngoingHintOnAnUnrecognisedReportIsImmediacyThree() =
+        assertEquals(3, f("there is something strange in the basement", hint = LlmHint(ongoing = true)).immediacy)
+
+    @Test fun aStatedNotUrgentNuisanceIsStillRespected() =
+        assertEquals(1, f("a pothole near the gate, not urgent", hint = LlmHint(ongoing = true)).immediacy)
+
+    @Test fun anAbsentHintChangesNothing() {
+        val base = f("there is a spill in the corridor")
+        val none = f("there is a spill in the corridor", hint = LlmHint())
+        assertEquals(base.impact, none.impact)
+        assertEquals(base.immediacy, none.immediacy)
+    }
 }
+

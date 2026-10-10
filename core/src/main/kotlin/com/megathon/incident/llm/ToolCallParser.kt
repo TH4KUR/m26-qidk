@@ -60,11 +60,31 @@ object ToolCallParser {
         }
         val args = found.arguments as? JsonObject
             ?: return ParseResult.Failure(FailureCode.INVALID_ARGUMENTS, "arguments is not an object", raw)
-        return runCatching { json.decodeFromJsonElement(ExtractionPayload.serializer(), nullifyLiterals(args)) }
+        return runCatching { json.decodeFromJsonElement(ExtractionPayload.serializer(), sanitizeHints(nullifyLiterals(args) as JsonObject)) }
             .fold(
                 onSuccess = { ParseResult.Ok(it, found.kind) },
                 onFailure = { ParseResult.Failure(FailureCode.INVALID_ARGUMENTS, it.message ?: "decode error", raw) },
             )
+    }
+
+    /**
+     * The urgency hints are optional extras. A small model that writes "high" or "maybe" must not
+     * cost us the whole report, so unparseable hints are dropped and numeric strings are accepted.
+     */
+    private fun sanitizeHints(args: JsonObject): JsonObject {
+        val out = args.toMutableMap()
+        out["impact_hint"]?.let { v ->
+            val n = (v as? JsonPrimitive)?.content?.trim()?.toIntOrNull()
+            if (n == null) out.remove("impact_hint") else out["impact_hint"] = JsonPrimitive(n)
+        }
+        out["ongoing"]?.let { v ->
+            when ((v as? JsonPrimitive)?.content?.trim()?.lowercase()) {
+                "true" -> out["ongoing"] = JsonPrimitive(true)
+                "false" -> out["ongoing"] = JsonPrimitive(false)
+                else -> out.remove("ongoing")
+            }
+        }
+        return JsonObject(out)
     }
 
     /** Small models write `"null"` or `""` for absent values; treat those as JSON null / drop them from lists. */

@@ -48,6 +48,8 @@ data class LexiconFile(
     /** Strong cues ("help", "bachao") count on their own. */
     val distressStrongCues: List<String> = emptyList(),
     val distressEmotions: List<String> = emptyList(),
+    /** Phrases by which a reporter cancels or corrects an earlier alarm ("false alarm", "galti se"). */
+    val cancelCues: List<String> = emptyList(),
     val signals: List<SignalDef> = emptyList(),
 )
 
@@ -65,7 +67,7 @@ class HazardLexicon(val file: LexiconFile) {
             hazards = hazards.map { it.copy(phrases = it.phrases.nfc(), notWhen = it.notWhen.nfc()) },
             compounds = compounds.map { it.copy(andAnyOf = it.andAnyOf.nfc()) },
             peopleCues = peopleCues.nfc(), resolutionCues = resolutionCues.nfc(), lowUrgencyCues = lowUrgencyCues.nfc(),
-            distressCues = distressCues.nfc(), distressStrongCues = distressStrongCues.nfc(),
+            distressCues = distressCues.nfc(), distressStrongCues = distressStrongCues.nfc(), cancelCues = cancelCues.nfc(),
             signals = signals.map { it.copy(matches = it.matches.nfc()) },
         )
 
