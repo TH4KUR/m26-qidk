@@ -39,11 +39,11 @@ class QuestionPlanner {
             val yesterday = QuickReply("Yesterday", field, "yesterday")
             Ask(field, if (noDate) "Was that today?" else "Which day was that?", listOf(today, yesterday))
         } else {
-            Ask(field, "When did it happen?", listOf(QuickReply("Just now", field, "now")))
+            Ask(field, "When was that?", listOf(QuickReply("Just now", field, "now")))
         }
         Field.SEVERITY -> {
             val suggested = report.value(field).takeIf { it.status == ValueStatus.SUGGESTED }?.text
-            Ask(field, "How severe is it?", SEVERITY_CHOICES.map { (label, s) -> QuickReply(label, field, s.wire, suggested = s.wire == suggested) })
+            Ask(field, "How bad is it?", SEVERITY_CHOICES.map { (label, s) -> QuickReply(label, field, s.wire, suggested = s.wire == suggested) })
         }
         else -> Ask(field, "Can you tell me more?", emptyList())
     }

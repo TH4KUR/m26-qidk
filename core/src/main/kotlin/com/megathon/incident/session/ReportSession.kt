@@ -90,7 +90,7 @@ class ReportSession(
      */
     suspend fun onUtterance(text: String, stt: StageRecord? = null, signals: List<Signal> = emptyList(), capturedAt: Instant? = null) {
         if (text.isBlank()) {
-            fail("I didn't catch that. Try again, a little closer to the microphone.")
+            fail("I didn't catch that. Could you say it again, a little closer to the microphone?")
             return
         }
         val said = text.trim()
@@ -111,7 +111,7 @@ class ReportSession(
         }
         record(StageRecord("Read", llm.name, result.compute, result.elapsedMs))
         if (parsed !is ParseResult.Ok) {
-            fail("I couldn't make sense of that one. Please say it again.")
+            fail("I didn't quite get that. Could you say it again?")
             return
         }
         log("update_report", result.text.trim())

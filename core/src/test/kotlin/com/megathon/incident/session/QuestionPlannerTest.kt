@@ -24,8 +24,28 @@ class QuestionPlannerTest {
     @Test fun theSlideExampleAsksExactlyOneQuestionAboutSeverity() {
         val q = planner.next(full(), emptySet(), low, emptyList())!!
         assertEquals(listOf(Field.SEVERITY), q.asks.map { it.field })
-        assertEquals("How severe is it?", q.spoken)
+        assertEquals("How bad is it?", q.spoken)
         assertEquals(listOf("Minor", "Moderate", "Severe", "Critical", "No harm"), q.asks.single().replies.map { it.label })
+    }
+
+    @Test fun aMissingTimeIsAskedAsWhenWasThat() {
+        val r = full().with(Field.DATE_TIME, FieldValue(null, ValueStatus.MISSING)).with(Field.SEVERITY, FieldValue("minor", ValueStatus.USER_CONFIRMED))
+        val q = planner.next(r, emptySet(), low, emptyList())!!
+        assertEquals(listOf(Field.DATE_TIME), q.asks.map { it.field })
+        assertEquals("When was that?", q.spoken)
+        assertEquals(listOf("Just now"), q.asks.single().replies.map { it.label })
+    }
+
+    @Test fun aNonUrgentLocationIsAskedAsWhereDidItHappen() {
+        val r = full().with(Field.LOCATION, FieldValue(null, ValueStatus.MISSING)).with(Field.SEVERITY, FieldValue("minor", ValueStatus.USER_CONFIRMED))
+        assertEquals("Where did it happen?", planner.next(r, emptySet(), low, emptyList())!!.spoken)
+    }
+
+    @Test fun twoQuestionsInOneTurnAreTwoShortSentencesThatDoNotEchoEachOther() {
+        val empty = IncidentReport.empty("r", 0)
+        assertEquals("What kind of incident is it? Where did it happen?", planner.next(empty, emptySet(), low, emptyList())!!.spoken)
+        val noPlaceNoTime = full().with(Field.LOCATION, FieldValue(null, ValueStatus.MISSING)).with(Field.DATE_TIME, FieldValue(null, ValueStatus.MISSING))
+        assertEquals("Where did it happen? When was that?", planner.next(noPlaceNoTime, emptySet(), low, emptyList())!!.spoken)
     }
 
     @Test fun nothingMissingMeansNoQuestion() {
