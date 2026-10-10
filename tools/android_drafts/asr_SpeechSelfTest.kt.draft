@@ -1,0 +1,49 @@
+package com.megathon.incident.asr
+
+import android.content.Context
+import com.megathon.incident.speech.TranscriptAgreement
+import com.megathon.incident.testing.ContractReport
+import com.megathon.incident.testing.Compute
+import com.megathon.incident.testing.SpeechEngine
+import com.megathon.incident.testing.SpeechEngineContract
+import com.megathon.incident.testing.WavDecoder
+
+/**
+ * Startup check for the proof strip. It runs the shared engine contract on a bundled speech clip and, when a CPU
+ * reference engine is given, compares the NPU transcript with the CPU one so a silently wrong NPU result is caught.
+ *
+ * The clip is an app asset (16 kHz mono PCM16 WAV, for example `selftest/slide_example.wav`), recorded on the kit.
+ */
+class SpeechSelfTest(private val context: Context, private val clipAsset: String = DEFAULT_CLIP) {
+    data class Result(
+        val engineName: String,
+        val contract: ContractReport,
+        val transcript: String,
+        val compute: Compute?,
+        /** Null when no CPU reference was given. */
+        val agreement: TranscriptAgreement.Verdict?,
+    ) {
+        val passed: Boolean get() = contract.passed && (agreement?.agrees ?: true)
+    }
+
+    suspend fun run(
+        engine: SpeechEngine,
+        cpuReference: SpeechEngine? = null,
+        allowedCompute: Set<Compute> = SpeechEngineContract.LIVE_COMPUTE,
+        language: String = "en",
+    ): Result {
+        val pcm = WavDecoder.decode(context.assets.open(clipAsset).use { it.readBytes() }, clipAsset)
+        val contract = SpeechEngineContract.verify(engine, pcm, allowedCompute, listOf(language))
+        val heard = runCatching { engine.transcribe(pcm, language) }.getOrNull()
+        val agreement = if (cpuReference != null && heard != null) {
+            TranscriptAgreement.compare(heard.text, cpuReference.transcribe(pcm, language).text)
+        } else {
+            null
+        }
+        return Result(engine.name, contract, heard?.text.orEmpty(), heard?.compute, agreement)
+    }
+
+    companion object {
+        const val DEFAULT_CLIP = "selftest/slide_example.wav"
+    }
+}

@@ -1,0 +1,111 @@
+package com.megathon.incident.asr
+
+import android.content.Context
+import com.argmaxinc.whisperkit.ExperimentalWhisperKit
+import com.argmaxinc.whisperkit.WhisperKit
+import com.megathon.incident.speech.WhisperKitFeed
+import com.megathon.incident.testing.Compute
+import com.megathon.incident.testing.SpeechEngine
+import com.megathon.incident.testing.Transcript
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlin.math.abs
+
+/**
+ * English speech engine on WhisperKit (archived library, English only, no language or task API).
+ * One utterance at a time: init, stream 100 ms byte chunks, pad to a 30 s window, deinitialize, read the text.
+ *
+ * Honesty rules: [Transcript.compute] says where the encoder and decoder were *configured* to run; the QNN
+ * delegate may still fall back to the CPU, which the app's startup self-test checks against a CPU reference.
+ * A request for any language but English is refused rather than answered with English text under another label.
+ *
+ * First use downloads the model from Hugging Face (network once); call [warm] at app start, with Wi-Fi on the
+ * first time, so the demo can run offline. The first NPU run is slow (graph preparation), so warm it.
+ */
+@OptIn(ExperimentalWhisperKit::class)
+class WhisperKitEngine(
+    context: Context,
+    private val profile: Profile = Profile.NPU_QUALCOMM_TINY_EN,
+) : SpeechEngine {
+    enum class Profile(val model: String, val encoderBackend: Int, val decoderBackend: Int) {
+        NPU_QUALCOMM_TINY_EN(WhisperKit.Builder.QUALCOMM_TINY_EN, WhisperKit.Builder.CPU_AND_NPU, WhisperKit.Builder.CPU_AND_NPU),
+        NPU_QUALCOMM_BASE_EN(WhisperKit.Builder.QUALCOMM_BASE_EN, WhisperKit.Builder.CPU_AND_NPU, WhisperKit.Builder.CPU_AND_NPU),
+        CPU_OPENAI_TINY_EN(WhisperKit.Builder.OPENAI_TINY_EN, WhisperKit.Builder.CPU_ONLY, WhisperKit.Builder.CPU_ONLY),
+    }
+
+    override val name: String = "WhisperKit ${profile.name}"
+
+    private val appContext = context.applicationContext
+    private val lock = Any()
+    private val accumulator = WhisperKitFeed.TranscriptAccumulator()
+    private val oneAtATime = Mutex()
+    private var kit: WhisperKit? = null
+
+    val compute: Compute = WhisperKitFeed.computeLabel(profile.encoderBackend, profile.decoderBackend)
+
+    /** Builds the engine and loads (downloads on first use) the model. Safe to call again. */
+    suspend fun warm(onProgress: (Float) -> Unit = {}) {
+        withContext(Dispatchers.Default) {
+            oneAtATime.withLock { loadedKit(onProgress) }
+        }
+    }
+
+    override suspend fun transcribe(pcm: ShortArray, language: String): Transcript {
+        require(language == "en") { "WhisperKit is English only; '$language' needs another engine" }
+        return withContext(Dispatchers.Default) {
+            oneAtATime.withLock {
+                val startedAt = System.nanoTime()
+                val text = if (isSilent(pcm)) "" else run(pcm)
+                Transcript(text, language, (System.nanoTime() - startedAt) / 1_000_000, compute)
+            }
+        }
+    }
+
+    /** Releases the native engine. */
+    fun close() {
+        synchronized(lock) { kit = null }
+    }
+
+    private suspend fun loadedKit(onProgress: (Float) -> Unit): WhisperKit {
+        kit?.let { return it }
+        val built = WhisperKit.Builder()
+            .setModel(profile.model)
+            .setApplicationContext(appContext)
+            .setEncoderBackend(profile.encoderBackend)
+            .setDecoderBackend(profile.decoderBackend)
+            .setCallback { what, result ->
+                if (what == WhisperKit.TextOutputCallback.MSG_TEXT_OUT) {
+                    synchronized(lock) { accumulator.onResult(result.text, result.segments.map { it.text }) }
+                }
+            }
+            .build()
+        built.loadModel().collect { onProgress(it.fractionCompleted) }
+        kit = built
+        return built
+    }
+
+    private suspend fun run(pcm: ShortArray): String {
+        val whisper = loadedKit {}
+        synchronized(lock) { accumulator.reset() }
+        val bytes = WhisperKitFeed.toPcmBytes(pcm)
+        whisper.init(16_000, 1, 0)
+        try {
+            WhisperKitFeed.chunks(bytes).forEach { whisper.transcribe(it) }
+            val padding = WhisperKitFeed.paddingBytes(bytes.size)
+            if (padding > 0) whisper.transcribe(ByteArray(padding))
+        } finally {
+            whisper.deinitialize()
+        }
+        return synchronized(lock) { accumulator.text() }
+    }
+
+    /** Whisper invents text ("Thank you.") for silence, so near-silent input never reaches the model. */
+    private fun isSilent(pcm: ShortArray): Boolean = pcm.isEmpty() || pcm.all { abs(it.toInt()) < SILENCE_PEAK }
+
+    private companion object {
+        const val SILENCE_PEAK = 50
+    }
+}
