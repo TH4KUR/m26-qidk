@@ -28,11 +28,27 @@ Status rules: a field holds `SUGGESTED` only when it was `MISSING`; a change to 
 | `Tam`, `Tense`, `Aspect`, `Modality` | `domain/Tam.kt` | new |
 | `UrgencyAssessment`, `UrgencyReason`, `TriageLane`, `priorityForScore` | `domain/Urgency.kt` | new |
 | `ParseResult`, `FailureCode`, `Envelope` | `llm/ToolCallParser.kt` | new; `FailureCode.DUPLICATE_KEY` |
-| `FieldProposal`, `Rejection`, `ValidationResult` | `llm/PayloadValidator.kt` | new; `ValidationResult.hint` |
+| `FieldProposal`, `Rejection`, `ValidationResult` | `llm/PayloadValidator.kt` | new; `ValidationResult.hint`; `FieldProposal.temporal` and `.nearMiss` are **additive, default null** |
+| `TemporalValue` | `domain/TemporalResolver.kt` | **added `from`, `to`** (default null; a week is a range with `date == null`) |
+| `NearMiss(heard, meant)` | `domain/GroundingValidator.kt` | new |
+| `HomophoneTable`, `Homophones` | `suggest/Homophones.kt` | **D owns**; copied here verbatim (same blob) so `:core` builds without D's branch |
 | `LlmEngine`, `LlmRequest`, `LlmResult`, `FakeLlmEngine`, `EngineFactory` | **A owns these** (not C) | removed from C's branch to avoid a name collision |
 | `HedgeDetector` | `tam/HedgeDetector.kt` | new (D needs it); `TamHedgeDetector` is the real one |
 | `FakeHedgeDetector` | `testing/` | new fake for D |
 | `PriorityAdvisor` | `priority/PriorityAdvisor.kt` | `onChunk(text, signals, hint)`; outputs `deescalation`, `keyQuestion`; `acceptDeescalation()`, `answerKeyQuestion()` |
+
+## Weeks and near-misses (agreed with D)
+
+| Input | What `PayloadValidator` returns |
+|---|---|
+| "last week" / "pichhle hafte" / "पिछले हफ्ते" | `DATE_TIME` REPORTED, `temporal.date == null`, `temporal.from`..`to` = previous Monday..Sunday (ISO weeks), `approximate`, note "needs clarification: which day" |
+| "this week" / "is hafte" | same, `from` = this Monday, `to` = today |
+| "a week ago" / "2 weeks ago" / "ek hafte pehle" | `temporal.date` = capture - 7 (or 14) days, approximate, time missing (still needs clarification) |
+| the model's value is not in the transcript but a word sounds alike ("last weak" for "last week", "room to" for "room 2") or is one letter off in a word of 4+ letters ("leaks" for "leak") | **SUGGESTED**, `value.evidence` = the words actually heard, `nearMiss.heard` / `.meant`, note `heard "...", proposed "..."`. Never REPORTED; the 0.5 / 0.8 overlap thresholds are unchanged |
+
+Rules: names (`persons_involved`, `witnesses`) use the sound-alike table only, never the one-letter rule (Rahul/Rahil are two people); Hindi words are never matched by the one-letter rule; a near-miss in a negated clause is still rejected; a DATE_TIME that was never said is still rejected.
+
+D's planner: ask "which day?" when `temporal.date == null && temporal.from != null`; build the chip from `nearMiss` (`original = heard`, `proposed = meant`).
 
 ## What each consumer should do
 - **D:** build `ReportLogic` on `ValueStatus` and `ReportState`; use `HedgeDetector` (real or fake) for hedge chips; filter chips with `hasDecided`; obey `PriorityAdvisor.lane()` in the follow-up planner. A hedged or ungrounded model value arrives from `PayloadValidator` as a `FieldProposal` with status `SUGGESTED` and a `note`.
