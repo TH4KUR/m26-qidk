@@ -6,6 +6,8 @@ import com.megathon.incident.domain.ValueStatus
 import com.megathon.incident.llm.LlmEngine
 import com.megathon.incident.llm.LlmRequest
 import com.megathon.incident.llm.LlmResult
+import com.megathon.incident.priority.KeyAnswer
+import com.megathon.incident.priority.PriorityAdvisor
 import com.megathon.incident.testing.Compute
 import com.megathon.incident.testing.FakeLlmEngine
 import kotlinx.coroutines.runBlocking
@@ -35,25 +37,30 @@ class ReportSessionTest {
     private fun ReportSession.say(text: String, stt: StageRecord? = null) = runBlocking { onUtterance(text, stt) }
     private fun ReportSession.field(f: Field) = ui.value.fields.first { it.field == f }
 
+    private fun ReportSession.tap(field: Field, label: String) =
+        answer((ui.value.state as SessionState.Asking).question.asks.first { it.field == field }.replies.first { it.label == label })
+
+    /** The slide sentence, the severity by voice, and the day tapped: nothing left to ask, so the report is in review. */
     private fun reviewed(): ReportSession = session().also {
         it.say(slide)
         it.say("Minor, nobody was hurt.")
+        it.tap(Field.DATE_TIME, "Today")
     }
 
-    @Test fun theSlideExampleFillsTheFieldsAndAsksOnlyHowSevere() {
+    @Test fun theSlideExampleFillsTheFieldsAndAsksWhichDayAndHowSevere() {
         val s = session()
         s.say(slide)
         val state = assertIs<SessionState.Asking>(s.ui.value.state)
-        assertEquals(listOf(Field.SEVERITY), state.question.asks.map { it.field })
-        assertEquals("How severe is it?", s.ui.value.say?.text)
+        assertEquals(listOf(Field.DATE_TIME, Field.SEVERITY), state.question.asks.map { it.field }, "the time has no date, so the day is asked")
+        assertEquals("Was that today? How severe is it?", s.ui.value.say?.text)
 
         assertEquals("Water leak or flood", s.field(Field.INCIDENT_TYPE).value)
         assertEquals(UiStatus.HEARD, s.field(Field.INCIDENT_TYPE).status)
         assertEquals("Conference Room 2", s.field(Field.LOCATION).value)
         assertEquals("near Conference Room 2", s.field(Field.LOCATION).evidence)
-        assertEquals("Today · about 10:00 AM", s.field(Field.DATE_TIME).value)
-        assertEquals(UiStatus.HEARD, s.field(Field.DATE_TIME).status)
-        assertTrue(s.field(Field.DATE_TIME).hint!!.contains("assumed today", ignoreCase = true))
+        assertEquals("About 10:00 AM · day not given", s.field(Field.DATE_TIME).value)
+        assertEquals(UiStatus.NEEDED, s.field(Field.DATE_TIME).status)
+        assertEquals("Which day was this?", s.field(Field.DATE_TIME).hint)
         assertEquals("isolated the area", s.field(Field.IMMEDIATE_ACTIONS).value)
         assertEquals(listOf("update_report", "ask_user"), s.ui.value.toolLog.map { it.tool })
     }
@@ -69,18 +76,20 @@ class ReportSessionTest {
         val s = session()
         s.say(slide)
         s.say("Minor, nobody was hurt.")
-        assertEquals(SessionState.Review, s.ui.value.state)
         assertEquals(UiStatus.HEARD, s.field(Field.SEVERITY).status)
         assertEquals("Minor", s.field(Field.SEVERITY).value)
-        assertEquals(listOf("update_report", "ask_user", "update_report"), s.ui.value.toolLog.map { it.tool })
+        assertEquals(listOf(Field.DATE_TIME), assertIs<SessionState.Asking>(s.ui.value.state).question.asks.map { it.field }, "only the day is still open")
+        s.tap(Field.DATE_TIME, "Today")
+        assertEquals(SessionState.Review, s.ui.value.state)
+        assertEquals(listOf("update_report", "ask_user", "update_report", "ask_user", "update_report"), s.ui.value.toolLog.map { it.tool })
     }
 
     @Test fun tappingAReplyAnswersWithoutTheModel() {
         val llm = Scripted(FakeLlmEngine.DECK_REPLY)
         val s = session(llm)
         s.say(slide)
-        val reply = (s.ui.value.state as SessionState.Asking).question.asks.single().replies.first { it.label == "Moderate" }
-        s.answer(reply)
+        s.tap(Field.SEVERITY, "Moderate")
+        s.tap(Field.DATE_TIME, "Today")
         assertEquals(1, llm.calls, "a tap must not call the model")
         assertEquals(SessionState.Review, s.ui.value.state)
         assertEquals("Moderate", s.field(Field.SEVERITY).value)
@@ -124,6 +133,8 @@ class ReportSessionTest {
         s.say(slide)
         s.acceptSuggestion(Field.SEVERITY)
         assertEquals(UiStatus.CONFIRMED, s.field(Field.SEVERITY).status)
+        assertEquals(listOf(Field.DATE_TIME), assertIs<SessionState.Asking>(s.ui.value.state).question.asks.map { it.field })
+        s.tap(Field.DATE_TIME, "Today")
         assertEquals(SessionState.Review, s.ui.value.state)
     }
 
@@ -216,5 +227,130 @@ class ReportSessionTest {
         assertTrue(s.ui.value.transcripts.isEmpty())
         assertNull(s.ui.value.priority?.takeIf { it.level > Priority.LOW })
         assertTrue(s.ui.value.fields.filter { it.mandatory }.all { it.status == UiStatus.NEEDED })
+    }
+
+    // ---- replies: hint, urgent lane, de-escalation chip, key question, undated times -----------------------------
+
+    private fun update(args: String) = """{"tool":"update_report","arguments":$args}"""
+    private val nothing = update("{}")
+    private val strange = "there is something strange in the basement"
+    private val fireNoPlace = update("""{"incident_type":"fire_smoke","evidence":{"incident_type":"fire"}}""")
+
+    @Test fun theModelsHintReachesTheAdvisorAndRaisesTheLevelButNotToUrgent() {
+        val plain = session(Scripted(nothing)).also { it.say(strange) }
+        val hinted = session(Scripted(update("""{"impact_hint":5,"ongoing":true}"""))).also { it.say(strange) }
+        assertTrue(plain.ui.value.priority!!.level < Priority.HIGH, "without a hint: ${plain.ui.value.priority!!.level}")
+        assertTrue(hinted.ui.value.priority!!.level >= Priority.HIGH, "with a hint: ${hinted.ui.value.priority!!.level}")
+        assertTrue(hinted.ui.value.priority!!.level < Priority.URGENT)
+    }
+
+    @Test fun anUrgentIncidentAsksOnlyWhereAndOffersSubmitNow() {
+        val s = session(Scripted(fireNoPlace))
+        s.say("There is a fire")
+        assertEquals(Priority.URGENT, s.ui.value.priority?.level)
+        val asking = assertIs<SessionState.Asking>(s.ui.value.state)
+        assertEquals(listOf(Field.LOCATION), asking.question.asks.map { it.field })
+        assertTrue(s.ui.value.canSubmitNow)
+    }
+
+    @Test fun anUrgentReportCanBeSubmittedAtOnceAndListsWhatIsMissing() {
+        val store = InMemoryReportStore()
+        val s = session(Scripted(fireNoPlace), store)
+        s.say("There is a fire")
+        runBlocking { s.submit() }
+        assertIs<SessionState.Submitted>(s.ui.value.state)
+        assertEquals(1, store.saved.size)
+        assertEquals(false, s.ui.value.canSubmitNow, "nothing to submit once it is sent")
+        val call = s.ui.value.toolLog.last()
+        assertEquals("submit_report", call.tool)
+        for (f in listOf("location", "date_time")) assertTrue(call.json.contains(f), "missing list names $f: ${call.json}")
+    }
+
+    @Test fun skippedFieldsOnTheUrgentLaneStayFlaggedAsNeededAndDoNotBlock() {
+        val s = session(Scripted(fireNoPlace, update("""{"location":"the kitchen","evidence":{"location":"the kitchen"}}""")))
+        s.say("There is a fire")
+        s.say("In the kitchen")
+        assertEquals(SessionState.Review, s.ui.value.state, "the urgent lane asks for the place and nothing else")
+        assertEquals(UiStatus.NEEDED, s.field(Field.DATE_TIME).status)
+        assertTrue(s.ui.value.canSubmitNow)
+    }
+
+    @Test fun aRoutineReportDoesNotOfferSubmitNow() {
+        val s = session()
+        s.say(slide)
+        assertEquals(false, s.ui.value.canSubmitNow)
+        assertEquals(false, session().ui.value.canSubmitNow)
+    }
+
+    @Test fun aCancelledAlarmOffersToLowerTheLevelButNeverDoesItBySelf() {
+        val s = session(Scripted(update("""{"incident_type":"fire_smoke","location":"the kitchen","evidence":{"incident_type":"fire","location":"the kitchen"}}"""), nothing))
+        s.say("There is a fire in the kitchen")
+        assertNull(s.ui.value.deescalation)
+        s.say("Sorry, false alarm")
+        val offer = assertNotNull(s.ui.value.deescalation)
+        assertEquals(Priority.LOW, offer.offerLevel)
+        assertEquals(Priority.URGENT, s.ui.value.priority?.level, "the level is unchanged until the reporter taps")
+        assertEquals(false, s.ui.value.priority?.overriddenByUser)
+
+        s.overridePriority(Priority.LOW, "cancelled alarm")
+        assertEquals(Priority.LOW, s.ui.value.priority?.level)
+        assertEquals(true, s.ui.value.priority?.overriddenByUser)
+        assertNull(s.ui.value.deescalation, "the chip is gone once the reporter decided")
+    }
+
+    @Test fun nothingRecognisedAsksTheOneKeyQuestionFirstAndOnlyOnce() {
+        val s = session(Scripted(nothing))
+        s.say(strange)
+        val asking = assertIs<SessionState.Asking>(s.ui.value.state)
+        assertTrue(asking.question.key)
+        assertEquals(PriorityAdvisor.KEY_QUESTION, asking.question.spoken, "a single spoken question, nothing else with it")
+        assertEquals(PriorityAdvisor.KEY_QUESTION, s.ui.value.say?.text)
+
+        s.answerKeyQuestion(KeyAnswer.NO)
+        val next = assertIs<SessionState.Asking>(s.ui.value.state)
+        assertEquals(false, next.question.key)
+        assertEquals(Field.INCIDENT_TYPE, next.question.asks.first().field, "then the normal questions")
+
+        s.say("It is near the stairs")
+        val askedKey = s.ui.value.toolLog.filter { it.tool == "ask_user" && it.json.contains(PriorityAdvisor.KEY_QUESTION) }
+        assertEquals(1, askedKey.size)
+    }
+
+    @Test fun answeringYesToTheKeyQuestionRaisesToUrgentAndSpeaksTheEmergencyLine() {
+        val s = session(Scripted(nothing))
+        s.say(strange)
+        s.answerKeyQuestion(KeyAnswer.YES)
+        assertEquals(Priority.URGENT, s.ui.value.priority?.level)
+        assertTrue(s.ui.value.say!!.text.startsWith(PriorityAdvisor.EMERGENCY_LINE))
+        assertEquals(listOf(Field.LOCATION), assertIs<SessionState.Asking>(s.ui.value.state).question.asks.map { it.field })
+    }
+
+    @Test fun aRecognisedReportDoesNotAskTheKeyQuestion() {
+        val s = session()
+        s.say(slide)
+        assertEquals(false, (s.ui.value.state as SessionState.Asking).question.key)
+    }
+
+    @Test fun aTimeWithoutADateIsAskedAndTappingTodayConfirmsIt() {
+        val s = session()
+        s.say(slide)
+        assertEquals("date missing ≈10:00 (around 10 AM)", s.ui.value.report.value(Field.DATE_TIME).text, "nothing was assumed")
+        assertNull(s.field(Field.DATE_TIME).hint?.takeIf { it.contains("assumed", ignoreCase = true) })
+        val ask = (s.ui.value.state as SessionState.Asking).question.asks.first { it.field == Field.DATE_TIME }
+        assertEquals("Was that today?", ask.prompt)
+        s.answer(ask.replies.first { it.label == "Today" })
+        val v = s.ui.value.report.value(Field.DATE_TIME)
+        assertEquals("2026-10-11 ≈10:00 (around 10 AM)", v.text)
+        assertEquals(ValueStatus.USER_CONFIRMED, v.status)
+        assertEquals("Today · about 10:00 AM", s.field(Field.DATE_TIME).value)
+    }
+
+    @Test fun tappingYesterdayStoresYesterdayAsConfirmed() {
+        val s = session()
+        s.say(slide)
+        val ask = (s.ui.value.state as SessionState.Asking).question.asks.first { it.field == Field.DATE_TIME }
+        s.answer(ask.replies.first { it.label == "Yesterday" })
+        assertEquals("2026-10-10 ≈10:00 (around 10 AM)", s.ui.value.report.value(Field.DATE_TIME).text)
+        assertEquals(ValueStatus.USER_CONFIRMED, s.ui.value.report.value(Field.DATE_TIME).status)
     }
 }

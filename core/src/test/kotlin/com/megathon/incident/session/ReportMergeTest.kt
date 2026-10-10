@@ -76,19 +76,25 @@ class ReportMergeTest {
         assertEquals(ValueStatus.SUGGESTED, out.report.value(Field.LOCATION).status)
     }
 
-    @Test fun aTimeWithoutADateThatAlreadyPassedTodayIsAssumedToBeToday() {
+    @Test fun aTimeWithoutADateIsNeverCompletedAndIsFlaggedToBeAsked() {
         val p = FieldProposal(Field.DATE_TIME, FieldValue("date missing ≈10:00 (around 10 AM)", ValueStatus.REPORTED, "around 10 AM"), "needs clarification: date or exact time missing")
         val out = ReportMerge.apply(report(), result(p), ctx("around 10 AM"))
-        assertEquals("2026-10-11 ≈10:00 (around 10 AM)", out.report.value(Field.DATE_TIME).text)
-        assertEquals(setOf(Field.DATE_TIME), out.assumed)
-        assertTrue(out.clarify.isEmpty())
+        assertEquals("date missing ≈10:00 (around 10 AM)", out.report.value(Field.DATE_TIME).text, "the value stays as the validator produced it")
+        assertEquals(ValueStatus.REPORTED, out.report.value(Field.DATE_TIME).status)
+        assertEquals(setOf(Field.DATE_TIME), out.clarify)
     }
 
-    @Test fun aTimeLaterThanNowMeansItsMostRecentPastOccurrenceYesterday() {
+    @Test fun aTimeLaterThanNowIsNotMovedToYesterdayEither() {
         val p = FieldProposal(Field.DATE_TIME, FieldValue("date missing ≈18:00 (around 6 PM)", ValueStatus.REPORTED, "around 6 PM"), "needs clarification: date or exact time missing")
         val out = ReportMerge.apply(report(), result(p), ctx("around 6 PM"))
-        assertEquals("2026-10-10 ≈18:00 (around 6 PM)", out.report.value(Field.DATE_TIME).text, "18:00 has not happened yet on the 11th (it is 15:00)")
-        assertEquals(setOf(Field.DATE_TIME), out.assumed)
+        assertEquals("date missing ≈18:00 (around 6 PM)", out.report.value(Field.DATE_TIME).text, "no past-occurrence guess (it is 15:00 on the 11th)")
+        assertEquals(setOf(Field.DATE_TIME), out.clarify)
+    }
+
+    @Test fun aDateThatWasSaidIsKeptAndNotFlagged() {
+        val p = FieldProposal(Field.DATE_TIME, FieldValue("2026-10-10 ≈10:00 (yesterday around 10 AM)", ValueStatus.REPORTED, "yesterday around 10 AM"))
+        val out = ReportMerge.apply(report(), result(p), ctx("yesterday around 10 AM"))
+        assertEquals("2026-10-10 ≈10:00 (yesterday around 10 AM)", out.report.value(Field.DATE_TIME).text)
         assertTrue(out.clarify.isEmpty())
     }
 

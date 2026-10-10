@@ -3,6 +3,7 @@ package com.megathon.incident.session
 import com.megathon.incident.domain.Field
 import com.megathon.incident.domain.IncidentReport
 import com.megathon.incident.domain.PriorityAdvice
+import com.megathon.incident.priority.Deescalation
 import com.megathon.incident.testing.Compute
 
 /** What the screen shows for one field. Word + icon + colour are chosen from this, never colour alone. */
@@ -16,7 +17,7 @@ data class FieldView(
     val status: UiStatus,
     /** The reporter's own words that support the value. */
     val evidence: String?,
-    /** One short line of explanation: why it is suggested, what is assumed, what is asked. */
+    /** One short line of explanation: why it is suggested, what is asked. */
     val hint: String?,
     /** Filled by the assistant at submit time, not heard: labelled as such (disclosure). */
     val writtenByAssistant: Boolean,
@@ -27,8 +28,11 @@ data class QuickReply(val label: String, val field: Field, val value: String, va
 
 data class Ask(val field: Field, val prompt: String, val replies: List<QuickReply>)
 
-/** At most two [Ask]s per turn (lane cap). [spoken] is what the device says aloud. */
-data class Question(val asks: List<Ask>, val spoken: String)
+/**
+ * At most two [Ask]s per turn (lane cap). [spoken] is what the device says aloud.
+ * A [key] question is the advisor's dispatch-style "anyone hurt or in danger?": no asks, answered Yes / No / Not sure.
+ */
+data class Question(val asks: List<Ask>, val spoken: String, val key: Boolean = false)
 
 /** The visible "function call" trail (spec D5): update_report, ask_user, submit_report. */
 data class ToolLogEntry(val tool: String, val json: String, val atMs: Long)
@@ -63,4 +67,8 @@ data class SessionUi(
     val canUndo: Boolean,
     val say: Say?,
     val spokenSummary: String?,
+    /** The urgent lane (or high) offers sending now: the report is not yet submitted and the lane allows it. */
+    val canSubmitNow: Boolean = false,
+    /** Set when the reporter cancelled an alarm: a one-tap "lower to LOW?" offer. Never applied by itself. */
+    val deescalation: Deescalation? = null,
 )
