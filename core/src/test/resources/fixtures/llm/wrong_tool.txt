@@ -1,0 +1,1 @@
+{"tool":"submit_report","arguments":{"report_id":"r1"}}

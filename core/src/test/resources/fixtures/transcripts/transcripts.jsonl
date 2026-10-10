@@ -1,0 +1,15 @@
+{"id":"deck","text":"There was a water leak near Conference Room 2 around 10 AM. Maintenance has already isolated the area.","tags":["deck"],"expect":{"completed":true,"negated":false,"hedged":false}}
+{"id":"deck_whisper_mistakes","text":"there was a water leak near conference room to around ten am maintenance has already isolated the area","tags":["deck","asr-errors"],"expect":{"completed":true}}
+{"id":"deck_with_fillers","text":"Um, so there was, like, a water leak near Conference Room 2 around 10 AM, and maintenance has already isolated the area.","tags":["deck","fillers"],"expect":{"completed":true}}
+{"id":"negation_specific","text":"Ravi did not see it.","tags":["negation"],"expect":{"negated":true}}
+{"id":"negation_universal","text":"Nobody was hurt and nobody saw it.","tags":["negation"],"expect":{"negated":true}}
+{"id":"correction","text":"The leak is in Room 2. No, sorry, Room 3.","tags":["correction"],"expect":{"negated":true}}
+{"id":"hedge","text":"I think it might be a gas leak, I am not sure.","tags":["hedge"],"expect":{"hedged":true,"negated":false}}
+{"id":"planned","text":"We will call maintenance and the guard will come later.","tags":["planned"],"expect":{"planned":true,"completed":false}}
+{"id":"completed_actions","text":"We already called the fire brigade and turned off the main switch.","tags":["completed"],"expect":{"completed":true,"planned":false}}
+{"id":"ongoing","text":"The water is still coming and it keeps spreading.","tags":["ongoing"],"expect":{"ongoing":true}}
+{"id":"unresolved","text":"The leak has not stopped.","tags":["ongoing","unresolved"],"expect":{"ongoing":true}}
+{"id":"hindi_ongoing","text":"abhi bhi paani leak ho raha hai.","tags":["hindi","UNREVIEWED"],"expect":{"ongoing":true}}
+{"id":"hindi_negation","text":"koi ghayal nahi hua.","tags":["hindi","UNREVIEWED"],"expect":{"negated":true}}
+{"id":"hindi_devanagari","text":"पानी अभी भी रिस रहा है।","tags":["hindi","UNREVIEWED"],"expect":{"ongoing":true}}
+{"id":"hinglish_mix","text":"Conference room 2 ke paas water leak hua tha, maintenance ne band kar diya.","tags":["hinglish","UNREVIEWED"],"expect":{"completed":true}}

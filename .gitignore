@@ -34,3 +34,5 @@ local.properties
 *.iml
 captures/
 !gradle/wrapper/gradle-wrapper.jar
+
+.env
