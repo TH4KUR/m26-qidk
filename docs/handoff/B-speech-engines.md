@@ -17,7 +17,7 @@ Branch: `b/speech-engines` · Written 2026-10-10 · Read this whole file first, 
 4. `.claude/skills/qidk-npu-android/SKILL.md` (kit facts, section 1b and 1c)
 5. `reports/Indic ASR and TTS on Snapdragon.md` and all three files in `research_notes/Indic ASR and TTS on Snapdragon/` (`asr_models.md`, `tts_models.md`, `npu_deployment.md`)
 6. `docs/device/qidk-device-profile-2026-10-10.md`
-`PLAN-codex.md` is a teammate's plan made with another AI. It is a **reference only** (validation rules, negation tests), **not authoritative**: whether it overrides our plan is an open team decision.
+A teammate's earlier alternative plan was **removed from the repo**. **Our spec (D1-D21) and our plan with Addendum A are authoritative.** Its useful ideas (REPORTED/CONFIRMED labels, negation and correction tests, no severity guessing) are already adopted in the spec and in your tasks.
 
 ## 3. Ground rules (apply to everyone)
 - **No cloud inference at runtime, and never claim "runs on the NPU" for something on the CPU.** Say which compute each piece uses; disclose CPU parts.
@@ -30,7 +30,7 @@ Branch: `b/speech-engines` · Written 2026-10-10 · Read this whole file first, 
 
 ## 4. Pending team decisions that can change your work
 These are open (see `docs/team-split.md` section 7). **Assume the default until the lead tells you otherwise.**
-1. Which plan is authoritative: **default: our spec and plan with Addendum A.**
+1. Which plan is authoritative: **settled: ours** (the alternative plan was removed from the repo).
 2. Hindi/Telugu: **default: experimental lane**, decided at hour 16 (D19); English is core.
 3. Qualcomm Package Manager login: **default: assume none**, so Voice AI SDK routes are dead.
 4. Severity: **default: rules only suggest it** (D18); the user states or confirms it.
@@ -74,10 +74,60 @@ These are open (see `docs/team-split.md` section 7). **Assume the default until 
 ## 7. Definition of done for your part
 English transcription on the NPU through `SpeechEngine`; a ranked accent-contest table on our own recordings; `Signal` objects produced for the recorded clips with their compute labelled; TTS speaking questions in airplane mode.
 
-## 8. Starter prompt for your Claude
+## 7a. Stubs you own (do this first)
+Define the interfaces with A and C in the first 90 minutes, then publish the fakes so everyone can code against them. **Put the interfaces in `:core`; implementations in `:app`.**
+```kotlin
+// :core (pure Kotlin)
+enum class Compute { NPU, CPU, HYBRID, SIMULATED }
+data class Transcript(val text: String, val language: String, val elapsedMs: Long, val compute: Compute)
+interface SpeechEngine { val name: String; suspend fun transcribe(pcm: ShortArray, language: String): Transcript }
+interface SignalSource { suspend fun signals(pcm: ShortArray): List<Signal> }   // Signal type is C's
+interface Speaker { suspend fun speak(text: String) }
+```
+Ship these fakes (in `core/.../testing/`): **`FakeSpeechEngine`** (scripted text from `fixtures/`, optional delay, optional failure, includes the deck example with and without a "room to" mistake), **`FakeSignalSource`** (canned lists per clip ID: "fire alarm heard", "emotion angry"), **`WavFileSource`** (feeds recorded WAVs; E's Judge Bench needs it), **`FakeSpeaker`** (logs what it would say). Fakes report `Compute.SIMULATED`.
+**Contract tests** (`SpeechEngineContractTest`, one suite run against the fake and every real engine): non-empty text for a speech sample, empty for silence, honours the language argument, does not block the main thread, reports `elapsedMs` and `compute`. Pass it for WhisperKit, then sherpa-onnx QNN, then AI Hub.
+**Order:** draft interface and fakes before A's skeleton lands (plain Kotlin files); after A merges the skeleton, move them into `:core`, push, and tell A, C and D they can use `FAKE` immediately. Then build `WhisperKitEngine` behind the same interface, then the sherpa-onnx engine (mirror the CLI flags in the JNI config; the reference app is `android/SherpaOnnxSimulateStreamingAsr` in the sherpa-onnx repo [V per its docs]; A builds the native libraries on the VM).
+**Never let a fake pass as real:** it reports `SIMULATED`, the proof strip shows it, and release builds refuse it.
+
+## 8. Stubs, fakes and contract tests (the team pattern)
+Five people build in parallel, so **nobody waits for the real NPU engine.** Every dependency on someone else's work gets an **interface in `:core`** and a **fake**, until the real one lands.
+
+1. **Where:** interfaces and fakes in `core/src/main/kotlin/com/megathon/incident/testing/` (so `:app` debug builds can use them); shared fixtures in `core/src/test/resources/fixtures/` (deck example, canned raw LLM outputs, Whisper-style mistakes, signal lists, a test `site.json`). Add to the shared folders; do not copy fixtures.
+2. **Fakes are labelled `SIMULATED`.** `enum class Compute { NPU, CPU, HYBRID, SIMULATED }` is part of every engine's result. The proof strip shows `SIMULATED` in a clearly different colour, and **release builds must refuse to start with a simulated engine** (guard in `EngineFactory`). **A scripted result must never be shown as live recognition.**
+3. **One `EngineFactory` in `:app`** (A) selects speech `FAKE | WHISPERKIT | SHERPA_QNN | AIHUB` and LLM `FAKE | GENIEX`. Default is FAKE until the real engine passes its contract test; a debug setting switches.
+4. **One contract-test suite per interface**, run against the fake now and every real implementation later (same tests, so fake and real cannot drift).
+5. **Interfaces are owned and announced** (chat plus a line in the commit message). Changes go through the owner.
+
+| Interface | Owner | Fake (ship early) | Real | Consumed by |
+|---|---|---|---|---|
+| `SpeechEngine`, `AudioSource`, `Speaker` | B | `FakeSpeechEngine`, `WavFileSource`, `FakeSpeaker` (logs text) | WhisperKit, sherpa-onnx QNN, AI Hub; `AudioRecord`; Android TTS | A (pipeline), E (Judge Bench) |
+| `SignalSource` | B | `FakeSignalSource` (canned alarm/emotion lists per clip ID) | SenseVoice + YamNet | C (priority), A (panel) |
+| `LlmEngine` (contract by C, adapter by A) | C / A | `FakeLlmEngine` (canned `update_report` JSON per input) | `GenieXLlmEngine` | A, C, D, E |
+| `SuggestionEngine` | D | `FakeSuggestionEngine` (returns the "Conference Room 2" chip) | real engine | A (chips UI) |
+| `PriorityAdvisor`, `TamDetector`/`HedgeDetector` | C | simple rule fakes | real | A, D |
+| `Clock` | C | `FixedClock` | system clock | C, D, E |
+| `ReportRepository` | D | `InMemoryReportRepository` | file-based | A |
+| `PipelineRunner` (replays clips for the Judge Bench) | E | `FakePipelineRunner` (reads predictions from a file) | real pipeline | A (Judge Bench UI) |
+
+## 9. Experiment log and submission rules
+**Experiment log (needed for M2):** every experiment or measurement, **including failures**, goes in `docs/experiments/<letter>-<yyyymmdd>-<topic>.md`: date and time, who, goal, setup (device, model, version, commands), data (number of clips, kit mic or phone), result **with denominators**, verdict, next step. E compiles M2 from these. Commit and push your branch at least every 2 hours.
+
+**Deadlines (from the organisers' PDF, as written; no grace period):**
+| When | What |
+|---|---|
+| 10:00 PM, 10 Oct | M1 approach PDF: **done** (`deliverables/M1.pdf` is on the submission repo's `main`) |
+| **4:00 AM, 11 Oct** | `deliverables/M2.pdf` (2 pages: approach changes since M1, **experiments run and results**, testing progress, plan for the remaining time) **plus all code written so far pushed to `main`** |
+| **11:00 AM, 11 Oct** | Final: full code, `README.md` (setup and run steps only, plus links to external weights; do not explain the solution), MIT `LICENSE`, `deliverables/final_report.pdf` (max 3 pages), demo video (max 4 min, screen recording with voiceover, Google Drive "Anyone with the link"), code zip (exclude virtual environments, datasets, model weights) |
+| 11:30 AM, 11 Oct | Slides as PDF, through the slides form |
+
+**Submission repo:** `IIIT-ECell/megathon26-readyornot` (private; only `main` is evaluated, and only the latest commit at each deadline). It is **separate from this team repo**. Its README has empty **Build** and **Run** sections that must be filled before the final.
+**Double-blind (all PDFs and the video):** put **"Team 087"** at the top of every PDF; **no team name, member names, college or city names** anywhere: not in slides, video, window titles, terminal prompts, usernames, hostnames or file names visible on screen. Run `tools/blindcheck.sh <file.pdf>` (E provides it) before every submission.
+**Proposed (not an organiser rule):** E drafts the PDFs from `docs/templates/report-template.tex`; **A pushes**. A mirrors **only** `app/`, `core/`, the Gradle files, `tools/`, README and LICENSE into a clone of the submission repo, then commits and pushes `main`. Research and planning docs (which name the college) stay in the private team repo.
+
+## 10. Starter prompt for your Claude
 > Read `docs/handoff/B-speech-engines.md`, then the files it lists under "Read first". I am person B. Work on branch `b/speech-engines` only, in my folders, test-first. Do my first-90-minutes tasks now. Ask me before changing shared types or touching another person's folders. Do not run `adb` against the kit unless I say I am in a booked slot.
 
-## 9. Report back to the lead (A) when
+## 11. Report back to the lead (A) when
 - you finish a task (say what passed and what did not, with numbers, not impressions);
 - you are blocked for more than 20 minutes;
 - you need a shared-type change or find something in the spec or plan that is wrong or untested.
