@@ -1,0 +1,112 @@
+package com.megathon.incident.domain
+
+import kotlinx.serialization.Serializable
+
+/** Incident categories; [wire] is the exact value in the LLM contract (spec §4). */
+@Serializable
+enum class IncidentType(val wire: String) {
+    WATER_LEAK_FLOOD("water_leak_flood"),
+    FIRE_SMOKE("fire_smoke"),
+    ELECTRICAL("electrical"),
+    SPILL_CHEMICAL("spill_chemical"),
+    INJURY("injury"),
+    ILLNESS("illness"),
+    NEAR_MISS("near_miss"),
+    PROPERTY_DAMAGE("property_damage"),
+    EQUIPMENT_FAILURE("equipment_failure"),
+    SECURITY("security"),
+    ENVIRONMENTAL("environmental"),
+    OTHER("other");
+
+    companion object {
+        fun fromWire(value: String?): IncidentType? = entries.firstOrNull { it.wire == value }
+    }
+}
+
+/** Reporter-stated severity (spec D18). `NONE` is a stated level, not the missing sentinel. */
+@Serializable
+enum class Severity(val wire: String) {
+    NONE("none"), MINOR("minor"), MODERATE("moderate"), SEVERE("severe"), CRITICAL("critical");
+
+    companion object {
+        fun fromWire(value: String?): Severity? = entries.firstOrNull { it.wire == value }
+    }
+}
+
+@Serializable
+enum class Field {
+    INCIDENT_TYPE, SEVERITY, LOCATION, DATE_TIME, PERSONS_INVOLVED,
+    EQUIPMENT_ASSET, DESCRIPTION, IMMEDIATE_ACTIONS, WITNESSES, RECOMMENDED_FOLLOW_UP,
+}
+
+/** Spec §4b. Only REPORTED, USER_CONFIRMED and USER_EDITED count as filled. */
+@Serializable
+enum class ValueStatus { MISSING, UNKNOWN, EXPLICIT_NONE, REPORTED, SUGGESTED, USER_CONFIRMED, USER_EDITED }
+
+/** Where a signal, suggestion or reason came from; shown on every chip (spec §4b). */
+@Serializable
+enum class Source { TEXT_CUE, SENSEVOICE, YAMNET, GAZETTEER, RULE }
+
+@Serializable
+data class FieldValue(
+    val text: String?,
+    val status: ValueStatus,
+    val evidence: String? = null,
+) {
+    companion object {
+        val MISSING = FieldValue(null, ValueStatus.MISSING)
+        fun explicitNone(evidence: String) = FieldValue(null, ValueStatus.EXPLICIT_NONE, evidence)
+        fun unknown(evidence: String) = FieldValue(null, ValueStatus.UNKNOWN, evidence)
+    }
+}
+
+@Serializable
+data class IncidentReport(
+    val id: String,
+    val createdAtEpochMs: Long,
+    val fields: Map<Field, FieldValue> = emptyMap(),
+) {
+    fun value(field: Field): FieldValue = fields[field] ?: FieldValue.MISSING
+
+    fun with(field: Field, value: FieldValue): IncidentReport = copy(fields = fields + (field to value))
+
+    /** Has a usable value (heard, confirmed or typed). */
+    fun isFilled(field: Field): Boolean = value(field).status in FILLED
+
+    /** The question has an answer, including "none" or "I don't know". */
+    fun isAnswered(field: Field): Boolean = value(field).status in ANSWERED
+
+    companion object {
+        private val FILLED = setOf(ValueStatus.REPORTED, ValueStatus.USER_CONFIRMED, ValueStatus.USER_EDITED)
+        private val ANSWERED = FILLED + setOf(ValueStatus.EXPLICIT_NONE, ValueStatus.UNKNOWN)
+
+        fun empty(id: String, nowEpochMs: Long) = IncidentReport(id, nowEpochMs)
+    }
+}
+
+/** Raw `update_report` arguments exactly as the LLM proposed them (spec §4). Not yet validated. */
+@Serializable
+data class ExtractionPayload(
+    val incident_type: String? = null,
+    val severity: String? = null,
+    val location: String? = null,
+    val date_time_text: String? = null,
+    val persons_involved: List<String> = emptyList(),
+    val equipment_asset: String? = null,
+    val immediate_actions: String? = null,
+    val witnesses: List<String> = emptyList(),
+    val evidence: Map<String, String> = emptyMap(),
+)
+
+@Serializable
+data class Signal(val kind: String, val label: String, val source: Source, val segmentId: Long? = null)
+
+@Serializable
+data class Suggestion(val field: Field, val original: String, val proposed: String, val reason: String, val source: Source)
+
+/** Declared in ascending urgency so `compareTo` orders LOW < MEDIUM < HIGH < URGENT. */
+@Serializable
+enum class Priority { LOW, MEDIUM, HIGH, URGENT }
+
+@Serializable
+data class PriorityAdvice(val level: Priority, val reasons: List<String>, val overriddenByUser: Boolean = false)
