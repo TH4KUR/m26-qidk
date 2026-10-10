@@ -19,7 +19,7 @@ import com.megathon.incident.ui.theme.IncidentTheme
 
 class MainActivity : ComponentActivity() {
     // Debug switch for the kit, no rebuild: adb shell am start -n com.megathon.incident/.MainActivity --es speech FAKE --es llm FAKE
-    private val vm: AppViewModel by viewModels { AppViewModel.Factory(application, Engines.selection(intent)) }
+    private val vm: AppViewModel by viewModels { AppViewModel.Factory(application, Engines.selection(intent, application)) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
