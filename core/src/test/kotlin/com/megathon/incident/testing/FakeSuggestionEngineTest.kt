@@ -1,6 +1,5 @@
 package com.megathon.incident.testing
 
-import com.megathon.incident.llm.Compute
 import com.megathon.incident.suggest.SuggestionEngine
 import com.megathon.incident.suggest.SuggestionEngineContract
 import kotlin.test.Test

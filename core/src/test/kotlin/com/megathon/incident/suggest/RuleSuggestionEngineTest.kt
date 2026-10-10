@@ -5,7 +5,7 @@ import com.megathon.incident.domain.FieldValue
 import com.megathon.incident.domain.ReportState
 import com.megathon.incident.domain.Suggestion
 import com.megathon.incident.domain.ValueStatus
-import com.megathon.incident.llm.Compute
+import com.megathon.incident.testing.Compute
 import com.megathon.incident.tam.TamCueLists
 import com.megathon.incident.tam.TamHedgeDetector
 import kotlinx.serialization.json.Json

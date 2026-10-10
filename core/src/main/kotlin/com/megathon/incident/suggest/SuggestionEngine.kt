@@ -6,7 +6,7 @@ import com.megathon.incident.domain.JournalKind
 import com.megathon.incident.domain.ReportState
 import com.megathon.incident.domain.Suggestion
 import com.megathon.incident.domain.ValueStatus
-import com.megathon.incident.llm.Compute
+import com.megathon.incident.testing.Compute
 import java.time.Clock
 
 /**

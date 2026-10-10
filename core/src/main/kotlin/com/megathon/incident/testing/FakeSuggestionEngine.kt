@@ -4,7 +4,6 @@ import com.megathon.incident.domain.Field
 import com.megathon.incident.domain.ReportState
 import com.megathon.incident.domain.Source
 import com.megathon.incident.domain.Suggestion
-import com.megathon.incident.llm.Compute
 import com.megathon.incident.suggest.ChipDecisions
 import com.megathon.incident.suggest.SuggestionEngine
 import java.time.Clock
