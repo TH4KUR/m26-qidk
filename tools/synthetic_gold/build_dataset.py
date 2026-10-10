@@ -115,6 +115,51 @@ def validate_rows(rows, require_complete_mandatory=False):
             require([m["role"] for m in messages] == ["system", "user", "assistant"], "invalid messages")
             require(messages[1]["content"] == prompt_user(utterance, saved), "input differs from PromptBuilder format")
             require(messages[2]["content"] == compact(target), "assistant content differs from target")
+    validate_transitions(rows)
+
+
+def validate_transitions(rows):
+    """Reject stale sequence snapshots and patches that miss the authored state.
+
+    expected_report_after is authored from the current narrative facts, separately
+    from the sparse patch. It is not inserted into model messages.
+    """
+    sequences = {}
+    for row in rows:
+        if "transition" in row:
+            sequences.setdefault(row["group_id"], []).append(row)
+    for sequence in sequences.values():
+        previous = None
+        for index, row in enumerate(sorted(sequence, key=lambda r: r["transition"]["turn_index"])):
+            transition = row["transition"]
+            label = row["id"]
+            if transition["turn_index"] != index:
+                raise ValueError(f"{label}: missing or duplicate sequence turn")
+            expected_previous = previous["id"] if previous else None
+            if transition["previous_id"] != expected_previous:
+                raise ValueError(f"{label}: wrong previous turn id")
+            previous_state = previous["transition"]["expected_report_after"] if previous else {}
+            if row["report_before"] != previous_state:
+                raise ValueError(f"{label}: stale saved report; differs from previous expected state")
+            after = dict(row["report_before"])
+            args = row["target"]["arguments"]
+            changed = set(args) - {"evidence"}
+            if set(transition["changed_fields"]) != changed:
+                raise ValueError(f"{label}: declared changed fields differ from patch")
+            for field in changed:
+                value = args[field]
+                if field in LIST_FIELDS:
+                    value = ", ".join(value)
+                elif field == "date_time_text":
+                    from temporal_gold import materialize, time_spec
+                    captured = datetime.fromisoformat(transition["captured_at"])
+                    time = materialize(time_spec(value), captured)
+                    clock = ("≈" if time["approximate"] else "") + time["time"]
+                    value = f"{time['date']} {clock} ({value})"
+                after[SAVED_KEYS.get(field, field)] = value
+            if after != transition["expected_report_after"]:
+                raise ValueError(f"{label}: patch cannot produce authored expected final state")
+            previous = row
 
 
 def prompt_user(utterance, saved):
@@ -184,13 +229,19 @@ def write_jsonl(path, rows):
 
 def summarize(rows):
     counts = Counter(r["split"] for r in rows)
+    digest = hashlib.sha256("".join(compact(r) + "\n" for r in rows).encode()).hexdigest()
     tokenizer_check = "not_performed"
     check_file = DEST / "tokenizer_check.json"
     if check_file.exists():
         report = json.loads(check_file.read_text(encoding="utf-8"))
-        digest = hashlib.sha256("".join(compact(r) + "\n" for r in rows).encode()).hexdigest()
         if report.get("gold_sha256") == digest and report.get("rows") == len(rows):
             tokenizer_check = "passed" if report.get("over_4096") == 0 else "failed"
+    runtime_check = "not_performed"
+    audit_file = DEST / "runtime_update_audit.json"
+    if audit_file.exists():
+        audit = json.loads(audit_file.read_text(encoding="utf-8"))
+        if audit.get("gold_sha256") == digest:
+            runtime_check = audit["status"]
     return {
         "rows": len(rows), "families": len({r["group_id"] for r in rows}),
         "split_rows": dict(sorted(counts.items())),
@@ -201,13 +252,22 @@ def summarize(rows):
         "field_counts": {f: sum(f in r["target"]["arguments"] for r in rows) for f in FIELDS},
         "no_op_rows": sum(r["target"]["arguments"] == {} for r in rows),
         "context_rows": sum(bool(r["report_before"]) for r in rows),
+        "update_sequences": len({r["group_id"] for r in rows if "transition" in r}),
+        "sequence_rows": sum("transition" in r for r in rows),
+        "sequence_context_rows": sum("transition" in r and bool(r["report_before"]) for r in rows),
+        "replacement_update_rows": sum(any(SAVED_KEYS.get(f, f) in r["report_before"]
+            for f in set(r["target"]["arguments"]) - {"evidence"}) for r in rows),
+        "updates_to_previously_saved_fields": {f: sum(f in r["target"]["arguments"]
+            and SAVED_KEYS.get(f, f) in r["report_before"] for r in rows) for f in FIELDS},
+        "sequence_operations": dict(Counter(r["transition"]["operation"] for r in rows if "transition" in r)),
         "all_mandatory_answered_rows": sum(set(r.get("mandatory_answers", {})) == {"incident_type", "severity", "location", "date_time_text"} for r in rows),
         "date_and_clock_resolvable_rows": sum("date_and_clock_resolvable" in r["tags"] for r in rows),
         "tags": dict(Counter(tag for r in rows for tag in r["tags"])),
         "validation": {"schema_and_enum_checks": "passed", "exact_evidence_spans": "passed",
             "literal_value_grounding": "passed", "family_split_leakage": 0,
             "exact_input_duplicates": 0, "independent_human_review": "not_performed",
-            "model_accuracy": "not_measured", "tokenizer_length_checks": tokenizer_check},
+            "model_accuracy": "not_measured", "tokenizer_length_checks": tokenizer_check,
+            "sequence_validator_merge_compatibility": runtime_check},
     }
 
 
@@ -230,13 +290,19 @@ def main():
         for name, digest in manifest["source_sha256"].items():
             if hashlib.sha256((ROOT / name).read_bytes()).hexdigest() != digest:
                 raise ValueError(f"{name}: source or app contract changed; regenerate and recheck")
+        for name in ("runtime_update_audit.json", "validation_results.json"):
+            path = DEST / name
+            if path.exists() and json.loads(path.read_text()).get("gold_sha256") != manifest["sha256"]["gold.jsonl"]:
+                raise ValueError(f"{name}: stale validation evidence for a different dataset")
         print(json.dumps(summarize(rows), indent=2))
         return
     from corpus import base_examples, edge_examples, context_examples, mandatory_complete, resolvable_times
+    from updates import update_examples
     from temporal_gold import time_spec
 
     system = (DEST / "system_prompt.txt").read_text(encoding="utf-8").strip()
-    rows = assign_splits(resolvable_times(mandatory_complete(base_examples() + edge_examples() + context_examples())))
+    original = resolvable_times(mandatory_complete(base_examples() + edge_examples() + context_examples()))
+    rows = assign_splits(original + update_examples())
     for row in rows:
         row["temporal_gold"] = time_spec(row["mandatory_answers"]["date_time_text"]["value"])
         row["messages"] = [
@@ -252,15 +318,18 @@ def main():
     (DEST / "target.schema.json").write_text(json.dumps(schema(), indent=2) + "\n", encoding="utf-8")
     (DEST / "statistics.json").write_text(json.dumps(summarize(rows), indent=2) + "\n", encoding="utf-8")
     files = ["gold.jsonl", "train.jsonl", "validation.jsonl", "test.jsonl", "system_prompt.txt", "target.schema.json", "statistics.json"]
-    files += [name for name in ("existing_e_benchmark.json", "tokenizer_check.json") if (DEST / name).exists()]
+    files += [name for name in ("existing_e_benchmark.json", "tokenizer_check.json",
+                                "runtime_update_audit.json", "validation_results.json") if (DEST / name).exists()]
     revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, check=True, capture_output=True, text=True).stdout.strip()
-    source_files = [Path(__file__), Path(__file__).with_name("corpus.py"), Path(__file__).with_name("temporal_gold.py")]
+    source_files = [Path(__file__), Path(__file__).with_name("corpus.py"),
+                    Path(__file__).with_name("temporal_gold.py"), Path(__file__).with_name("updates.py")]
     contract_files = [ROOT / "core/src/main/kotlin/com/megathon/incident" / path for path in (
         "domain/Model.kt", "session/PromptBuilder.kt", "llm/ToolCallParser.kt", "llm/PayloadValidator.kt")]
     manifest = {
         "dataset": "incident-synthetic-gold-v1", "created_date": "2026-10-11", "seed": 20261011,
         "base_git_revision": revision, "independent_human_adjudication": False,
-        "generation": "96 authored fact sets x 4 controlled variants, 24 edge families x 2, 24 context families x 2; no external records or model sampling",
+        "generation": "Original 480 rows plus 80 authored four-turn update sequences (320 rows); no external records or model sampling",
+        "supersedes_git_revision": "959d6719a25f1804cbc0bbb8761e7499ab331dd3",
         "sha256": {name: hashlib.sha256((DEST / name).read_bytes()).hexdigest() for name in files},
         "source_sha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in source_files + contract_files},
     }

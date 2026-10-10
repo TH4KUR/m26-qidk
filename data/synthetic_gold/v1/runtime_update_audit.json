@@ -1,0 +1,346 @@
+{
+  "rows": 320,
+  "matching_rows": 274,
+  "mismatching_rows": 46,
+  "excluded_field": "date_time",
+  "mode": "sequential replay from empty report; no gold-state reseeding",
+  "mismatches": [
+    {
+      "id": "update-incident_type-03-sequence_initial",
+      "issues": [
+        "rejected SEVERITY: negated in the transcript: \"I rate the severity none\"",
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-incident_type-03-sequence_update_1",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-incident_type-03-sequence_update_2",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-incident_type-03-sequence_confirm",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-severity-03-sequence_initial",
+      "issues": [
+        "rejected SEVERITY: negated in the transcript: \"I rate the severity none\"",
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-severity-05-sequence_update_1",
+      "issues": [
+        "rejected SEVERITY: negated in the transcript: \"I rate the severity none\"",
+        "SEVERITY: expected none, got moderate"
+      ]
+    },
+    {
+      "id": "update-severity-07-sequence_update_2",
+      "issues": [
+        "rejected SEVERITY: negated in the transcript: \"I rate the severity none\"",
+        "SEVERITY: expected none, got severe"
+      ]
+    },
+    {
+      "id": "update-severity-07-sequence_confirm",
+      "issues": [
+        "SEVERITY: expected none, got severe"
+      ]
+    },
+    {
+      "id": "update-location-03-sequence_initial",
+      "issues": [
+        "rejected SEVERITY: negated in the transcript: \"I rate the severity none\"",
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-location-03-sequence_update_1",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-location-03-sequence_update_2",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-location-03-sequence_confirm",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-date_time_text-03-sequence_initial",
+      "issues": [
+        "rejected SEVERITY: negated in the transcript: \"I rate the severity none\"",
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-date_time_text-03-sequence_update_1",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-date_time_text-03-sequence_update_2",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-date_time_text-03-sequence_confirm",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-persons_involved-03-sequence_initial",
+      "issues": [
+        "rejected SEVERITY: negated in the transcript: \"I rate the severity none\"",
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-persons_involved-03-sequence_update_1",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-persons_involved-03-sequence_update_2",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-persons_involved-03-sequence_confirm",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-equipment_asset-03-sequence_initial",
+      "issues": [
+        "rejected SEVERITY: negated in the transcript: \"I rate the severity none\"",
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-equipment_asset-03-sequence_update_1",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-equipment_asset-03-sequence_update_2",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-equipment_asset-03-sequence_confirm",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-immediate_actions-03-sequence_initial",
+      "issues": [
+        "rejected SEVERITY: negated in the transcript: \"I rate the severity none\"",
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-immediate_actions-03-sequence_update_1",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-immediate_actions-03-sequence_update_2",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-immediate_actions-03-sequence_confirm",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-witnesses-03-sequence_initial",
+      "issues": [
+        "rejected SEVERITY: negated in the transcript: \"I rate the severity none\"",
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-witnesses-03-sequence_update_1",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-witnesses-03-sequence_update_2",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-witnesses-03-sequence_confirm",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-mixed-03-sequence_initial",
+      "issues": [
+        "rejected SEVERITY: negated in the transcript: \"I rate the severity none\"",
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-mixed-03-sequence_update_1",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-mixed-03-sequence_update_2",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-mixed-03-sequence_confirm",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-mixed-05-sequence_update_1",
+      "issues": [
+        "rejected SEVERITY: negated in the transcript: \"I rate the severity none\"",
+        "SEVERITY: expected none, got moderate"
+      ]
+    },
+    {
+      "id": "update-mixed-05-sequence_update_2",
+      "issues": [
+        "SEVERITY: expected none, got moderate"
+      ]
+    },
+    {
+      "id": "update-mixed-05-sequence_confirm",
+      "issues": [
+        "SEVERITY: expected none, got moderate"
+      ]
+    },
+    {
+      "id": "update-mixed-11-sequence_initial",
+      "issues": [
+        "rejected SEVERITY: negated in the transcript: \"I rate the severity none\"",
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-mixed-11-sequence_update_1",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-mixed-11-sequence_update_2",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-mixed-11-sequence_confirm",
+      "issues": [
+        "SEVERITY: expected none, got null",
+        "SEVERITY: expected REPORTED, got MISSING"
+      ]
+    },
+    {
+      "id": "update-mixed-13-sequence_update_1",
+      "issues": [
+        "rejected SEVERITY: negated in the transcript: \"I rate the severity none\"",
+        "SEVERITY: expected none, got moderate"
+      ]
+    },
+    {
+      "id": "update-mixed-13-sequence_update_2",
+      "issues": [
+        "SEVERITY: expected none, got moderate"
+      ]
+    },
+    {
+      "id": "update-mixed-13-sequence_confirm",
+      "issues": [
+        "SEVERITY: expected none, got moderate"
+      ]
+    }
+  ],
+  "gold_sha256": "01dd1ec0b16540681b6efa00b9b324eb70057933b3d73282c8fc4ad97a9e20d1",
+  "status": "blocked",
+  "scope": "All 80 newly authored sequences (320 calls), real parser/validator/merge; non-temporal state compared after every call.",
+  "independent_human_adjudication": false,
+  "model_inference_run": false,
+  "source_sha256": {
+    "core/src/main/kotlin/com/megathon/incident/llm/PayloadValidator.kt": "f1ff1729ed00e6a7d26f014d93b6db2d4c9bad92c1aff40a3c35037851bdb8cf",
+    "core/src/main/kotlin/com/megathon/incident/session/ReportMerge.kt": "8034c9a5e2f25fd8a020cf2e7a8d053292456293617e117e3051823c9e51860b",
+    "core/src/main/resources/tam/cues_en.json": "b930970826ce92c76430e583b93378046a19b86b0539e2260714a92b6bd02853"
+  }
+}

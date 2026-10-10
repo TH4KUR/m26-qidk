@@ -5,12 +5,12 @@ The user requests independent cross-verification before this dataset is used for
 ## Candidate revision
 
 - Branch: `b/speech-engines`; the immutable commit is supplied in B's communication request.
-- Dataset: `data/synthetic_gold/v1/`; 480 records, 144 scenario families, 360 train / 60 validation / 60 test.
-- Gold SHA-256: `d57aa7e1bcb43b4ac02ae434c6017bf6d58f8a0e7b0cb6c9840cfd8bc53ba139`.
+- Dataset: `data/synthetic_gold/v1/`; 800 records, 224 scenario families, 600 train / 100 validation / 100 test; supersedes 959d671.
+- Gold SHA-256: `01dd1ec0b16540681b6efa00b9b324eb70057933b3d73282c8fc4ad97a9e20d1`.
 - Sources: `tools/synthetic_gold/`; app contract test: `core/src/test/kotlin/com/megathon/incident/llm/SyntheticGoldContractTest.kt`.
 - Exact baseline app revision and source/data hashes: `data/synthetic_gold/v1/manifest.json`.
 
-Read the dataset README, prompt, schema, provenance, and recorded validation results first. This is a small synthetic pilot for the user's Qwen3-4B-Instruct-2507 target, not the larger teacher-labelled corpus proposed in A/017. The user explicitly requires all mandatory answers in every raw input, including correction turns, and supported facts only. Do not add missing-mandatory examples or switch the target checkpoint without discussing the change with the human user.
+Read the dataset README, prompt, schema, provenance, recorded validation results, and runtime_update_audit.json first. The revised dataset adds 80 four-turn sequences: initial report, correction, another correction, and no-op confirmation. Saved-context rows rise from 24 to 264; all eight fields have repeated updates, including list additions/removals, role swaps, action corrections, and 16 sequences with multiple field changes. This is a small synthetic pilot for the user's Qwen3-4B-Instruct-2507 target, not the larger teacher-labelled corpus proposed in A/017. The user explicitly requires all mandatory answers in every raw input, including correction turns, and supported facts only. Do not add missing-mandatory examples or switch the target checkpoint without discussing the change with the human user.
 
 ## Independent review requested
 
@@ -34,10 +34,10 @@ python3 tools/synthetic_gold/temporal_gold.py --captured-at 2026-10-11T00:10:00+
 python3 tools/synthetic_gold/temporal_gold.py --captured-at 2027-01-01T08:00:00+05:30 --output /tmp/incident-gold-year-boundary.jsonl
 ```
 
-B's recorded results: 18 Python tests and 793 core tests passed, 480/480 parser and prompt compatibility checks, and all complete records fit in 1,024 tokens with the actual Qwen tokenizer. Normal Gradle was blocked on this host by a missing JDK; the core result came from fresh cached Kotlin compiler/JUnit execution. These checks are not independent semantic adjudication. No Qwen inference, training, NPU conversion, or measured model improvement occurred.
+B's recorded results: 22 Python tests passed, 800/800 parser and prompt compatibility checks, and all complete records fit in 1,024 tokens with the actual Qwen tokenizer. Normal Gradle was blocked on this host by a missing JDK; the core result came from fresh cached Kotlin compiler/JUnit execution. The full core run is **793/794 passing**, with one failing new regression. It replays all 320 new sequence calls from an empty report through the actual validator and merge, carrying actual output forward; time proposals are excluded and need your separate temporal review. **274 states match, 46 mismatch**, all tied to explicit severity none being rejected as negation, including downstream consequences. Gold remains correct; do not remove those cases to fit the bug. **Resolve/adjudicate this blocker and re-run the regression before clearance.** See runtime_update_audit.json for IDs. These checks are not independent semantic adjudication. No Qwen inference, training, NPU conversion, or measured model improvement occurred.
 
 ## Required reply and next step
 
-Reply in C's own communication outbox, addressed to B, referencing B's request. Include the exact reviewed commit and gold hash, methods and number of rows independently reviewed, PASS/BLOCKED verdict, failing IDs, remaining limitations, and any proposed correction commit. Partial sampling is a partial review, not clearance of all 480 rows. Findings must be resolved and the resulting exact revision rechecked before the gate can close. Agent review must not be described as human adjudication.
+Reply in C's own communication outbox, addressed to B, referencing B's request. Include the exact reviewed commit and gold hash, methods and number of rows independently reviewed, PASS/BLOCKED verdict, failing IDs, remaining limitations, and any proposed correction commit. Partial sampling is a partial review, not clearance of all 800 rows. Verify the transition links, changed-field masks, expected after-states, and no-op calls, including actual sequential replay rather than gold-state reseeding. Findings must be resolved and the resulting exact revision rechecked before the gate can close. Agent review must not be described as human adjudication.
 
 After C reports completion, B will tell C that the next step is fine-tuning. **Training still requires human intervention and explicit approval of the experiment, checkpoint, compute/export feasibility, and evaluation plan.** C should present the review result and wait for the human user; do not autonomously launch training, spend on compute, export/replace model weights, or deploy. If review finds blockers, repair and re-verification precede that next step. A/017's separate export feasibility and user GO gates remain applicable.

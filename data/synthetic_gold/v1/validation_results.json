@@ -1,27 +1,49 @@
 {
-  "gold_sha256": "d57aa7e1bcb43b4ac02ae434c6017bf6d58f8a0e7b0cb6c9840cfd8bc53ba139",
-  "raw_inputs_with_all_mandatory_answers": 480,
-  "date_and_clock_resolvable_inputs": 480,
-  "train": 360,
-  "validation": 60,
-  "test": 60,
+  "gold_sha256": "01dd1ec0b16540681b6efa00b9b324eb70057933b3d73282c8fc4ad97a9e20d1",
+  "raw_inputs_with_all_mandatory_answers": 800,
+  "date_and_clock_resolvable_inputs": 800,
+  "train": 600,
+  "validation": 100,
+  "test": 100,
   "family_split_leakage": 0,
   "e_exact_utterance_overlap": 0,
+  "original_rows_and_splits_preserved": 480,
   "python_tests": {
-    "run": 18,
+    "run": 22,
     "failed": 0
   },
   "app_compatibility": {
-    "targets_accepted_by_real_parser": 480,
-    "inputs_match_real_prompt_builder": 480
+    "targets_accepted_by_real_parser": 800,
+    "inputs_match_real_prompt_builder": 800
+  },
+  "update_coverage": {
+    "new_four_turn_sequences": 80,
+    "new_sequence_rows": 320,
+    "actual_correction_calls_added": 160,
+    "confirmation_noops_added": 80,
+    "saved_context_rows_before": 24,
+    "saved_context_rows_after": 264,
+    "rows_replacing_previously_saved_values": 178
   },
   "core_tests": {
-    "run": 793,
-    "failed": 0,
-    "method": "Fresh compilation of all core production and test Kotlin sources using cached K2 compiler 2.2.0 + serialization plugin 2.2.0, JVM target 17, Java 21 runtime, JUnit 4.13.2; abstract contract base excluded, inherited tests run via concrete classes."
+    "run": 794,
+    "passed": 793,
+    "failed": 1,
+    "failing_test": "SyntheticGoldContractTest.update sequence gold replaces saved fields through the real validator and merge",
+    "method": "Fresh compilation of all core production and test Kotlin sources with cached K2 compiler 2.2.0 + serialization plugin 2.2.0, JVM target 17, Java 21 runtime, JUnit 4.13.2; abstract contract base excluded, inherited tests run via concrete classes."
   },
-  "normal_gradle_command": "Blocked by missing JDK 17; no repository toolchain configuration changed.",
+  "runtime_update_audit": {
+    "status": "blocked",
+    "rows": 320,
+    "matching_rows": 274,
+    "mismatching_rows": 46,
+    "excluded_field": "date_time",
+    "mode": "sequential replay from empty report; no gold-state reseeding"
+  },
+  "blocker": "PayloadValidator mistakes an explicit severity rating none for negation. Correct gold patches can leave severity missing or retain an older rating. 46 sequential replay row states mismatch, including downstream consequences. Correct labels retained; C must fix/adjudicate and re-run before clearance.",
+  "normal_gradle_command": "Re-run blocked by missing JDK 17; no repository toolchain settings changed.",
   "independent_human_adjudication": false,
   "qwen_inference_or_finetuning_run": false,
-  "model_accuracy": "not_measured"
+  "model_accuracy": "not_measured",
+  "training_gate": "blocked pending C review and downstream compatibility resolution; human approval required before training"
 }

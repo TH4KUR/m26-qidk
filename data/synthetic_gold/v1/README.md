@@ -1,18 +1,18 @@
 # Incident extraction synthetic gold v1
 
-480 English examples for **Qwen3-4B-Instruct-2507**: 360 train, 60 validation, 60 test. All **480 raw inputs contain supported answers to the four mandatory questions**: incident type, location, date/time phrase, and reporter-stated severity. Every time answer provides a resolvable **date and clock time**, possibly approximate. Optional fields vary in completeness. This reflects the user's final requirement; missing-mandatory training examples are excluded.
+800 English examples for **Qwen3-4B-Instruct-2507**: 600 train, 100 validation, 100 test. All **800 raw inputs contain supported answers to the four mandatory questions**: incident type, location, date/time phrase, and reporter-stated severity. Every time answer provides a resolvable **date and clock time**, possibly approximate. Optional fields vary in completeness. This reflects the user's final requirement; missing-mandatory training examples are excluded.
 
-**Review gate: awaiting C's independent cross-verification. Do not use this revision for fine-tuning until C has cleared its labels and app compatibility.** After verification, the next step is a fine-tuning experiment involving the human user. C must not start training, provision compute, export weights, or deploy a model without the user's explicit go-ahead. The review scope and required verdict are in [B's handoff to C](../../../docs/handoff/B-synthetic-gold-to-C.md).
+**Review gate: BLOCKED by the validator defect below and awaiting C's independent cross-verification. Do not use this revision for fine-tuning until C has cleared its labels and app compatibility.** After verification, the next step is a fine-tuning experiment involving the human user. C must not start training, provision compute, export weights, or deploy a model without the user's explicit go-ahead. The review scope and required verdict are in [B's handoff to C](../../../docs/handoff/B-synthetic-gold-to-C.md).
 
-These are machine-checked synthetic gold **candidates**, not independently human-adjudicated labels. There are **144 scenario families**, not 480 independent incidents: 96 authored fact sets with four controlled variants each, 24 semantic-contrast pairs, and 24 initial/follow-up pairs. Names, assets, and situations are fictional. No real incident records, recordings, or external teacher-model API were used. ASR-like noise is manufactured, not measured Whisper output.
+These are machine-checked synthetic gold **candidates**, not independently human-adjudicated labels. There are **224 scenario families**, not 800 independent incidents: 96 authored fact sets with four controlled variants each, 24 semantic-contrast pairs, 24 initial/follow-up pairs, and **80 four-turn update sequences**. The original 480 rows and their splits are unchanged; 320 rows were added. Names, assets, and situations are fictional. No real incident records, recordings, or external teacher-model API were used. ASR-like noise is manufactured, not measured Whisper output.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `train.jsonl` | 360 SFT records; only `messages` |
-| `validation.jsonl` | 60 development records; only `messages` |
-| `test.jsonl` | 60 reserved records; do not train or tune on these |
+| `train.jsonl` | 600 SFT records; only `messages` |
+| `validation.jsonl` | 100 development records; only `messages` |
+| `test.jsonl` | 100 reserved records; do not train or tune on these |
 | `gold.jsonl` | All records with IDs, family/split, raw text, seeded saved state, targets, mandatory-answer evidence, temporal oracle rules, tags, and notes |
 | `system_prompt.txt` | Exact system instruction used by this dataset; not installed as the app default |
 | `target.schema.json` | Sparse `update_report` target schema |
@@ -20,7 +20,9 @@ These are machine-checked synthetic gold **candidates**, not independently human
 | `manifest.json` | Dataset, generator, and app-contract hashes |
 | `tokenizer_check.json` | Actual Qwen tokenizer lengths and template hash |
 | `existing_e_benchmark.json` | E's existing benchmark provenance, split sizes, and exact-overlap audit; no benchmark narratives copied |
-| `preview.md` | Four concrete training examples for review |
+| `preview.md` | Four original training examples for review |
+| `update_preview.md` | Mandatory and optional corrections across four-turn training sequences |
+| `runtime_update_audit.json` | Exhaustive new-sequence validator/merge replay; downstream failures remain blockers |
 | `validation_results.json` | Recorded Python/core test results and app-compatibility checks |
 
 Every training record has one system message, one user message, and one assistant message. Follow-ups are **independent calls with an explicit report snapshot**, matching this checkout's `PromptBuilder`; they are not chat history that the current app never sends. Saved values are strings, including comma-separated names and the rendered `date_time`. The user message is exactly:
@@ -31,6 +33,27 @@ Worker: "raw report"
 ```
 
 The assistant content is a JSON **string**, containing exactly one `{"tool":"update_report","arguments":{...}}` object. Metadata, symbolic temporal rules, and resolved timestamps never enter model messages.
+
+## Updating an already-reported answer
+
+The added corpus contains **80 four-turn sequences**: initial report → correction → another correction → confirmation. There are eight sequences for each of the eight extraction fields, plus 16 sequences that change multiple fields. These add **160 actual update calls**, 80 initial reports, and 80 confirmations that should produce an empty patch. Saved-context rows increase from **24/480 (5%)** to **264/800 (33%)**; 178 rows replace at least one previously saved value.
+
+| Field | Updates to a previously saved value, including original cases |
+|---|---:|
+| `incident_type` | 23 |
+| `severity` | 28 |
+| `location` | 29 |
+| `date_time_text` | 36 |
+| `persons_involved` | 30 |
+| `equipment_asset` | 27 |
+| `immediate_actions` | 26 |
+| `witnesses` | 30 |
+
+The cases cover severity upgrades and downgrades; incident reclassification; location/code corrections; relative-date and offset corrections; affected-person and witness spelling/replacement/addition/removal; role swaps; affected-asset replacement; action replacement/addition/removal; and several corrections in the same call. Updates retain unchanged mandatory answers in the current words, while the patch omits their already-saved values. Some confirmations repeat optional facts and mention a future inspection, which must not create a new action or witness.
+
+Each new row's `transition` metadata records its turn index, previous row ID, operation, changed fields, frozen capture reference, and independently authored complete `expected_report_after`. The next turn's `report_before` must equal that state. Mechanical validation rejects a stale precondition or a patch that cannot produce the authored state. This state oracle is annotation metadata and is never supplied to the model as an answer. All four turns of a sequence stay in one split.
+
+The sequences use controlled sentence patterns and a finite set of narrative values. They are targeted correction regressions, not independent natural conversations. The model still receives one app-format extraction call at a time, not a four-turn chat history absent from this checkout's prompt builder.
 
 ## Label policy
 
@@ -82,7 +105,7 @@ E already supplied `app/src/main/assets/eval/gold_v1.jsonl` on `origin/e/data-ev
 
 That dataset labels final report states and has its own scorer. This dataset labels **per-call extraction patches**. They are not interchangeable. E's records were not copied into training; their held-out narratives were not displayed or used for authoring. An in-process hash comparison found **zero exact utterance overlaps** across E's clean/misheard text and these new reports. This does not establish the absence of semantic overlap.
 
-Keep E's held-out data as an external benchmark. The 60 new synthetic test rows hold out complete families, but they share generation patterns with training. They are useful regression cases and cannot establish real-world generalization by themselves.
+Keep E's held-out data as an external benchmark. The 100 synthetic test rows hold out complete families, but they share generation patterns with training. They are useful regression cases and cannot establish real-world generalization by themselves.
 
 The current `EvalRunner` filters for `split == dev` and consumes `turns`, ignoring the saved-state preconditions and patch labels here. **Do not pass these files directly to that runner.** Use the explicit `messages` inputs and `target` outputs in a per-call evaluator, or write an adapter that preserves the seeds and per-call capture times.
 
@@ -98,9 +121,17 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/synthetic_gold -
 
 The checks reject unsupported enums/fields, bad shapes, empty values, fabricated evidence, ungrounded literal values, repeated saved values, missing mandatory-answer annotations, duplicate inputs, split leakage, export mismatches, and manifest drift. Temporal regressions cover rollover, timezone conversion, dynamic dates, missing precision, and unknown phrases. Quote presence is a mechanical check, not proof of semantic entailment; independent human adjudication remains outstanding.
 
-`SyntheticGoldContractTest` additionally checks all 480 tool targets against the actual Kotlin parser and all model inputs against the actual `PromptBuilder`. Normal invocation is `./gradlew :core:test` with the repository's required JDK 17.
+`SyntheticGoldContractTest` additionally checks all 800 tool targets against the actual Kotlin parser and all model inputs against the actual `PromptBuilder`. Normal invocation is `./gradlew :core:test` with the repository's required JDK 17.
 
-For this task, **18 Python tests and 793 core tests passed**, including all 480 parser/prompt compatibility checks. The host has a Java runtime but no JDK, so normal Gradle execution was blocked. The fallback freshly compiled all core/test Kotlin with cached K2 and serialization compiler plugins, targeted JVM 17 bytecode, and ran JUnit on the Java 21 runtime. No repository toolchain setting was changed. The temporary runner initially included an abstract test-contract base; that harness error was corrected before the successful full run. See `validation_results.json`.
+For this revision, **22 Python tests passed** and the parser/prompt contract checks passed for all **800** records. The full core suite ran **794 tests: 793 passed and one failed**. The new exhaustive sequence validator/merge regression exposes a downstream severity bug; see `runtime_update_audit.json` and the blocker below. The host has a Java runtime but no JDK, so normal Gradle execution was blocked. The fallback freshly compiled all core/test Kotlin with cached K2 and serialization compiler plugins, targeted JVM 17 bytecode, and ran JUnit on the Java 21 runtime. No repository toolchain setting was changed. See `validation_results.json`.
+
+## Known blocker from sequential replay
+
+The new regression runs every update sequence from an empty report through the real parser, `PayloadValidator`, and `ReportMerge`. It carries actual prior output forward rather than reseeding from the expected gold state. Resolved `date_time` proposals are excluded from this audit because time resolution has its own oracle and documented resolver gaps. The per-call parser/prompt check still includes every time extraction target.
+
+The validator treats the explicit severity rating **“none” as negation** and rejects a valid `severity: none` target. This can leave an old severity in the report when the reporter changes the rating to none, or leave severity missing in an initial report; later no-op calls cannot recover it. The correct labels are retained. This is a downstream app failure, not evidence that the SLM returned wrong JSON. C must resolve or explicitly adjudicate it and re-run the regression before clearing the training/integration gate. Of 320 replayed calls, **274 match and 46 mismatch**; the mismatches include downstream consequences of the rejected none rating. The exact affected IDs and cascading replay outcomes are saved in `runtime_update_audit.json`. This audit did not run the SLM and is not a model accuracy score.
+
+The new validator/merge test currently fails for this documented reason. Do not describe the full core suite as green, and do not remove correct gold cases merely to make an app defect disappear.
 
 ## Training and measurement
 
@@ -108,7 +139,9 @@ Load only `train.jsonl` for training and `validation.jsonl` for model selection.
 
 `tokenizer_check.json` records actual lengths from the Qwen3-4B-Instruct-2507 tokenizer, including this dataset's system prompt and chat template. Every complete record fits within 1,024 tokens and hence within the 4,096-token deployment context recorded in the app. Changes to input, output, system prompt, or template require a new check.
 
-Compare the unfine-tuned baseline and the fine-tuned candidate with identical prompts, tokenizer, decoding settings, capture references, and post-processing. Track first-call JSON validity; type/location/time/severity accuracy; each optional field's precision and recall; hallucinated fields/names; evidence validity; and relative-time resolution separately. For resolved time, compare the precision actually stated, not an invented point for an interval. Exact evidence wording may have multiple correct alternatives; do not score JSON key order or an equally valid supporting quote as semantic errors.
+Compare the unfine-tuned baseline and the fine-tuned candidate with identical prompts, tokenizer, decoding settings, capture references, and post-processing. Measure the update slice separately: changed-field precision/recall, stale saved values after a correction, preservation of unchanged fields, full-list replacement, repeated-correction success, final sequence state, and no-op accuracy. Report mandatory and optional update fields separately, and include the prior-state precondition rather than testing only the raw sentence.
+
+Track first-call JSON validity; type/location/time/severity accuracy; each optional field's precision and recall; hallucinated fields/names; evidence validity; and relative-time resolution separately. For resolved time, compare the precision actually stated, not an invented point for an interval. Exact evidence wording may have multiple correct alternatives; do not score JSON key order or an equally valid supporting quote as semantic errors.
 
 **No fine-tuning or Qwen inference was run in this task. Improvement is unmeasured.** The NPU bundle and its deployment were not modified.
 
