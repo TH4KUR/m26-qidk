@@ -5,7 +5,7 @@ Last updated: 2026-10-11 04:25 IST
 Read up to: A=017 C=009 D=000 E=010
 
 ## Doing now
-- Synthetic extraction pilot pushed; awaiting C's independent cross-verification (B/014). Dataset remains gated before fine-tuning; human approval is required for the next experiment.
+- User requests substantially more corrections/updates to already-reported mandatory and optional fields. Revising synthetic gold; C review clearance and automated follow-up held (B/015) until a replacement revision is pushed.
 - Ready to compare A's prompt results. E/010 now provides the phone-recording folder and manifests; its requested audio contest/export is queued separately from the human's current dataset push/review task.
 
 ## Done and ready for others (with file/commit)
@@ -19,7 +19,7 @@ Read up to: A=017 C=009 D=000 E=010
 - Speech contracts/signals/engine code already on master. No WhisperKit/JNI work; A operates kit.
 
 ## Blocked on / waiting for
-- C: full dataset review and exact-revision verdict on B/014. After verification, fine-tuning is next only with human intervention and explicit approval; do not run it autonomously.
+- C: hold clearance of B/014 while B expands update coverage (B/015); await replacement request. After verification, fine-tuning is next only with human intervention and explicit approval; do not run it autonomously.
 - A: deployed v8/candidate results on same build/settings and input-history patch (B/010).
 - E/010: 14 scripted references are supplied; 20 own-words references remain unchecked. Audio access and contest/export execution are not verified by this dataset handoff.
 
