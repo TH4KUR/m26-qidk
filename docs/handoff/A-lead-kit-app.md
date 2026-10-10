@@ -17,7 +17,7 @@ Branch: `a/lead-kit-app` · Written 2026-10-10 · Read this whole file first, th
 4. `.claude/skills/qidk-npu-android/SKILL.md` (kit facts, section 1b and 1c)
 5. `reports/Indic ASR and TTS on Snapdragon.md` and `research_notes/Indic ASR and TTS on Snapdragon/npu_deployment.md` (sections Q4 and Q7: the sherpa-onnx QNN route and Whisper-on-NPU pitfalls)
 6. `docs/device/qidk-device-profile-2026-10-10.md` (everything measured on the kit)
-`PLAN-codex.md` is a teammate's plan made with another AI. It is a **reference only** (validation rules, negation tests), **not authoritative**: whether it overrides our plan is an open team decision.
+A teammate's earlier alternative plan was **removed from the repo**. **Our spec (D1-D21) and our plan with Addendum A are authoritative.** Its useful ideas (REPORTED/CONFIRMED labels, negation and correction tests, no severity guessing) are already adopted in the spec and in your tasks.
 
 ## 3. Ground rules (apply to everyone)
 - **No cloud inference at runtime, and never claim "runs on the NPU" for something on the CPU.** Say which compute each piece uses; disclose CPU parts.
@@ -30,7 +30,7 @@ Branch: `a/lead-kit-app` · Written 2026-10-10 · Read this whole file first, th
 
 ## 4. Pending team decisions that can change your work
 These are open (see `docs/team-split.md` section 7). **Assume the default until the lead tells you otherwise.**
-1. Which plan is authoritative: **default: our spec and plan with Addendum A.**
+1. Which plan is authoritative: **settled: ours** (the alternative plan was removed from the repo).
 2. Hindi/Telugu: **default: experimental lane**, decided at hour 16 (D19); English is core.
 3. Qualcomm Package Manager login: **default: assume none**, so Voice AI SDK routes are dead.
 4. Severity: **default: rules only suggest it** (D18); the user states or confirms it.
@@ -86,10 +86,95 @@ Add `<uses-native-library android:name="libcdsprpc.so" android:required="true"/>
 ## 7. Definition of done for your part
 Slide example end to end on the kit by hour 9; the proof strip shows true per-stage compute; the app runs in airplane mode; 20 consecutive loops without crash.
 
-## 8. Starter prompt for your Claude
+## 7a. Stubs you own, exact build commands, and the submission push
+**You own `EngineFactory` and the debug engine switch (section 8).** In the skeleton, include: `EngineFactory` (speech `FAKE|WHISPERKIT|SHERPA_QNN|AIHUB`, LLM `FAKE|GENIEX`), `FakeLlmEngine` returning a canned `update_report` JSON per input (so UI, C, D and E can run before GenieX works), the `SIMULATED` colour in the proof strip, a replay mode that loads fixtures, and a **release guard that refuses to start with a simulated engine.** `LlmEngine` is an interface in `:core` (contract tests by C); `GenieXLlmEngine` in `:app` implements it.
+
+### Build VM facts [V, read-only diagnostic on 2026-10-10]
+Ubuntu **24.04.4** (not 22.04; a cross-compile should not care [I]), x86_64, 8 vCPU AMD EPYC, 31 GB RAM, 484 GB disk, user `ubuntu` with passwordless sudo, no GPU, fresh install (cmake, ninja, gcc, make, unzip, bzip2 were missing). GitHub, Google's NDK host, Qualcomm's SDK host and Hugging Face are reachable. `unattended-upgrades` may hold the apt lock, so use `-o DPkg::Lock::Timeout=300`. **No tokens, credentials or the confidential kit guide on the VM; stop it when idle.**
+
+### Exact commands (sherpa-onnx with QNN; flags checked in sherpa-onnx's docs and source, not yet run by us)
+```bash
+# 1. tools
+export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a
+sudo -E apt-get -o DPkg::Lock::Timeout=300 update
+sudo -E apt-get -o DPkg::Lock::Timeout=300 install -y git cmake ninja-build build-essential wget curl unzip bzip2 python3 pkg-config
+
+# 2. NDK + Qualcomm AI Runtime Community SDK 2.40.0.251030 (no login)
+cd ~ && wget -q --show-progress https://dl.google.com/android/repository/android-ndk-r27c-linux.zip && unzip -q android-ndk-r27c-linux.zip && rm android-ndk-r27c-linux.zip
+mkdir -p ~/qnn && cd ~/qnn && wget -q --show-progress -O qairt.zip "https://softwarecenter.qualcomm.com/api/download/software/sdks/Qualcomm_AI_Runtime_Community/All/2.40.0.251030/v2.40.0.251030.zip" && unzip -q qairt.zip && rm qairt.zip
+cat >> ~/.bashrc <<'EOF'
+export ANDROID_NDK=$HOME/android-ndk-r27c
+export QNN_SDK_ROOT=$HOME/qnn/qairt/2.40.0.251030
+EOF
+source ~/.bashrc
+ls $QNN_SDK_ROOT/lib/aarch64-android/libQnnHtp.so $QNN_SDK_ROOT/lib/hexagon-v79/unsigned/libQnnHtpV79Skel.so
+
+# 3. build (background; watch with tail -f ~/build.log)
+cd ~ && git clone --depth 1 https://github.com/k2-fsa/sherpa-onnx && cd sherpa-onnx
+export SHERPA_ONNX_ENABLE_QNN=ON SHERPA_ONNX_ENABLE_BINARY=ON
+nohup ./build-android-arm64-v8a.sh > ~/build.log 2>&1 &
+
+# 4. check: expect libonnxruntime.so, libsherpa-onnx-jni.so, sherpa-onnx-offline
+ls -lh ~/sherpa-onnx/build-android-arm64-v8a/install/lib/ ~/sherpa-onnx/build-android-arm64-v8a/install/bin/sherpa-onnx-offline
+
+# 5. models for SM8750 (can run while the build compiles); note the file names inside
+mkdir -p ~/models && cd ~/models
+wget -q --show-progress https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models-qnn-binary-2/sherpa-onnx-qnn-SM8750-binary-whisper-small.tar.bz2
+wget -q --show-progress https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models-qnn-binary/sherpa-onnx-qnn-SM8750-binary-10-seconds-sense-voice-zh-en-ja-ko-yue-2025-09-09-int8.tar.bz2
+for f in *.tar.bz2; do tar xjf "$f" && rm "$f"; done; ls -lh */
+
+# 6. bundle for the kit
+mkdir -p ~/bundle && cd ~/bundle
+cp ~/sherpa-onnx/build-android-arm64-v8a/install/lib/*.so . && cp ~/sherpa-onnx/build-android-arm64-v8a/install/bin/sherpa-onnx-offline .
+cp $QNN_SDK_ROOT/lib/aarch64-android/{libQnnHtp.so,libQnnHtpPrepare.so,libQnnSystem.so,libQnnHtpV79Stub.so} .
+cp $QNN_SDK_ROOT/lib/hexagon-v79/unsigned/libQnnHtpV79Skel.so . && cp -r ~/models/* .
+cd ~ && tar czf sherpa-qnn-sm8750.tar.gz bundle
+```
+On your laptop with the kit: `scp ubuntu@<vm-ip>:~/sherpa-qnn-sm8750.tar.gz .`, untar, `adb push bundle/. /data/local/tmp/binary/`, then in `adb shell`: `cd /data/local/tmp/binary; chmod +x sherpa-onnx-offline; export LD_LIBRARY_PATH=$PWD; export ADSP_LIBRARY_PATH="$PWD;$ADSP_LIBRARY_PATH"` (**semicolon, not colon**) and run `./sherpa-onnx-offline --provider=qnn --tokens=<tokens-file> --whisper.qnn-backend-lib=./libQnnHtp.so --whisper.qnn-system-lib=./libQnnSystem.so --whisper.qnn-context-binary=<encoder>.bin,<decoder>.bin --whisper-language=hi --whisper-task=transcribe <16kHz-mono.wav>`.
+**Verified in sherpa-onnx source:** Whisper on QNN takes **two** context binaries (encoder, decoder, comma-separated) and the flag names above. **Not known:** the file names inside the tarball (use `ls`), and that `--provider=qnn`, `--tokens` and `LD_LIBRARY_PATH` behave as in the docs' SenseVoice example. **Compare the transcript with a CPU run; watch for "!!!!".**
+
+### Submission push (you only)
+You push to the submission repo at M2 (4:00 AM) and the final (11:00 AM); see section 9 for what to mirror and the double-blind rules. Fill in the README **Build** and **Run** sections before the final.
+
+## 8. Stubs, fakes and contract tests (the team pattern)
+Five people build in parallel, so **nobody waits for the real NPU engine.** Every dependency on someone else's work gets an **interface in `:core`** and a **fake**, until the real one lands.
+
+1. **Where:** interfaces and fakes in `core/src/main/kotlin/com/megathon/incident/testing/` (so `:app` debug builds can use them); shared fixtures in `core/src/test/resources/fixtures/` (deck example, canned raw LLM outputs, Whisper-style mistakes, signal lists, a test `site.json`). Add to the shared folders; do not copy fixtures.
+2. **Fakes are labelled `SIMULATED`.** `enum class Compute { NPU, CPU, HYBRID, SIMULATED }` is part of every engine's result. The proof strip shows `SIMULATED` in a clearly different colour, and **release builds must refuse to start with a simulated engine** (guard in `EngineFactory`). **A scripted result must never be shown as live recognition.**
+3. **One `EngineFactory` in `:app`** (A) selects speech `FAKE | WHISPERKIT | SHERPA_QNN | AIHUB` and LLM `FAKE | GENIEX`. Default is FAKE until the real engine passes its contract test; a debug setting switches.
+4. **One contract-test suite per interface**, run against the fake now and every real implementation later (same tests, so fake and real cannot drift).
+5. **Interfaces are owned and announced** (chat plus a line in the commit message). Changes go through the owner.
+
+| Interface | Owner | Fake (ship early) | Real | Consumed by |
+|---|---|---|---|---|
+| `SpeechEngine`, `AudioSource`, `Speaker` | B | `FakeSpeechEngine`, `WavFileSource`, `FakeSpeaker` (logs text) | WhisperKit, sherpa-onnx QNN, AI Hub; `AudioRecord`; Android TTS | A (pipeline), E (Judge Bench) |
+| `SignalSource` | B | `FakeSignalSource` (canned alarm/emotion lists per clip ID) | SenseVoice + YamNet | C (priority), A (panel) |
+| `LlmEngine` (contract by C, adapter by A) | C / A | `FakeLlmEngine` (canned `update_report` JSON per input) | `GenieXLlmEngine` | A, C, D, E |
+| `SuggestionEngine` | D | `FakeSuggestionEngine` (returns the "Conference Room 2" chip) | real engine | A (chips UI) |
+| `PriorityAdvisor`, `TamDetector`/`HedgeDetector` | C | simple rule fakes | real | A, D |
+| `Clock` | C | `FixedClock` | system clock | C, D, E |
+| `ReportRepository` | D | `InMemoryReportRepository` | file-based | A |
+| `PipelineRunner` (replays clips for the Judge Bench) | E | `FakePipelineRunner` (reads predictions from a file) | real pipeline | A (Judge Bench UI) |
+
+## 9. Experiment log and submission rules
+**Experiment log (needed for M2):** every experiment or measurement, **including failures**, goes in `docs/experiments/<letter>-<yyyymmdd>-<topic>.md`: date and time, who, goal, setup (device, model, version, commands), data (number of clips, kit mic or phone), result **with denominators**, verdict, next step. E compiles M2 from these. Commit and push your branch at least every 2 hours.
+
+**Deadlines (from the organisers' PDF, as written; no grace period):**
+| When | What |
+|---|---|
+| 10:00 PM, 10 Oct | M1 approach PDF: **done** (`deliverables/M1.pdf` is on the submission repo's `main`) |
+| **4:00 AM, 11 Oct** | `deliverables/M2.pdf` (2 pages: approach changes since M1, **experiments run and results**, testing progress, plan for the remaining time) **plus all code written so far pushed to `main`** |
+| **11:00 AM, 11 Oct** | Final: full code, `README.md` (setup and run steps only, plus links to external weights; do not explain the solution), MIT `LICENSE`, `deliverables/final_report.pdf` (max 3 pages), demo video (max 4 min, screen recording with voiceover, Google Drive "Anyone with the link"), code zip (exclude virtual environments, datasets, model weights) |
+| 11:30 AM, 11 Oct | Slides as PDF, through the slides form |
+
+**Submission repo:** `IIIT-ECell/megathon26-readyornot` (private; only `main` is evaluated, and only the latest commit at each deadline). It is **separate from this team repo**. Its README has empty **Build** and **Run** sections that must be filled before the final.
+**Double-blind (all PDFs and the video):** put **"Team 087"** at the top of every PDF; **no team name, member names, college or city names** anywhere: not in slides, video, window titles, terminal prompts, usernames, hostnames or file names visible on screen. Run `tools/blindcheck.sh <file.pdf>` (E provides it) before every submission.
+**Proposed (not an organiser rule):** E drafts the PDFs from `docs/templates/report-template.tex`; **A pushes**. A mirrors **only** `app/`, `core/`, the Gradle files, `tools/`, README and LICENSE into a clone of the submission repo, then commits and pushes `main`. Research and planning docs (which name the college) stay in the private team repo.
+
+## 10. Starter prompt for your Claude
 > Read `docs/handoff/A-lead-kit-app.md`, then the files it lists under "Read first". I am person A. Work on branch `a/lead-kit-app` only, in my folders, test-first. Do my first-90-minutes tasks now. Ask me before changing shared types or touching another person's folders. Do not run `adb` against the kit unless I say I am in a booked slot.
 
-## 9. Report back to the lead (A) when
+## 11. Report back to the lead (A) when
 - you finish a task (say what passed and what did not, with numbers, not impressions);
 - you are blocked for more than 20 minutes;
 - you need a shared-type change or find something in the spec or plan that is wrong or untested.
