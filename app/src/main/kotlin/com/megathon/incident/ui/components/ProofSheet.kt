@@ -71,6 +71,8 @@ fun ProofSheet(ui: AppUi, onClose: () -> Unit) {
 
             item { Section("Where each step ran") { Stages(ui.session.stages, ui.ttsOffline) } }
 
+            item { Section("Voice tags (suggestions only)") { VoiceTags(ui) } }
+
             item {
                 Section("Network") {
                     Fact("Airplane mode", if (ui.network.airplaneMode) "On" else "Off")
@@ -136,6 +138,28 @@ private fun Stages(stages: List<StageRecord>, ttsOffline: Boolean?) {
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun VoiceTags(ui: AppUi) {
+    val c = Theme.colors
+    val tags = ui.voiceTags
+    if (tags == null || tags.signals.isEmpty()) {
+        Muted(ui.voiceTagsNote ?: "None heard")
+        return
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+        tags.signals.forEach { s ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                Text(
+                    "${if (s.kind == "emotion") "Voice" else "Sound"}: ${s.label}",
+                    style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f, fill = false),
+                )
+                Text("from SenseVoice", style = MaterialTheme.typography.bodyMedium, color = c.ink2)
+                ComputePill(tags.compute)
             }
         }
     }

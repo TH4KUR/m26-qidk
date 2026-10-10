@@ -5,6 +5,7 @@ import com.megathon.incident.domain.FieldValue
 import com.megathon.incident.domain.IncidentReport
 import com.megathon.incident.domain.Priority
 import com.megathon.incident.domain.PriorityAdvice
+import com.megathon.incident.domain.Signal
 import com.megathon.incident.domain.ValueStatus
 import com.megathon.incident.llm.LlmEngine
 import com.megathon.incident.llm.ParseResult
@@ -64,8 +65,11 @@ class ReportSession(
 
     // ---- voice turns --------------------------------------------------------------------------------------------
 
-    /** One thing the reporter said. [stt] is how it was heard (engine, where it ran, how long). */
-    suspend fun onUtterance(text: String, stt: StageRecord? = null) {
+    /**
+     * One thing the reporter said. [stt] is how it was heard (engine, where it ran, how long). [signals] are the sound and
+     * voice tags heard in the same audio; they go to the advisor, whose rules alone decide what they mean.
+     */
+    suspend fun onUtterance(text: String, stt: StageRecord? = null, signals: List<Signal> = emptyList()) {
         if (text.isBlank()) {
             fail("I didn't catch that. Try again, a little closer to the microphone.")
             return
@@ -102,7 +106,7 @@ class ReportSession(
         assumed = (assumed - changed) + merged.assumed
 
         suggestSeverity()
-        val out = advisor.onChunk(said)
+        val out = advisor.onChunk(said, signals)
         priority = out.advice
         advance(prefix = out.spoken)
     }
