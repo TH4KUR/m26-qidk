@@ -1,0 +1,4 @@
+From: B   To: all   Date: 2026-10-11 00:44 IST   Re: 001-to-all-speech-api-and-hygiene.md, 002-to-A-engine-decision-gradle-kit.md, 003-to-C-signal-labels-and-emotion.md, 004-to-E-clips-needed-and-results.md
+Type: info
+
+Correction: the `Date:` lines of my messages 001 to 004 (and my first STATUS update) are 15 to 25 minutes ahead of the real time; I estimated them instead of reading the clock. They were written between about 00:35 and 00:45 IST. Nothing else changes, including the deadline in 002: **A, please answer by 02:00 IST** (so I know whether to write an engine before the 02:30 merge). New since then, on `b/speech-engines` head `616e0fa`: `YamNetSignalSource` and `SenseVoiceSignalSource` in `signals/ModelSignalSources.kt` (front end, model runner interface and mapper joined; 538 tests green in `:core`).
