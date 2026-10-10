@@ -47,28 +47,32 @@ Everything below was read from the connected kit over `adb` (serial `cacf48a9`, 
 ## 5. Peripherals and state
 | Item | Value |
 |---|---|
-| Audio | ALSA card `sun-qrd-snd-card` (`pcmC0D*p/c`), `audiohalservice.qti` running. Framework device list includes speaker, USB headset, BT A2DP/LE. Mic path not yet proven: **record a 3 s clip to confirm** |
+| Audio | ALSA card `sun-qrd-snd-card` (`pcmC0D*p/c`), `audiohalservice.qti` running. Framework device list includes speaker, USB headset, BT A2DP/LE. **Mic path verified 22:48**: the stock Sound Recorder (`com.android.soundrecorder`) captured 14 s with no permission prompt (saved as AMR-NB 8 kHz in `/sdcard/Music`). Levels: mean -39 dBFS, loud parts about -35 to -30 dBFS, floor about -45 dBFS, so the input is **quiet with roughly 10 dB of speech over the noise floor**. Check gain and distance before trusting WER numbers |
 | Camera | `dumpsys media.camera`: **0 camera devices**. Camera HAL service is present but no sensor is attached. Do not plan any camera feature |
 | Wi-Fi | `wlan0` DOWN, "Wi-Fi is disabled", **airplane mode ON** (matches the offline rule) |
 | Battery | reports `present: true, level 100, voltage 8994 mV, AC false`: **[INF]** not a real pack (the skill notes the kit is mains-only): ignore it |
-| Clock | Device date was **2026-01-12 19:17 IST** while the host date is 2026-10-10: the clock is wrong, set it before any timestamped report is shown to judges |
+| Clock | Was **2026-01-12** at first probe. **Set from the host epoch at 22:48 on 2026-10-10** (`adb root` then `date @<epoch>`, diff 0 s). `auto_time` is 0 and Wi-Fi is off, so nothing resyncs it: **re-check after any reboot** |
 | Timezone / locale | `Asia/Kolkata`, `en-US` |
 | USB | composition `diag,adb`; `adb devices` lists the kit as authorized `device` |
 | Sideloaded apps | `com.qc.posedetectionYoloNAS`, `com.cpuid.cpu_z`, `com.primatelabs.geekbench6`, `io.teamsnapped.pramana`, `com.kiloo.subwaysurf`. `com.android.vending`, GMS and Chrome are installed |
 | Models on `/sdcard` | none (`Episteme/` folder and `cpu-z_1.07.apk` only) |
 
 ## 6. Host (laptop) readiness
+First measured with nothing installed (Android SDK/NDK/Studio missing, `/` 99 % full with 1.7 GB free). **Updated after setup on the same day:**
+
 | Item | State |
 |---|---|
-| adb / fastboot | present: adb 1.0.41 (platform-tools 35.0.0), kit authorized, user in `plugdev` |
-| JDK | OpenJDK **21** present (plan wants 17 for Gradle: see below) |
-| Docker, cmake, ninja | present |
-| Android SDK, NDK, Android Studio | **missing** (`ANDROID_HOME` unset, only `platform-tools` and `licenses` under `/usr/lib/android-sdk`) |
-| QAIRT / QNN SDK | **missing** (not needed for the GenieX + WhisperKit main path) |
-| `qai_hub` Python package | missing (only needed for AI Hub exports) |
-| HF CLI | present (`hf`, `huggingface-cli`) |
-| **Disk** | `/` is **99 % full, 1.7 GB free**. This blocks Android Studio (about 3 GB), SDK/NDK (about 5 GB), Gradle caches and any model download. **Free at least 25 GB first** |
-| CPU / RAM | i7-13650HX, 20 threads, 15 GB RAM (7 GB used) |
+| adb | SDK `platform-tools` **37.0.1** first on PATH (apt's 35.0.0 still at `/usr/bin/adb`); kit shows as authorized `device`; user in `plugdev` |
+| Android Studio | Rabbit 1 \| 2026.2.1 at `~/Android/android-studio` (first-run wizard pending) |
+| Android SDK | `~/Android/Sdk`: platforms 34/35/36, build-tools 35.0.0, **NDK 27.3.13750724**, cmdline-tools |
+| Gradle / JDK | Gradle 9.1.0 at `~/dev-tools/gradle`; JDK 21 (default) and 17 installed |
+| llama.cpp | b11541 CPU (`llama-server`) and Vulkan (`llama-server-vulkan`; RTX 4060 = `Vulkan1`) in `~/dev-tools/llama.cpp` |
+| Other | Docker, cmake, ninja, git, `hf` CLI, scrcpy 1.25 |
+| Reference repos | `~/src/WhisperKitAndroid`, `~/src/ai-hub-apps` (sparse: `geniex_chat_android/`, pins `geniex-android` 0.3.5) |
+| QAIRT / QNN SDK, `qai_hub` | not installed (not needed for the GenieX + WhisperKit main path) |
+| Disk | `/` 88 % full, about 12 GB free after setup (was 1.7 GB). `~/android-dl` still holds 1.7 GB of installers |
+| CPU / RAM | i7-13650HX, 20 threads, 15 GB RAM; RTX 4060 Laptop 8 GB (driver 580, CUDA 13.0) |
+| PATH | `source ~/Android/env.sh` (sourced from `~/.bashrc` and `~/.zshrc`) |
 
 ## 7. Consequences for the plan
 1. `minSdk 31 / targetSdk 35` is fine on Android 16. The kit is a **userdebug** build, so `adb root` works (verified), which the skill previously listed only as a possibility.
