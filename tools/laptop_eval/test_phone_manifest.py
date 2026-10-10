@@ -39,3 +39,10 @@ def test_rows_inherit_the_plan_and_keep_the_original_file(tmp_path):
     assert alarm["reference"] == "" and alarm["label_source"] == "unchecked"
     assert alarm["noise"] == "alarm" and "alarm" in alarm["note"]
     assert "single take" in rows["S5_08"]["note"]
+
+
+def test_split_follows_the_gold_so_selectors_can_hold_out_test_clips(tmp_path):
+    for name in ("S1_3.wav", "S1_4.wav"):  # sheet S5_03 is gold g27 (holdout), S5_04 is g32 (dev)
+        _wav(tmp_path / name)
+    rows = {r["clip_id"]: r for r in build(tmp_path)}
+    assert rows["S5_03"]["split"] == "holdout" and rows["S5_04"]["split"] == "dev"
