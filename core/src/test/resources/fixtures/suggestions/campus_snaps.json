@@ -1,0 +1,23 @@
+[
+  {
+    "field": "LOCATION",
+    "original": "vindya see four",
+    "proposed": "Vindhya C4",
+    "reason": "Heard \"vindya see four\"; the site has Vindhya C4.",
+    "source": "GAZETTEER"
+  },
+  {
+    "field": "LOCATION",
+    "original": "himalaya one oh five",
+    "proposed": "Himalaya 105",
+    "reason": "Heard \"one oh five\" after Himalaya; the site has Himalaya 105.",
+    "source": "GAZETTEER"
+  },
+  {
+    "field": "EQUIPMENT_ASSET",
+    "original": "the chilla",
+    "proposed": "Chiller 1",
+    "reason": "Heard \"chilla\"; the site has Chiller 1 in the Kohli Research Block.",
+    "source": "GAZETTEER"
+  }
+]
