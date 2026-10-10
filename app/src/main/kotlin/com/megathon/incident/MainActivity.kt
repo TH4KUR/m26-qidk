@@ -5,6 +5,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.lifecycle.lifecycleScope
+import android.util.Log
+import com.megathon.incident.speech.TtsVoiceCheck
+import kotlinx.coroutines.launch
+import java.io.File
 import com.megathon.incident.engine.Engines
 import com.megathon.incident.ui.AppRoot
 import com.megathon.incident.ui.AppViewModel
@@ -22,6 +27,14 @@ class MainActivity : ComponentActivity() {
         // Debug builds: `--es eval <gold file> [--es prompt <file>] --es run <name> [--es only g01,g02]` (dev split only).
         intent.getStringExtra("eval")?.let { gold ->
             vm.debugEval(gold, intent.getStringExtra("prompt"), intent.getStringExtra("run") ?: "run", intent.getStringExtra("only")?.split(',')?.toSet())
+        }
+        // Debug builds: `--es tts check` logs the system TTS voices for en-IN/hi-IN/te-IN (tag Incident, prefix ttscheck) and writes files/ttscheck.txt. Silent, no downloads.
+        if (intent.getStringExtra("tts") == "check" && Engines.isDebuggable(this)) {
+            lifecycleScope.launch {
+                val lines = TtsVoiceCheck(this@MainActivity).run()
+                lines.forEach { Log.i("Incident", it) }
+                runCatching { File(filesDir, "ttscheck.txt").writeText(lines.joinToString("\n") + "\n") }
+            }
         }
         setContent { IncidentTheme { AppRoot(vm) } }
     }
