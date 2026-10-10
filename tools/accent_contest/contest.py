@@ -138,6 +138,7 @@ def main() -> None:
     parser.add_argument("--predictions", type=Path, help="optional JSONL output with per-clip predictions")
     parser.add_argument("--model", action="append", dest="models", help="override the default four model IDs; repeatable")
     parser.add_argument("--models-dir", type=Path, help="directory containing locally downloaded model folders")
+    parser.add_argument("--dataset-label", default="", help="heading for the output table, e.g. Synthetic smoke test")
     args = parser.parse_args()
     clips = load_manifest(args.manifest)
     models = args.models or list(DEFAULT_MODELS)
@@ -164,6 +165,8 @@ def main() -> None:
 
     rows, predictions = run_contest(clips, models, transcribe)
     table = render_table(rows)
+    if args.dataset_label:
+        table = f"# {args.dataset_label}\n\n{table}"
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(table, encoding="utf-8")
     if args.predictions:
