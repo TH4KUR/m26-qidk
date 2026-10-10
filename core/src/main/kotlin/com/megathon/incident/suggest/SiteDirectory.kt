@@ -2,12 +2,16 @@ package com.megathon.incident.suggest
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.io.File
 import java.text.Normalizer
 
 /** Which report field a directory entry can fill: LOCATION, EQUIPMENT_ASSET, or a person list. */
 enum class EntryKind { PLACE, ASSET, PERSON }
 
 data class SiteEntry(val id: String, val name: String, val kind: EntryKind, val aliases: List<String>)
+
+/** Which site list is in use: [fromFile] is false for the bundled one; [problem] explains a rejected file. */
+data class SiteLoad(val site: SiteDirectory, val fromFile: Boolean, val problem: String? = null)
 
 /**
  * The site gazetteer (spec D16): known places, assets and people with their spoken aliases.
@@ -63,6 +67,20 @@ class SiteDirectory(val entries: List<SiteEntry>) {
                     doc.assets.map { SiteEntry(it.id, it.name, EntryKind.ASSET, it.aliases) } +
                     doc.people.map { SiteEntry(it.id, it.name, EntryKind.PERSON, it.aliases) },
             )
+        }
+
+        /**
+         * The site list from [file] when it exists and is valid, else the bundled (fictional) one. The app
+         * passes `filesDir/site.json`, so a real list pushed to the kit for the live demo replaces the
+         * bundled one without being in the code. Never throws: a broken file falls back and [SiteLoad.problem] says why.
+         */
+        fun loadPreferring(file: File?): SiteLoad {
+            if (file == null || !file.isFile) return SiteLoad(loadDefault(), fromFile = false)
+            return try {
+                SiteLoad(fromJson(file.readText(Charsets.UTF_8)), fromFile = true)
+            } catch (e: Exception) {
+                SiteLoad(loadDefault(), fromFile = false, problem = "${file.name} not used: ${e.message ?: e::class.simpleName}")
+            }
         }
 
         fun loadDefault(): SiteDirectory {
