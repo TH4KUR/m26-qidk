@@ -1,20 +1,22 @@
 # Status: agent E (data, evaluation, pitch)
 
 Owner: agent E only. Overwrite this file freely; it is a snapshot, not a log.
-Last updated: 2026-10-11 01:25 IST
-Read up to: A=005 B=007 C=004 D=003
+Last updated: 2026-10-11 04:20 IST
+Read up to: A=016 B=009 C=004 D=003
 
 ## Doing now
-- Phone recordings by the team (the kit is busy with development); then re-align 9 site names with D's map, M2 draft (due 03:00).
+- Typing references for the 20 own-words phone clips, by ear, and checking their gold answers against what was said.
+- Next (A/016): results tables from logs only, the one-shot held-out scorer, the voice-versus-typing protocol.
 
-## Done and ready for others (with file/commit) — branch `e/data-eval` (push pending, see 007)
-- **Gold on fictional names** (decision 00:35; 9 names still to re-align with D's final list 1d2aa74 via D's map): `app/src/main/assets/eval/gold_v1.jsonl` (40: 27 dev, 13 held out), `gold_homophones.jsonl` (8, clean + mis-heard), `manifest.jsonl` (50 clips), `docs/recording-sheets.md`. Old run outputs with real names deleted; a test scans every mirrored eval file against master's scan list (96 Python tests pass with both lists).
-- **Baseline to cite:** `docs/experiments/E-20261011-fictional-gold-baseline.md` (Qwen3-1.7B, laptop CPU, gold text): grammar v2 valid calls 20/20, recall 76/98, mandatory recall 56/61, hallucination 17/62; free decoding valid 6/20, recall 28/98.
-- Scorers (Python `score.py`, `wer.py`; Kotlin `eval/EvalScorer.kt`), `testing/FakePipelineRunner.kt`, runner `run_eval.py`, grammar schema v2, parser port matching C's `ToolCallParser`.
+## Done and ready for others (with file/commit) — branch `e/data-eval`
+- **Phone recordings round 1** (message 010): 34 clips in Drive (https://drive.google.com/drive/folders/1QPgCuU_l0B3vGcYCIeqcWyQDtU1Ods8a?usp=sharing). Manifests `app/src/main/assets/eval/manifest_phone_r1.jsonl` (34) and `manifest_phone_r1_scripted.jsonl` (14 with exact references, B's contest shape). The `_06` alarm clips are very noisy: report them separately. The `_08` clips are single takes. 8 held-out clips run once at the end.
+- **Gold on fictional names:** `gold_v1.jsonl` (40: 27 dev, 13 held out), `gold_homophones.jsonl`, `manifest.jsonl` (plan), `docs/recording-sheets.md`.
+- **Baseline to cite:** `docs/experiments/E-20261011-fictional-gold-baseline.md` (Qwen3-1.7B, laptop CPU, gold text; does not predict the 4B on the kit).
+- Scorers (`score.py`, `wer.py`, Kotlin `eval/EvalScorer.kt`), `FakePipelineRunner.kt`, `run_eval.py`, parser port of C's `ToolCallParser`. Python 99 tests pass.
 
 ## Blocked on / waiting for
-- App session: push of `a/stubs` (Judge Bench replays through its `Pipeline` + `ReplayLlmEngine`); a 16 kHz recording route (tinycap numbers or app recorder) and the demo mic.
-- User: GPU logins (A 005 #3); teammates for phone recordings now, a second human labeller and a native Hindi reader for C.
+- B: raw transcripts of the 34 clips and the phone accent table.
+- A (app session): kit end-to-end run on the 26 dev clips.
 
 ## Needs from others
-- D: `real-to-fictional.json` off-repo (D 003, item 2).
+- Two blind labellers for the fresh urgency holdout (A/016 task for whoever recorded).
