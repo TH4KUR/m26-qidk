@@ -40,11 +40,11 @@ class SuggestionFixturesTest {
     }
 
     @Test
-    fun witnessChipMovesAPersonWhoOnlySawItToWitnesses() {
-        val chip = load("witness_role.json").single()
-        assertEquals(Field.WITNESSES, chip.field)
-        assertEquals("Priya", chip.proposed)
-        assertEquals(Source.RULE, chip.source)
+    fun witnessChipsMoveAPersonWhoOnlySawItToWitnesses() {
+        val chips = load("witness_role.json")
+        assertEquals(listOf(Field.PERSONS_INVOLVED, Field.WITNESSES), chips.map { it.field })
+        assertEquals(listOf("Ravi", "Priya"), chips.map { it.proposed })
+        assertTrue(chips.all { it.source == Source.RULE })
     }
 
     @Test

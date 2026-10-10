@@ -6,6 +6,7 @@ import com.megathon.incident.domain.Source
 import com.megathon.incident.domain.Suggestion
 import com.megathon.incident.domain.ValueStatus
 import com.megathon.incident.llm.Compute
+import com.megathon.incident.tam.HedgeDetector
 import java.time.Clock
 
 /**
@@ -13,9 +14,15 @@ import java.time.Clock
  * values already in the report, and only proposes; the report keeps what was heard until the user taps.
  * Values the user already confirmed or typed are never second-guessed.
  */
-class RuleSuggestionEngine(site: SiteDirectory, homophones: HomophoneTable, clock: Clock) : SuggestionEngine {
+class RuleSuggestionEngine(
+    site: SiteDirectory,
+    homophones: HomophoneTable,
+    private val hedges: HedgeDetector,
+    clock: Clock,
+) : SuggestionEngine {
 
     private val snapper = GazetteerSnapper(site, homophones)
+    private val hedgeChips = HedgeChips(hedges)
     private val decisions = ChipDecisions(clock)
 
     override val compute = Compute.CPU
@@ -29,6 +36,8 @@ class RuleSuggestionEngine(site: SiteDirectory, homophones: HomophoneTable, cloc
             val snap = snapper.snap(text, kind) ?: continue
             chips += Suggestion(field, text, snap.entry.name, snap.reason, Source.GAZETTEER)
         }
+        chips += RoleRules.chips(state, transcript)
+        chips += hedgeChips.chips(state, transcript)
         return chips.filterNot { state.hasDecided(it) }
     }
 

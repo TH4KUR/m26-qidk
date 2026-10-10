@@ -1,9 +1,16 @@
 [
   {
+    "field": "PERSONS_INVOLVED",
+    "original": "Ravi, Priya",
+    "proposed": "Ravi",
+    "reason": "Priya only saw it, so Priya is a witness, not involved.",
+    "source": "RULE"
+  },
+  {
     "field": "WITNESSES",
-    "original": "Priya (listed as involved)",
+    "original": "",
     "proposed": "Priya",
-    "reason": "Priya only \"saw it\", so Priya is a witness, not involved.",
+    "reason": "Priya only saw it, so Priya is a witness, not involved.",
     "source": "RULE"
   }
 ]
