@@ -1,0 +1,418 @@
+{
+ "n_items": 20,
+ "n_missing_predictions": 0,
+ "fields": {
+  "incident_type": {
+   "correct": 6,
+   "wrong": 1,
+   "miss": 13,
+   "hallucination": 0,
+   "correct_empty": 0,
+   "gold_values": 20,
+   "filled": 7,
+   "precision": {
+    "num": 6,
+    "den": 7,
+    "value": 0.8571428571428571,
+    "ci95": [
+     0.48686549668097007,
+     0.9743210440510253
+    ]
+   },
+   "recall": {
+    "num": 6,
+    "den": 20,
+    "value": 0.3,
+    "ci95": [
+     0.14547527396899385,
+     0.5189767762289793
+    ]
+   },
+   "hallucination_rate": {
+    "num": 0,
+    "den": 0,
+    "value": null,
+    "ci95": null
+   }
+  },
+  "severity": {
+   "correct": 4,
+   "wrong": 0,
+   "miss": 0,
+   "hallucination": 1,
+   "correct_empty": 15,
+   "gold_values": 4,
+   "filled": 5,
+   "precision": {
+    "num": 4,
+    "den": 5,
+    "value": 0.8,
+    "ci95": [
+     0.3755282641185388,
+     0.9637768390302125
+    ]
+   },
+   "recall": {
+    "num": 4,
+    "den": 4,
+    "value": 1.0,
+    "ci95": [
+     0.5100999795960008,
+     1.0
+    ]
+   },
+   "hallucination_rate": {
+    "num": 1,
+    "den": 16,
+    "value": 0.0625,
+    "ci95": [
+     0.01111905730833121,
+     0.2832926836802987
+    ]
+   }
+  },
+  "location": {
+   "correct": 7,
+   "wrong": 0,
+   "miss": 12,
+   "hallucination": 0,
+   "correct_empty": 1,
+   "gold_values": 19,
+   "filled": 7,
+   "precision": {
+    "num": 7,
+    "den": 7,
+    "value": 1.0,
+    "ci95": [
+     0.6456611570247934,
+     1.0
+    ]
+   },
+   "recall": {
+    "num": 7,
+    "den": 19,
+    "value": 0.3684210526315789,
+    "ci95": [
+     0.19149272376273843,
+     0.5896084250184328
+    ]
+   },
+   "hallucination_rate": {
+    "num": 0,
+    "den": 1,
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.7934567085261071
+    ]
+   }
+  },
+  "date_time": {
+   "correct": 7,
+   "wrong": 0,
+   "miss": 11,
+   "hallucination": 0,
+   "correct_empty": 2,
+   "gold_values": 18,
+   "filled": 7,
+   "precision": {
+    "num": 7,
+    "den": 7,
+    "value": 1.0,
+    "ci95": [
+     0.6456611570247934,
+     1.0
+    ]
+   },
+   "recall": {
+    "num": 7,
+    "den": 18,
+    "value": 0.3888888888888889,
+    "ci95": [
+     0.20304991926931162,
+     0.6138133141934384
+    ]
+   },
+   "hallucination_rate": {
+    "num": 0,
+    "den": 2,
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.6576280471103807
+    ]
+   }
+  },
+  "persons_involved": {
+   "correct": 1,
+   "wrong": 1,
+   "miss": 3,
+   "hallucination": 0,
+   "correct_empty": 15,
+   "gold_values": 5,
+   "filled": 2,
+   "precision": {
+    "num": 1,
+    "den": 2,
+    "value": 0.5,
+    "ci95": [
+     0.09452865480086614,
+     0.9054713451991339
+    ]
+   },
+   "recall": {
+    "num": 1,
+    "den": 5,
+    "value": 0.2,
+    "ci95": [
+     0.03622316096978745,
+     0.6244717358814613
+    ]
+   },
+   "hallucination_rate": {
+    "num": 0,
+    "den": 15,
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.20388926630434784
+    ]
+   }
+  },
+  "equipment_asset": {
+   "correct": 4,
+   "wrong": 1,
+   "miss": 9,
+   "hallucination": 1,
+   "correct_empty": 5,
+   "gold_values": 14,
+   "filled": 6,
+   "precision": {
+    "num": 4,
+    "den": 6,
+    "value": 0.6666666666666666,
+    "ci95": [
+     0.29998832134152864,
+     0.9032306674407831
+    ]
+   },
+   "recall": {
+    "num": 4,
+    "den": 14,
+    "value": 0.2857142857142857,
+    "ci95": [
+     0.11721187910109099,
+     0.5464954117248438
+    ]
+   },
+   "hallucination_rate": {
+    "num": 1,
+    "den": 6,
+    "value": 0.16666666666666666,
+    "ci95": [
+     0.03005258587173032,
+     0.563509436563646
+    ]
+   }
+  },
+  "immediate_actions": {
+   "correct": 4,
+   "wrong": 3,
+   "miss": 10,
+   "hallucination": 0,
+   "correct_empty": 3,
+   "gold_values": 17,
+   "filled": 7,
+   "precision": {
+    "num": 4,
+    "den": 7,
+    "value": 0.5714285714285714,
+    "ci95": [
+     0.2504542304090258,
+     0.8417830777373732
+    ]
+   },
+   "recall": {
+    "num": 4,
+    "den": 17,
+    "value": 0.23529411764705882,
+    "ci95": [
+     0.0955488907167594,
+     0.47262245889171595
+    ]
+   },
+   "hallucination_rate": {
+    "num": 0,
+    "den": 3,
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.5615060804490177
+    ]
+   }
+  },
+  "witnesses": {
+   "correct": 0,
+   "wrong": 0,
+   "miss": 1,
+   "hallucination": 1,
+   "correct_empty": 18,
+   "gold_values": 1,
+   "filled": 1,
+   "precision": {
+    "num": 0,
+    "den": 1,
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.7934567085261071
+    ]
+   },
+   "recall": {
+    "num": 0,
+    "den": 1,
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.7934567085261071
+    ]
+   },
+   "hallucination_rate": {
+    "num": 1,
+    "den": 19,
+    "value": 0.05263157894736842,
+    "ci95": [
+     0.009351752490529969,
+     0.2463921533654521
+    ]
+   }
+  }
+ },
+ "overall": {
+  "correct": 33,
+  "wrong": 6,
+  "miss": 59,
+  "hallucination": 3,
+  "correct_empty": 59,
+  "gold_values": 98,
+  "filled": 42,
+  "precision": {
+   "num": 33,
+   "den": 42,
+   "value": 0.7857142857142857,
+   "ci95": [
+    0.6405986210195627,
+    0.8829433146894876
+   ]
+  },
+  "recall": {
+   "num": 33,
+   "den": 98,
+   "value": 0.336734693877551,
+   "ci95": [
+    0.25089992900091485,
+    0.4348866258057654
+   ]
+  },
+  "hallucination_rate": {
+   "num": 3,
+   "den": 62,
+   "value": 0.04838709677419355,
+   "ci95": [
+    0.016591385000846108,
+    0.13288250384754152
+   ]
+  }
+ },
+ "mandatory": {
+  "correct": 24,
+  "wrong": 1,
+  "miss": 36,
+  "hallucination": 1,
+  "correct_empty": 18,
+  "gold_values": 61,
+  "filled": 26,
+  "precision": {
+   "num": 24,
+   "den": 26,
+   "value": 0.9230769230769231,
+   "ci95": [
+    0.7585805251948495,
+    0.9786453608166245
+   ]
+  },
+  "recall": {
+   "num": 24,
+   "den": 61,
+   "value": 0.39344262295081966,
+   "ci95": [
+    0.28068166862043625,
+    0.5188297561439126
+   ]
+  },
+  "hallucination_rate": {
+   "num": 1,
+   "den": 19,
+   "value": 0.05263157894736842,
+   "ci95": [
+    0.009351752490529969,
+    0.2463921533654521
+   ]
+  }
+ },
+ "followup": {
+  "precision": {
+   "num": 18,
+   "den": 54,
+   "value": 0.3333333333333333,
+   "ci95": [
+    0.22241243520150356,
+    0.466392853725497
+   ]
+  },
+  "recall": {
+   "num": 18,
+   "den": 19,
+   "value": 0.9473684210526315,
+   "ci95": [
+    0.7536078466345479,
+    0.99064824750947
+   ]
+  }
+ },
+ "status_agreement": {
+  "EXPLICIT_NONE": {
+   "num": 0,
+   "den": 2,
+   "value": 0.0,
+   "ci95": [
+    0.0,
+    0.6576280471103807
+   ]
+  },
+  "UNKNOWN": {
+   "num": 0,
+   "den": 0,
+   "value": null,
+   "ci95": null
+  },
+  "SUGGESTED": {
+   "num": 0,
+   "den": 1,
+   "value": 0.0,
+   "ci95": [
+    0.0,
+    0.7934567085261071
+   ]
+  }
+ },
+ "run": {
+  "model": "qwen3-1.7b-q4_0-cpu",
+  "grammar": false,
+  "split": "dev",
+  "n_calls": 20,
+  "parse_ok": 7,
+  "mean_completion_tokens": 106.9,
+  "max_prompt_tokens": 479
+ }
+}

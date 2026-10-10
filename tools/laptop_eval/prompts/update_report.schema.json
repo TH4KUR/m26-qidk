@@ -1,0 +1,99 @@
+{
+ "type": "object",
+ "additionalProperties": false,
+ "required": [
+  "tool",
+  "arguments"
+ ],
+ "properties": {
+  "tool": {
+   "const": "update_report"
+  },
+  "arguments": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": [
+    "incident_type",
+    "severity",
+    "location",
+    "date_time_text",
+    "persons_involved",
+    "equipment_asset",
+    "immediate_actions",
+    "witnesses",
+    "evidence"
+   ],
+   "properties": {
+    "incident_type": {
+     "enum": [
+      "water_leak_flood",
+      "fire_smoke",
+      "electrical",
+      "spill_chemical",
+      "injury",
+      "illness",
+      "near_miss",
+      "property_damage",
+      "equipment_failure",
+      "security",
+      "environmental",
+      "other",
+      null
+     ]
+    },
+    "severity": {
+     "enum": [
+      "none",
+      "minor",
+      "moderate",
+      "severe",
+      "critical",
+      null
+     ]
+    },
+    "location": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "date_time_text": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "persons_involved": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "equipment_asset": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "immediate_actions": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "witnesses": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "evidence": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "string"
+     }
+    }
+   }
+  }
+ }
+}

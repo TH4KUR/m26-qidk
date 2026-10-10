@@ -1,0 +1,15 @@
+{"id":"eh_ongoing_spreading","text":"The fire is spreading towards the store room.","tags":["ongoing"],"expect":{"ongoing":true}}
+{"id":"eh_completed_put_out","text":"The cook already put it out with the blanket.","tags":["completed"],"expect":{"completed":true,"ongoing":false}}
+{"id":"eh_planned_will_send","text":"Maintenance will send someone in the evening.","tags":["planned"],"expect":{"planned":true,"completed":false}}
+{"id":"eh_planned_need_to","text":"We need to replace the fuse box.","tags":["planned","modality"],"expect":{"planned":true,"completed":false}}
+{"id":"eh_hedge_maybe","text":"Maybe around nine, I can't remember exactly.","tags":["hedge"],"expect":{"hedged":true}}
+{"id":"eh_hedge_probably","text":"It was probably the compressor that failed.","tags":["hedge"],"expect":{"hedged":true}}
+{"id":"eh_negated_nothing_damaged","text":"Nothing was damaged, just a lot of smoke.","tags":["negation"],"expect":{"negated":true}}
+{"id":"eh_negated_never_reached","text":"The water never reached the server racks.","tags":["negation"],"expect":{"negated":true}}
+{"id":"eh_completed_and_planned","text":"We evacuated the floor and we'll do a headcount later.","tags":["completed","planned"],"expect":{"completed":true,"planned":true}}
+{"id":"eh_has_been_ongoing","text":"The alarm has been ringing for twenty minutes.","tags":["ongoing"],"expect":{"ongoing":true}}
+{"id":"eh_stopped_now","text":"It stopped leaking about an hour ago.","tags":["completed"],"expect":{"completed":true,"ongoing":false}}
+{"id":"eh_asr_no_punct_hedge","text":"i guess it was room two or three","tags":["asr-errors","hedge"],"expect":{"hedged":true}}
+{"id":"eh_question_not_claim","text":"Did anyone call security?","tags":["trap"],"expect":{"completed":false}}
+{"id":"hi_ho_gaya","text":"Aag bujh gayi hai, sab bahar aa gaye.","tags":["hi","UNREVIEWED","completed"],"expect":{"completed":true,"ongoing":false}}
+{"id":"hi_karenge","text":"Kal plumber ko bulayenge.","tags":["hi","UNREVIEWED","planned"],"expect":{"planned":true}}
