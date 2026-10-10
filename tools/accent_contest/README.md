@@ -14,6 +14,23 @@ Install `torch` and `transformers` in a local Python environment. Accept the ter
 python tools/accent_contest/contest.py --manifest clips.jsonl --models-dir $HOME/.cache/megathon-asr-models --output wer.md --predictions predictions.jsonl
 ```
 
+For E/C/D's raw transcript format, add `--raw-transcripts transcripts.jsonl`. Each row is exactly `clip_id`, `model`, `text`; text retains the inference result's punctuation/case and is not WER-normalized. The existing predictions schema remains unchanged. Keep actual spoken-name references and raw outputs outside the repo; replacing a name in a scoring reference without replacing it in the audio changes WER.
+
+For the team's recordings, use repeatable exact metadata filters to keep device, language and tuning/test subsets separate:
+
+```sh
+python tools/accent_contest/contest.py --manifest clips.jsonl \
+  --models-dir "$HOME/.cache/megathon-asr-models" \
+  --select device=phone --select split=tuning --select language=en \
+  --dataset-label "Team recordings: phone, tuning, English" \
+  --output results/phone-tuning-wer.md --predictions results/phone-tuning-predictions.jsonl \
+  --raw-transcripts results/phone-tuning-transcripts.jsonl
+```
+
+Repeat with `device=kit` and distinct output paths. Selectors are recorded in the Markdown report and must match metadata exactly. They apply before WAV validation, so unselected WAVs need not be downloaded. Missing, blank or non-string selection metadata and empty selected subsets raise errors. Use the manifest's actual split names (`tuning/test` or `dev/holdout`), not a guessed mapping. Choose/freeze the split before inspecting inference, and reserve the test set until evaluation settings are fixed. Default English checkpoints should not be scored on Hindi/Telugu clips.
+
+Additional `--select noise=fan`, `--select tone=stressed`, or `--select condition=fan` runs provide separate condition tables using the manifest's actual keys. Select `label_source=human` only if that is the exact label in the manifest. Model-generated labels remain silver; mark that limitation in the dataset heading. A filtered run does not require files for unselected clips. Output paths must be distinct and cannot overwrite the input manifest. These options change neither WER normalization nor the legacy unfiltered invocation.
+
 Use `--dataset-label "Synthetic smoke test — not an accuracy estimate"` for generated dummy audio.
 
 The default comparison is stock `tiny.en`, stock `base.en`, fine tuned Indian English Tiny, and fine tuned Indian English Small. WER is the total word edit errors divided by the total reference words, after case folding and punctuation removal. The table includes both counts. The checkpoints differ in size and training; their ranking is an empirical result on these clips, not proof that fine tuning caused the difference. The model download and inference run on the development machine only. No cloud inference is used by the Android app.

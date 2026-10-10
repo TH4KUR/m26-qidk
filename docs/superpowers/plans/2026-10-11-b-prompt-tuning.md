@@ -64,14 +64,15 @@
 
 ### Task 4: Measure and choose (depends on A)
 
-- [ ] A runs the same 27 dev cases: v8 first, then the two focused candidates (reported estimate ~3.5 minutes per prompt; not measured by B).
+- [ ] A runs the same 27 dev cases: v8 first, then the two focused candidates on the same build after the recall-parser patch (A/016 reports 65% recall). Estimate ~3.5 minutes per prompt; not measured by B.
 - [ ] Compare counts, not rounded percentages. Treat differences under about five points as noise from one run. Do not promote a shorter variant at the cost of validity or grounding.
 - [ ] Examine the five diagnostics separately, preserving raw outputs and the input-history format. Document a measured winner or leave the default unchanged if inconclusive.
 
 ### Task 5: Resume speech evaluation (depends on data)
 
+- [x] Prepare `tools/accent_contest/contest.py` with optional `--raw-transcripts` and repeatable exact `--select KEY=VALUE` metadata filters. Keep legacy predictions and WER normalization unchanged. Verify typed raw text, device/split exclusion, missing-metadata errors and CLI file outputs with `python3 -m unittest -v` from the tool directory (12 tests).
 - [x] Audit existing public proxy metadata first: the 80-clip run already exists; its broad South-Asia accent label and unverified mirror licence/release prevent treating it as a newly approved strict Indian-only benchmark.
-- [ ] If another set is material, select one small ungated set with verified source/licence, speaker and clip counts, deterministic subset and download size; notify A before >2 GB. Avoid repeating the existing proxy run.
+- [x] Decide whether another set is material: A/016 now says about 35 real clips exist. Prioritize locating and scoring them; a second public corpus is unnecessary for this task. Retain existing proxy limitations and avoid another download/run.
 - [ ] When E sends labeled 16 kHz WAVs, run unchanged WER and export per-clip `{clip_id, model, text}` rows; report phone/kit subsets separately and forward raw error pairs to C/D/E once authorized.
 
 ## Execution decisions
@@ -85,7 +86,11 @@
 - 2026-10-11: merged master d3d1cc3 into B (merge 6d13586). Eight prompts and five diagnostics written; root draft fixed but remains untracked.
 - Artifact verification: 44 JSON example/expected envelopes passed strict keys, people-list types, evidence pairing, enums and exact diagnostic evidence provenance. Compact/full lengths: 2,354/3,611 characters; tokenizer and kit runtime unmeasured.
 - Existing off-repo proxy metadata/manifest confirmed: revision 536a87197f1ebe18f844352c0601fc4c740cfe96, seed 20261011, 80 clips, 19 speakers. No download/inference repeated.
-- Plan ends at prepared candidates/handoffs; measurement depends on A, genuine accent results depend on E. Communication drafts remain local pending publication authorization.
+- Initial artifact batch ended at prepared handoffs; user's follow-up authorizes completing delivery. Measurement depends on A; genuine accent results depend on E.
 - Review fixes: explicitly typed evidence as an object in both focused prompts; corrected diagnostic-run instructions because EvalRunner ignores seeded reports rather than rejecting this file shape. A needs an explicit seeded-input route, otherwise those probes stay pending.
 - Review follow-through: clarified that the pronoun rule does not suppress explicit corrected locations, and distinguished site-list probe names from the retained fictional reserve examples. No outstanding review findings.
 - Final artifact check passed again after review: 44 envelopes, eight prompts, five diagnostics; six reserve exports equal the corrected root draft. Staged diff check passed. Task 3 delivery is committed locally; handoffs are drafts.
+- Follow-up: prompt commit 9625063 pushed. Communication commit 5ce0cf6 delivered B/010 to A (same-build baseline/results), B/011 to D (span probes), B/012 to E (real audio/manifest), and updated B's read boundary through A=016. The handoff notes in the artifact directory preserve their original draft wording; the sent messages are the delivery record.
+- Follow-up implementation: four new contest tests failed before the raw-export/selection implementation, then all 11 tool tests passed. No model inference or real-audio score was produced. User was asked for the recording folder/manifest immediately; A/E were asked through communication.
+- Tool review fix: a null/blank/non-string selected metadata value could have silently removed an unlabeled clip. Regression cases failed, then passed after explicit metadata validation; 12 tests pass. Output collision test confirms file preservation before input reading/inference. Independent reviewer confirmed no unresolved code findings.
+- Raw export exercised on 320 cached public-proxy predictions (four models); exact text and unique clip/model rows preserved, output kept off-repo. No new inference or accuracy run. Drive discovery failed because the connector is disconnected; recording paths remain a required input.
