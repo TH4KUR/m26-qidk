@@ -11,10 +11,10 @@ Companion files: `docs/core-rules/shared-types-changes.md` (for A and D), `docs/
 | Package | What it does |
 |---|---|
 | `domain` | Shared types (`ValueStatus`, `ReportState`, `JournalEntry`, `LlmHint`...), `EnumNormalizer`, `TemporalResolver`, `GroundingValidator` |
-| `llm` | `ToolCallParser` (lenient syntax, strict content, duplicate keys rejected), `PayloadValidator`, `LlmEngine` contract, `Compute` |
+| `llm` | `ToolCallParser` (lenient syntax, strict content, duplicate keys rejected), `PayloadValidator` |
 | `tam` | `TamDetector` + editable `cues_en.json` / `cues_hi.json`, `HedgeDetector` for D, shared `CueMatching` |
 | `priority` | Hazard lexicon → impact/immediacy, four 1–20 strategies, `PriorityAdvisor`, `TriageLanes`, `SeveritySuggester`, `UrgencyEvaluator` |
-| `testing` | `FakeLlmEngine`, `FakeHedgeDetector` (labelled `SIMULATED`) |
+| `testing` | `FakeHedgeDetector` (the LLM engine contract and fake are A's) |
 
 ## 2. The 1–20 urgency idea [DECIDED]
 **Severity** (a report field the reporter states) and **urgency** (advice with reasons) are separate (spec D18). Urgency = impact (1–5) × immediacy (1–4); bands LOW 1–4, MEDIUM 5–9, HIGH 10–14, URGENT 15–20.
