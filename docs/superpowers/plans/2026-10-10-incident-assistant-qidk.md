@@ -58,7 +58,7 @@
   - Run `adb shell grep MemTotal /proc/meminfo`.
   - Record all of it.
 - [ ] **Step 4: GenieX reference app.**
-  - `git clone -b release/geniex_chat_android https://github.com/qualcomm/ai-hub-apps`, open `geniex_chat_android` in Android Studio, sync, build, run `adb install -t app-debug.apk`.
+  - `git clone --depth 1 --filter=blob:none --sparse https://github.com/qualcomm/ai-hub-apps && cd ai-hub-apps && git sparse-checkout set geniex_chat_android` (the `release/geniex_chat_android` branch no longer exists: the app is a folder on the default `release` branch). Open `geniex_chat_android` in Android Studio, sync, build, run `adb install -t app-debug.apk`. It ships **no Gradle wrapper**: in Studio set "Use Gradle from" to `~/dev-tools/gradle/gradle-9.1.0`, or run `gradle wrapper --gradle-version 9.1.0` in the folder. It needs compileSdk 34 and NDK 27.3.13750724.
   - Download **Qwen3-1.7B** and **Qwen3-4B-Instruct** from the in-app catalog and chat once with each.
   - Pass: tokens stream on the kit. Record the `geniex-android` version from its `build.gradle(.kts)`. That is the version to pin in Task 1.
 - [ ] **Step 5: WhisperKit reference.**
@@ -369,7 +369,7 @@ class ScriptedLlm(private vararg val outs: String) : LlmEngine { var calls = 0; 
 @Test fun cpuAndNpuAgreeOnLocation() = runBlocking { /* llama_cpp models only: same prompt with compute_unit "cpu" via a test-only constructor flag; assert both parsed locations contain "Conference Room 2" (silent-corruption guard, skill qidk-npu-android §4) */ }
 ```
 - [ ] **Step 2: Run it and confirm it fails.** `gradlew.bat :app:connectedDebugAndroidTest --tests "*GenieXLlmEngineTest"`. Expected: compilation failure.
-- [ ] **Step 3: Implement** per Interfaces, mirroring the calls in `ai-hub-apps/release/geniex_chat_android`. Copy the exact AI Hub model name and chipset field from there. GenieX ships its own `com.geniex.sdk.bean.ToolCall`, so import it as `GxToolCall` to avoid clashing with our `llm.ToolCall`.
+- [ ] **Step 3: Implement** per Interfaces, mirroring the calls in `ai-hub-apps/geniex_chat_android`. Copy the exact AI Hub model name and chipset field from there. GenieX ships its own `com.geniex.sdk.bean.ToolCall`, so import it as `GxToolCall` to avoid clashing with our `llm.ToolCall`.
 - [ ] **Step 4: Run it and confirm it passes** (kit connected, model pre-downloaded). Expected: 2 PASS. Record tokens/s from the log in `docs/setup-log.md`.
 - [ ] **Step 5: Commit.** `git commit -am "feat: GenieX NPU LLM engine"`
 
@@ -513,7 +513,7 @@ class ScriptedLlm(private vararg val outs: String) : LlmEngine { var calls = 0; 
 
 | Repo | Use | Licence |
 |---|---|---|
-| [qualcomm/ai-hub-apps `release/geniex_chat_android`](https://github.com/qualcomm/ai-hub-apps/tree/release/geniex_chat_android) | Reference for GenieX init, pull, load and stream (Task 8) | BSD-3 |
+| [qualcomm/ai-hub-apps `geniex_chat_android/`](https://github.com/qualcomm/ai-hub-apps/tree/release/geniex_chat_android) | Reference for GenieX init, pull, load and stream (Task 8) | BSD-3 |
 | GenieX SDK `com.qualcomm.qti:geniex-android` ([qualcomm/GenieX](https://github.com/qualcomm/GenieX)) | LLM on the NPU | BSD-3 |
 | [argmaxinc/WhisperKitAndroid](https://github.com/argmaxinc/WhisperKitAndroid) | STT on the NPU (Task 9) | MIT (models: Qualcomm AI Hub licence) |
 | [AryamaVMurthy/sm8750-edge-ai-lab](https://github.com/AryamaVMurthy/sm8750-edge-ai-lab) | Proof that WhisperKit and the NPU LLM work on an SM8750 QIDK; reference for recorder, STT and TTS shapes | none: reference only |
@@ -566,6 +566,7 @@ This addendum supersedes the **Timeline and ownership** table above and extends 
 | **A8** | Test data: all five record about 8 incident clips each (clean and stressed, accents, noise); gold labels; scorer; **Judge Bench** data; **LLM candidate contest** (S3) on the GPU server | E | 8 h | `eval/` files, scorecard with raw/+grounding/+gazetteer |
 | **A9** | UI: field list with source chips, suggestion chips, signals and priority panel, **proof strip** (per-stage compute, bytes sent, NPU self-test), staggered evidence reveal | A | 8 h | Slide example end to end on the kit |
 | **A10** | Hands-free loop: energy end-of-speech detector, mic muted during TTS, acknowledgments from templates | B | 4 h | Hands-free run; tap-to-talk fallback present |
+| **A11** | **Mirror to the submission repo** (D22): `tools/mirror_to_submission.sh <clone>` dry run, then `--apply`, review, commit, push `main`; copy E's PDFs into `deliverables/` | A | 30 min each, plus one rehearsal | M2 (4:00 AM) and final (11:00 AM): the scan is clean, README Build and Run steps work from the mirrored code, earlier deliverables untouched |
 
 ### A.3 Revised timeline (5 people)
 
@@ -588,3 +589,14 @@ This addendum supersedes the **Timeline and ownership** table above and extends 
 - **Qualcomm Package Manager login:** if nobody has a working login by hour 3, Plan B (D10) is dead; do not plan around it.
 - **Hindi/Telugu lane (D19):** decided at hour 16 from measured field accuracy; otherwise cut.
 - **Emotion and sound signals:** shown only as sourced chips and priority reasons; never change severity or lower priority.
+
+### A.5 Submission checkpoints (organisers' PDF, as written; no grace period)
+
+| When | Needed in the submission repo's `main` | Owner |
+|---|---|---|
+| 10:00 PM, 10 Oct | `deliverables/M1.pdf` (**done**) | A |
+| **4:00 AM, 11 Oct** | `deliverables/M2.pdf` (2 pages, real experiments and results) **plus all code written so far**, mirrored (A11) | E drafts the PDF, A mirrors and pushes |
+| **11:00 AM, 11 Oct** | Full code, README (setup and run only, Build and Run filled in), MIT LICENSE, `deliverables/final_report.pdf` (max 3 pages); demo video link and code zip through the form | A pushes; E drafts; whole team on the video |
+| 11:30 AM, 11 Oct | Slides PDF through the slides form (not pushed) | E |
+
+Rehearse A11 once before 2:30 AM. Every PDF and the video go through `tools/blindcheck.sh` and a visual check for names on screen.
