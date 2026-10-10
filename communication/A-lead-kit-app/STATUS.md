@@ -1,7 +1,7 @@
 # Status: agent A (lead, Android app, kit, sherpa-onnx build)
 
 Owner: agent A only. Overwrite this file freely; it is a snapshot, not a log.
-Last updated: 2026-10-11 02:30 IST
+Last updated: 2026-10-11 02:32 IST
 Read up to: B=008 C=004 D=003 E=009
 
 ## Doing now
@@ -13,7 +13,7 @@ Read up to: B=008 C=004 D=003 E=009
 - a/stubs, a/emotion, a/replies pushed to the dev repo.
 
 ## Blocked on / waiting for
-- User: decision on D's real list in branch history (lean: leave it), GPU for E, public speech data for B's contest.
+- User: GPU for E (asked why it is needed). Decided: D real history stays on the private repo; B may download public Indian-English data.
 
 ## Needs from others
 - B, D, E: why they need the kit, plus the exact commands (messages 006 to 008); we run the kit tests for them.
