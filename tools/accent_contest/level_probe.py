@@ -1,14 +1,16 @@
 """Does a quiet microphone cost accuracy, and does peak-normalising each clip help?
 
 The kit's mic was measured quiet (2026-10-10: room floor about -45 dBFS, speech peaks -35 to -30 dBFS). This script
-takes the clips of a contest manifest and transcribes three versions of each with the same models:
+takes the clips of a contest manifest and transcribes four versions of each with the same models:
 
-  original   the clip as recorded
-  quiet      the clip scaled so its loud 20 ms frames sit at -32 dBFS RMS, plus white noise at -45 dBFS RMS
-  quiet+norm the quiet version, then peak-normalised to -3 dBFS (gain capped at 30 dB)
+  original         the clip as recorded
+  quiet            the clip scaled so its loud 20 ms frames sit at -32 dBFS RMS (level only, no added noise)
+  quiet+pink       quiet, plus pink (1/f) noise at -45 dBFS RMS, a room-like floor about 13 dB under the speech
+  quiet+pink+norm  the above, then peak-normalised to -3 dBFS (gain capped at 30 dB)
 
-White noise is a crude stand-in for a real room, and the simulation says nothing about the kit's actual
-frequency response or AGC, so the result is a hint to check on kit recordings, not a measurement of the kit.
+An earlier version added WHITE noise instead; that wrecked tiny.en (WER over 100%) and confounded noise with level,
+which is why level and noise are now separate steps. Pink noise is still only a stand-in for a real room, and nothing
+here knows the kit's frequency response or AGC, so the result is a hint to check on kit recordings, not a measurement.
 """
 
 from __future__ import annotations
@@ -47,10 +49,24 @@ def loud_frame_rms(signal: np.ndarray) -> float:
     return float(np.percentile(rms, 90)) or 1e-6
 
 
-def make_quiet(signal: np.ndarray, rng: np.random.Generator) -> np.ndarray:
-    scaled = signal * (dbfs_to_rms(LOUD_TARGET_DBFS) / loud_frame_rms(signal))
-    noisy = scaled + rng.normal(0.0, dbfs_to_rms(NOISE_DBFS), size=scaled.shape).astype(np.float32)
-    return np.clip(np.round(noisy * 32768.0), -32768, 32767).astype(np.float32) / 32768.0  # quantise like PCM16
+def quantise(signal: np.ndarray) -> np.ndarray:
+    return np.clip(np.round(signal * 32768.0), -32768, 32767).astype(np.float32) / 32768.0  # like PCM16
+
+
+def make_quiet(signal: np.ndarray) -> np.ndarray:
+    return quantise(signal * (dbfs_to_rms(LOUD_TARGET_DBFS) / loud_frame_rms(signal)))
+
+
+def pink_noise(length: int, rms: float, rng: np.random.Generator) -> np.ndarray:
+    spectrum = np.fft.rfft(rng.normal(size=length))
+    freqs = np.fft.rfftfreq(length)
+    freqs[0] = freqs[1]
+    noise = np.fft.irfft(spectrum / np.sqrt(freqs), n=length)
+    return (noise * (rms / float(np.sqrt((noise**2).mean())))).astype(np.float32)
+
+
+def add_floor(signal: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    return quantise(signal + pink_noise(len(signal), dbfs_to_rms(NOISE_DBFS), rng))
 
 
 def peak_normalise(signal: np.ndarray) -> np.ndarray:
@@ -65,6 +81,7 @@ def main() -> None:
     parser.add_argument("--models-dir", type=Path, required=True)
     parser.add_argument("--model", action="append", dest="models", required=True)
     parser.add_argument("--output", type=Path, required=True, help="JSON results file")
+    parser.add_argument("--predictions", type=Path, help="optional JSONL with every prediction, to read what the model said")
     parser.add_argument("--seed", type=int, default=20261011)
     args = parser.parse_args()
 
@@ -73,15 +90,18 @@ def main() -> None:
 
     clips = load_manifest(args.manifest)
     rng = np.random.default_rng(args.seed)
-    variants = {"original": [], "quiet": [], "quiet+norm": []}
+    variants = {"original": [], "quiet": [], "quiet+pink": [], "quiet+pink+norm": []}
     for clip in clips:
         original = read_wav(clip.wav)
-        quiet = make_quiet(original, rng)
+        quiet = make_quiet(original)
+        floor = add_floor(quiet, rng)
         variants["original"].append(original)
         variants["quiet"].append(quiet)
-        variants["quiet+norm"].append(peak_normalise(quiet))
+        variants["quiet+pink"].append(floor)
+        variants["quiet+pink+norm"].append(peak_normalise(floor))
 
     results = []
+    saved = []
     for model in args.models:
         asr = pipeline(
             "automatic-speech-recognition",
@@ -95,6 +115,7 @@ def main() -> None:
             }
             row = {"model": model, "variant": name, **aggregate_wer(clips, predictions)}
             results.append(row)
+            saved += [{"model": model, "variant": name, "clip_id": c.clip_id, "reference": c.reference, "prediction": predictions[c.clip_id]} for c in clips]
             print(f"{model:32s} {name:11s} {row['wer']:.2%} ({row['errors']}/{row['reference_words']})", flush=True)
         del asr
         if torch.cuda.is_available():
@@ -102,6 +123,8 @@ def main() -> None:
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(results, indent=2), encoding="utf-8")
+    if args.predictions:
+        args.predictions.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in saved), encoding="utf-8")
 
 
 if __name__ == "__main__":
