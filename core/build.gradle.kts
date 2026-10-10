@@ -1,18 +1,17 @@
-// :core — pure Kotlin/JVM (spec D21). No Android imports allowed in this module.
 plugins {
-    kotlin("jvm")
-    kotlin("plugin.serialization")
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin { jvmToolchain(17) }
 
 dependencies {
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+    // api: these types appear in :core's public signatures (Flow, @Serializable models) and :app uses them.
+    api(libs.kotlinx.coroutines.core)
+    api(libs.kotlinx.serialization.json)
+
     testImplementation(kotlin("test"))
+    testImplementation(libs.junit4)
 }
 
-tasks.test {
-    useJUnitPlatform()
-    testLogging { events("failed"); exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL }
-}
+tasks.test { useJUnit() }

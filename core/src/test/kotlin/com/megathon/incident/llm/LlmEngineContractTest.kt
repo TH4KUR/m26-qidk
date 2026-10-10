@@ -39,9 +39,11 @@ abstract class LlmEngineContract {
         assertEquals("Conference Room 2", ok.payload.location)
     }
 
-    @Test fun anUnknownInputIsStillParseable() = runBlocking {
-        val out = engine().generate(request("zzz qqq no such utterance"))
-        assertIs<ParseResult.Ok>(ToolCallParser.parse(out), "fallback must be a valid no-op update_report: $out")
+    @Test fun anUnknownInputIsStillParseable() {
+        runBlocking {
+            val out = engine().generate(request("zzz qqq no such utterance"))
+            assertIs<ParseResult.Ok>(ToolCallParser.parse(out), "fallback must be a valid no-op update_report: $out")
+        }
     }
 
     @Test fun aSimulatedEngineIsRefusedWhereLiveIsRequired() {
