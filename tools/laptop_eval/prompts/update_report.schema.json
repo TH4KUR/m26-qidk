@@ -1,0 +1,131 @@
+{
+ "type": "object",
+ "additionalProperties": false,
+ "required": [
+  "tool",
+  "arguments"
+ ],
+ "properties": {
+  "tool": {
+   "const": "update_report"
+  },
+  "arguments": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": [
+    "incident_type",
+    "severity",
+    "location",
+    "date_time_text",
+    "persons_involved",
+    "equipment_asset",
+    "immediate_actions",
+    "witnesses",
+    "evidence"
+   ],
+   "properties": {
+    "incident_type": {
+     "enum": [
+      "water_leak_flood",
+      "fire_smoke",
+      "electrical",
+      "spill_chemical",
+      "injury",
+      "illness",
+      "near_miss",
+      "property_damage",
+      "equipment_failure",
+      "security",
+      "environmental",
+      "other",
+      null
+     ]
+    },
+    "severity": {
+     "enum": [
+      "none",
+      "minor",
+      "moderate",
+      "severe",
+      "critical",
+      null
+     ]
+    },
+    "location": {
+     "anyOf": [
+      {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 120
+      },
+      {
+       "type": "null"
+      }
+     ]
+    },
+    "date_time_text": {
+     "anyOf": [
+      {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 120
+      },
+      {
+       "type": "null"
+      }
+     ]
+    },
+    "persons_involved": {
+     "type": "array",
+     "maxItems": 6,
+     "items": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 60
+     }
+    },
+    "equipment_asset": {
+     "anyOf": [
+      {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 120
+      },
+      {
+       "type": "null"
+      }
+     ]
+    },
+    "immediate_actions": {
+     "anyOf": [
+      {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 120
+      },
+      {
+       "type": "null"
+      }
+     ]
+    },
+    "witnesses": {
+     "type": "array",
+     "maxItems": 6,
+     "items": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 60
+     }
+    },
+    "evidence": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+     }
+    }
+   }
+  }
+ }
+}

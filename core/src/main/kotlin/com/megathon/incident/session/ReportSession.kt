@@ -1,11 +1,14 @@
 package com.megathon.incident.session
 
+import com.megathon.incident.domain.ExtractionPayload
 import com.megathon.incident.domain.Field
 import com.megathon.incident.domain.FieldValue
 import com.megathon.incident.domain.IncidentReport
 import com.megathon.incident.domain.Priority
 import com.megathon.incident.domain.PriorityAdvice
+import com.megathon.incident.domain.ReportState
 import com.megathon.incident.domain.Signal
+import com.megathon.incident.domain.Suggestion
 import com.megathon.incident.domain.ValueStatus
 import com.megathon.incident.llm.LlmEngine
 import com.megathon.incident.llm.ParseResult
@@ -15,12 +18,14 @@ import com.megathon.incident.priority.Deescalation
 import com.megathon.incident.priority.KeyAnswer
 import com.megathon.incident.priority.PriorityAdvisor
 import com.megathon.incident.priority.SeveritySuggester
+import com.megathon.incident.suggest.SuggestionEngine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import java.time.Instant
 import java.time.Clock
 import java.time.LocalDate
 import java.time.ZoneId
@@ -43,8 +48,15 @@ class ReportSession(
     private val clock: Clock,
     private val zone: ZoneId,
     private val newId: () -> String,
+    /** D's chip engine (spec D16); null means no chips. It only proposes; the reporter's tap is the only thing that changes a field. */
+    private val suggestions: SuggestionEngine? = null,
 ) {
-    private data class Snapshot(val report: IncidentReport, val clarify: Set<Field>, val transcriptCount: Int)
+    private data class Snapshot(
+        val report: IncidentReport,
+        val clarify: Set<Field>,
+        val transcriptCount: Int,
+        val chipDecisions: List<com.megathon.incident.domain.JournalEntry>,
+    )
 
     private var advisor = newAdvisor()
     private var report = IncidentReport.empty(newId(), clock.millis())
@@ -53,6 +65,8 @@ class ReportSession(
     private val transcripts = mutableListOf<String>()
     private val toolLog = mutableListOf<ToolLogEntry>()
     private val journal = mutableListOf<JournalEntry>()
+    /** Accepted and rejected chips, in D's journal type: this is how a dismissed chip stays dismissed. */
+    private var chipDecisions: List<com.megathon.incident.domain.JournalEntry> = emptyList()
     private val stages = mutableListOf<StageRecord>()
     private val asked = mutableListOf<Set<Field>>()
     private val undoStack = ArrayDeque<Snapshot>()
@@ -69,21 +83,23 @@ class ReportSession(
 
     /**
      * One thing the reporter said. [stt] is how it was heard (engine, where it ran, how long). [signals] are the sound and
-     * voice tags heard in the same audio; they go to the advisor, whose rules alone decide what they mean.
+     * voice tags heard in the same audio; they go to the advisor, whose rules alone decide what they mean. [capturedAt] is the
+     * device-clock instant the reporter stopped speaking (defaults to the session clock now).
      */
-    suspend fun onUtterance(text: String, stt: StageRecord? = null, signals: List<Signal> = emptyList()) {
+    suspend fun onUtterance(text: String, stt: StageRecord? = null, signals: List<Signal> = emptyList(), capturedAt: Instant? = null) {
         if (text.isBlank()) {
             fail("I didn't catch that. Try again, a little closer to the microphone.")
             return
         }
         val said = text.trim()
+        val at = capturedAt ?: clock.instant() // when the reporter stopped speaking: "right now" and "10 minutes ago" are relative to this
         remember() // one voice turn is one undoable step
         transcripts += said
         stt?.let(::record)
         state = SessionState.Extracting
         publish()
 
-        var request = prompts.build(said, report)
+        var request = prompts.build(said, report, earlier = transcripts.dropLast(1).takeLast(2))
         var result = llm.complete(request)
         var parsed = ToolCallParser.parse(result.text)
         if (parsed is ParseResult.Failure) {
@@ -99,8 +115,8 @@ class ReportSession(
         log("update_report", result.text.trim())
 
         val before = report
-        val validation = validator.validate(parsed.payload, transcripts.joinToString(" "), clock.instant())
-        val merged = ReportMerge.apply(report, validation, MergeContext(said, clock.instant(), zone, clock.millis()))
+        val validation = validator.validate(withNowPhrase(parsed.payload, said), transcripts.joinToString(" "), at)
+        val merged = ReportMerge.apply(report, validation, MergeContext(said, at, zone, clock.millis()))
         report = merged.report
         journal += merged.journal
         val changed = Field.entries.filter { before.value(it).text != report.value(it).text }.toSet()
@@ -111,6 +127,17 @@ class ReportSession(
         priority = out.advice
         deescalation = out.deescalation
         advance(prefix = out.spoken, keyQuestion = out.keyQuestion)
+    }
+
+    /**
+     * A small model often skips "right now" / "just now" as a time. It is the worker's own phrase and C's resolver reads it
+     * as the capture time, so when the model left the time out and the report has none yet, take the phrase from the words.
+     * Never replaces a time the model gave or one already in the report.
+     */
+    private fun withNowPhrase(payload: ExtractionPayload, said: String): ExtractionPayload {
+        if (!payload.date_time_text.isNullOrBlank() || report.isFilled(Field.DATE_TIME)) return payload
+        val phrase = NOW_PHRASE.find(said)?.value ?: return payload
+        return payload.copy(date_time_text = phrase, evidence = payload.evidence + ("date_time_text" to phrase))
     }
 
     // ---- taps and edits -----------------------------------------------------------------------------------------
@@ -145,11 +172,38 @@ class ReportSession(
         if (state is SessionState.Asking) advance(prefix = null) else publish()
     }
 
+    /**
+     * The reporter tapped Accept on a chip from the suggestion engine: the field becomes the proposal (USER_CONFIRMED), what was
+     * heard stays in the journal, and Undo brings it back. A chip made for a value that has since changed does nothing.
+     */
+    fun acceptSuggestion(chip: Suggestion) {
+        val engine = suggestions ?: return
+        val now = chipState()
+        val after = engine.accept(now, chip)
+        if (after == now) return
+        remember()
+        chipDecisions = after.journal
+        setByReporter(chip.field, after.report.value(chip.field), "suggestion accepted: ${chip.reason}")
+        if (state is SessionState.Asking) advance(prefix = null) else publish()
+    }
+
+    /** The reporter dismissed a chip: the field is untouched and the same chip is not offered again. */
+    fun rejectSuggestion(chip: Suggestion) {
+        val engine = suggestions ?: return
+        val now = chipState()
+        val after = engine.reject(now, chip)
+        if (after == now) return
+        remember()
+        chipDecisions = after.journal
+        publish()
+    }
+
     fun undo() {
         val snap = undoStack.removeLastOrNull() ?: return
         journal += JournalEntry(Field.INCIDENT_TYPE, null, null, "last change undone", clock.millis()).copy(field = lastChangedField(snap))
         report = snap.report
         clarify = snap.clarify
+        chipDecisions = snap.chipDecisions
         while (transcripts.size > snap.transcriptCount) transcripts.removeAt(transcripts.lastIndex)
         if (state is SessionState.Asking) advance(prefix = null) else publish()
     }
@@ -197,7 +251,7 @@ class ReportSession(
         advisor = newAdvisor()
         report = IncidentReport.empty(newId(), clock.millis())
         clarify = emptySet()
-        transcripts.clear(); toolLog.clear(); journal.clear(); stages.clear(); asked.clear(); undoStack.clear()
+        chipDecisions = emptyList(); transcripts.clear(); toolLog.clear(); journal.clear(); stages.clear(); asked.clear(); undoStack.clear()
         priority = null; deescalation = null; say = null; spokenSummary = null
         state = SessionState.Idle
         publish()
@@ -262,7 +316,7 @@ class ReportSession(
         Field.entries.firstOrNull { report.value(it) != snap.report.value(it) } ?: Field.INCIDENT_TYPE
 
     private fun remember() {
-        undoStack.addLast(Snapshot(report, clarify, transcripts.size))
+        undoStack.addLast(Snapshot(report, clarify, transcripts.size, chipDecisions))
         if (undoStack.size > 20) undoStack.removeFirst()
     }
 
@@ -302,6 +356,24 @@ class ReportSession(
         _ui.value = build()
     }
 
+    private fun chipState() = ReportState(report, chipDecisions)
+
+    /**
+     * Recomputed from the report each time (chips are never stored). Severity is left to its own suggestion
+     * ([acceptSuggestion] by field) while it is still only suggested, so the reporter is not shown it twice.
+     * A failing engine costs the chips, never the session.
+     */
+    private fun chips(): List<Suggestion> {
+        val engine = suggestions ?: return emptyList()
+        if (state is SessionState.Submitted) return emptyList()
+        val found = try {
+            engine.suggest(chipState(), transcripts.joinToString(" "))
+        } catch (e: Exception) {
+            emptyList()
+        }
+        return found.filterNot { it.field == Field.SEVERITY && report.value(Field.SEVERITY).status == ValueStatus.SUGGESTED }
+    }
+
     private fun build() = SessionUi(
         state = state,
         report = report,
@@ -316,6 +388,7 @@ class ReportSession(
         spokenSummary = spokenSummary,
         canSubmitNow = state !is SessionState.Submitted && advisor.lane().offerSubmitNow,
         deescalation = deescalation,
+        suggestions = chips(),
     )
 
     private fun fieldViews(): List<FieldView> {
@@ -343,5 +416,9 @@ class ReportSession(
             }
             FieldView(f, Labels.fieldLabel(f), mandatory, value, status, evidence, hint, assistant)
         }
+    }
+
+    private companion object {
+        val NOW_PHRASE = Regex("""\b(right now|just now|just happened|this very moment)\b""", RegexOption.IGNORE_CASE)
     }
 }

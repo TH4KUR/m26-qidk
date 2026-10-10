@@ -76,9 +76,43 @@ class ToolCallParserTest {
         assertEquals(FailureCode.TRUNCATED, fail("""{"tool":"update_report","arguments":{"location":"Conference Ro""").code)
     }
 
+    // Deliberate change (recall patch review, 2026-10-11): a model that writes a list field as one string, or writes
+    // evidence as a list, used to lose the whole call. The names and quotes are still checked against the transcript later,
+    // so a recoverable shape is coerced. A scalar field with the wrong shape still fails.
+
     @Test
-    fun wrongValueTypeFails() {
-        assertEquals(FailureCode.INVALID_ARGUMENTS, fail("""{"tool":"update_report","arguments":{"witnesses":"Ravi"}}""").code)
+    fun aListFieldWrittenAsOneStringIsCoercedToItsNames() {
+        assertEquals(listOf("Ravi"), ok("""{"tool":"update_report","arguments":{"witnesses":"Ravi"}}""").witnesses)
+        assertEquals(listOf("Ravi", "Meena"), ok("""{"tool":"update_report","arguments":{"witnesses":"Ravi and Meena"}}""").witnesses)
+    }
+
+    @Test
+    fun aListFieldWithANumberOrAnObjectIsDroppedNotInvented() {
+        assertEquals(emptyList(), ok("""{"tool":"update_report","arguments":{"witnesses":5,"location":"Lab 3"}}""").witnesses)
+        assertEquals(emptyList(), ok("""{"tool":"update_report","arguments":{"witnesses":{"a":"b"}}}""").witnesses)
+    }
+
+    @Test
+    fun evidenceWrittenAsListsOrNullsIsCoercedAndTheCallSurvives() {
+        val p = ok("""{"tool":"update_report","arguments":{"location":"Lab 3","evidence":{"location":["in Lab 3","near the door"],"severity":null,"x":[]}}}""")
+        assertEquals("Lab 3", p.location)
+        assertEquals("in Lab 3, near the door", p.evidence["location"])
+        assertEquals(null, p.evidence["severity"])
+    }
+
+    @Test
+    fun aRepeatedEvidenceKeyIsToleratedButARepeatedFieldStillFails() {
+        ok("""{"tool":"update_report","arguments":{"location":"Lab 3","evidence":{"location":"Lab 3"},"evidence":{"location":"Lab 3"}}}""")
+        assertEquals(
+            FailureCode.DUPLICATE_KEY,
+            fail("""{"tool":"update_report","arguments":{"location":"Lab 3","location":"Lab 4"}}""").code,
+        )
+    }
+
+    @Test
+    fun aWrongShapeForAScalarFieldStillFails() {
+        assertEquals(FailureCode.INVALID_ARGUMENTS, fail("""{"tool":"update_report","arguments":{"location":["Lab 3"]}}""").code)
+        assertEquals(FailureCode.INVALID_ARGUMENTS, fail("""{"tool":"update_report","arguments":{"incident_type":{"a":1}}}""").code)
     }
 
     @Test

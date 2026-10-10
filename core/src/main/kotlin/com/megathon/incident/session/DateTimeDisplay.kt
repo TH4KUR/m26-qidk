@@ -14,7 +14,7 @@ object DateTimeDisplay {
     data class Parts(val date: LocalDate?, val clock: String?, val approximate: Boolean, val partOfDay: String?, val phrase: String)
 
     private val FORMAT = Regex("""^(\d{4}-\d{2}-\d{2}|date missing) (≈?\d{2}:\d{2}|morning|afternoon|evening|night|time missing) \((.*)\)$""", RegexOption.DOT_MATCHES_ALL)
-    private val MONTH = DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)
+    private val DAY = DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH)
 
     fun parse(text: String): Parts? {
         val m = FORMAT.matchEntire(text.trim()) ?: return null
@@ -31,9 +31,9 @@ object DateTimeDisplay {
         val time = p.clock?.let { (if (p.approximate) "about " else "") + clock12(it) } ?: p.partOfDay
         val day = when (p.date) {
             null -> null
-            today -> "Today"
-            today.minusDays(1) -> "Yesterday"
-            else -> p.date.format(MONTH)
+            today -> "Today, " + p.date.format(DAY)
+            today.minusDays(1) -> "Yesterday, " + p.date.format(DAY)
+            else -> p.date.format(DAY)
         }
         return when {
             day == null && time == null -> p.phrase

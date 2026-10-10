@@ -67,10 +67,15 @@ object ReportMerge {
         return probe.isNotEmpty() && utterance.contains(probe, ignoreCase = true)
     }
 
-    /** The validator said the day is ambiguous, unresolved or missing: ask, never guess. */
+    /**
+     * Ask which day only when the day really is unknown: no date at all (a bare time, a week), an ambiguous word ("kal"),
+     * or a phrase the resolver could not read. A known date with no clock time ("yesterday morning") is a usable answer.
+     */
     private fun needsDay(p: FieldProposal): Boolean {
         if (p.field != Field.DATE_TIME || p.value.text == null) return false
-        val note = p.note.orEmpty()
+        val t = p.temporal
+        if (t != null) return t.date == null || t.ambiguous
+        val note = p.note.orEmpty() // a proposal without the structured time (only the note says what was wrong)
         return note.startsWith("ambiguous") || note.startsWith("could not resolve") || note.startsWith("needs clarification")
     }
 }

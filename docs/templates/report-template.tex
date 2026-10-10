@@ -1,0 +1,47 @@
+% Template derived from the M1 PDF layout (2 pages, pdflatex). Replace the body; KEEP "Team 087" at the top.
+% Do NOT add team name, member names, college or city names. Run tools/blindcheck.sh on the PDF before submitting.
+\documentclass[10pt,a4paper]{article}
+\usepackage[margin=0.62in,top=0.55in,bottom=0.55in]{geometry}
+\usepackage{booktabs,array}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\pagestyle{empty}
+\setlength{\parindent}{0pt}\setlength{\parskip}{3pt}
+\renewcommand{\arraystretch}{1.08}
+\newcommand{\hsec}[1]{\par\vspace{4pt}{\large\bfseries #1}\par\nobreak\vspace{1pt}\hrule\vspace{3pt}}
+\newcommand{\bx}[1]{\fbox{\parbox{0.115\linewidth}{\centering\scriptsize #1}}}
+\begin{document}
+{\LARGE\bfseries Team 087}\hfill{\large\bfseries M1: Approach}\\[2pt]
+{\large\bfseries AI Incident Report Assistant: a fully on-device voice reporter on a Snapdragon 8 Elite kit}\par
+\hsec{1. Problem statement and our understanding}
+Build an Android application for the Qualcomm HDK8750 development kit (Snapdragon 8 Elite, Hexagon NPU) that turns a spoken incident description into a structured report: speech-to-text, LLM information extraction, a mandatory-field check that asks the user for anything missing, tool/function calling that fills a form, user review and local submission, then on-screen and spoken output. All AI models must run on the device with Snapdragon acceleration; \emph{no cloud APIs}. The form has ten fields (incident type, severity, location, date/time, persons involved, equipment, description, immediate actions, witnesses, recommended follow-up). Judging covers: on-device acceleration, natural conversational speech, speech-recognition accuracy, extraction accuracy and correct field mapping.
+
+\textbf{Our understanding.} This is an \emph{emergency} record, so it must be fast and trustworthy. The main risks are (i) speech errors on names, rooms and accented speech, (ii) a small on-device LLM inventing or mis-assigning values, and (iii) unverifiable claims about what actually runs on the NPU. The deck's own example (``a water leak near Conference Room 2 around 10 AM, maintenance has isolated the area'') carries no severity and no date, so a correct system must \emph{ask} rather than guess.
+\hsec{2. Idea / abstract}
+\textbf{Report first, suggest after.} The report always stores exactly what was heard and is never blocked or silently rewritten. A suggestion layer then proposes one-tap fixes with the reason and source shown (e.g.\ ``heard \emph{room to}: did you mean Conference Room 2?'', ``Priya saw it: witness, not involved''). Every extracted value must be \emph{grounded} in an evidence span of the transcript or it is flagged unconfirmed. Beyond words, we read \emph{signals} (tense/aspect/modality cues, speaker emotion, background alarms) into a visible \textbf{priority advisor} that can only \emph{raise} urgency and never decides severity. Finally, we make the claims measurable: a per-stage compute map (NPU vs CPU, honestly labelled), a network-bytes counter, and an on-device scorecard with ablations.
+\hsec{3. High-level approach, pipeline and architecture}
+\begin{center}\setlength{\fboxsep}{3pt}
+\bx{Mic\\16\,kHz PCM}$\rightarrow$\bx{Speech-to-text\\(Whisper, NPU)}$\rightarrow$\bx{LLM extraction\\(NPU, JSON tool call)}$\rightarrow$\bx{Ground, merge, check mandatory fields}$\rightarrow$\bx{Suggestions + priority advisor}$\rightarrow$\bx{Review, submit (local JSON)}$\rightarrow$\bx{Screen + voice reply}
+\end{center}
+\begin{tabular}{@{}>{\bfseries}p{0.17\linewidth}p{0.80\linewidth}@{}}
+\toprule
+Speech-to-text & Whisper-family models on the Hexagon NPU through Qualcomm's AI runtime. An English baseline (WhisperKit) is built first; a multilingual route (sherpa-onnx with the QNN backend, language forced from a UI toggle) is built in parallel with a public AI Hub fallback. The English model is chosen by a measured accent contest (stock vs Indian-English fine-tunes) on our own recordings.\\
+LLM extraction & A small instruction model (1--4B, candidates compared on the device) via the GenieX runtime on the NPU. Output is one JSON \texttt{update\_report} tool call, constrained by a grammar where the backend supports it, with a lenient parser and one repair retry. A flat schema and short prompts respect the NPU's fixed context.\\
+Deterministic layer & Kotlin code, not AI: evidence grounding, enum and time normalisation (relative times resolved against an injected clock), merge of new answers without overwriting correct ones, and a follow-up planner (mandatory: type, location, date/time, severity; at most two questions per turn). Severity is stated or confirmed by the user, never inferred.\\
+Suggestions \& signals & Site-directory phonetic matching (homophone/number table, Double Metaphone, Jaro-Winkler), witness/involved role rules, and tense/aspect/modality cues (ongoing vs completed, planned vs done, hedged, negated) in English and Hindi. SenseVoice (emotion, events) and YamNet (alarm/siren/scream/glass sounds) feed the priority advisor with visible reasons; a missing or calm signal never lowers priority.\\
+Output & Compose UI with source labels on every value, spoken questions and summary through Android offline TTS (CPU, disclosed to the judges), local JSON storage and export. No network is needed after the one-time model download.\\
+\bottomrule
+\end{tabular}
+
+\textbf{Architecture.} A pure-Kotlin \texttt{core} module (parser, validator, merge, cue detection, priority, scoring) that is unit-tested on any laptop, plus an Android \texttt{app} module (audio, speech and LLM adapters, UI). English is the core lane; Hindi and Telugu form an experimental lane, enabled only if measured accuracy supports it (stock multilingual Whisper-Small is weak on Hindi and unusable on Telugu without fine-tuned weights).
+\hsec{4. Planned testing methodology}
+\begin{itemize}\itemsep1pt\topsep0pt
+\item \textbf{Gold set recorded on the target device itself:} about 40 scenarios (hand-written facilities cases including the deck's example, first-person rewrites of public workplace-incident narratives, multi-turn cases with corrections), spoken by the whole team with different accents, background noise, self-corrections, calm and stressed takes, and alarm-in-background clips. Each has typed gold values and expected missing fields.
+\item \textbf{Metrics:} word error rate; per-field accuracy and hallucination rate (value filled where gold is null), always with denominators; follow-up question precision; end-to-end latency (p50/p95) per stage.
+\item \textbf{Ablation:} raw LLM vs +grounding vs +suggestions, to show what each layer adds. \textbf{Model contests:} speech variants on the accent set, LLM candidates first on gold transcripts, then re-run on the device for the final pick; a held-out split is never used for tuning.
+\item \textbf{Adversarial fixtures:} negation (``Ravi did not see it''), corrections (``no, Room 3''), hedged values, planned vs completed actions, vague times (must ask, not invent), signals that must never lower priority.
+\item \textbf{Compliance and reliability checks:} full run in airplane mode with a zero-bytes-sent counter; an NPU-vs-CPU golden-clip self-test to catch silent wrong NPU output; 20 consecutive end-to-end loops without a crash; models warmed at launch.
+\item \textbf{Honest reporting:} failures and CPU-resident stages are reported as such; no number is quoted unless measured on the kit.
+\end{itemize}
+\textbf{Main risks and fallbacks.} Native runtime library clashes between speech and LLM stacks (tested early; fallback to a single stack with the English baseline); NPU conversion of fine-tuned speech weights is unproven (fallback: stock weights, English only); scope is cut in a fixed order, keeping the proof strip, the report-first rule and the core scorecard.
+\end{document}

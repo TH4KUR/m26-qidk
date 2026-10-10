@@ -36,12 +36,14 @@ import kotlinx.coroutines.withContext
  */
 class GenieXLlmEngine(
     private val context: Context,
-    private val modelName: String = DEFAULT_MODEL,
+    private val modelName: String = debugModel ?: DEFAULT_MODEL,
     private val maxTokens: Int = 320,
 ) : LlmEngine {
-    override val name = "Qwen3-4B-Instruct-2507 (GenieX, QAIRT)"
+    override val name = if (modelName == DEFAULT_MODEL) "Qwen3-4B-Instruct-2507 (GenieX, QAIRT)" else "$modelName (GenieX, QAIRT)"
 
     private val loadLock = Mutex()
+    /** One generation at a time: two overlapping calls on the same model corrupted its state and crashed the app (kit, 02:57). */
+    private val generateLock = Mutex()
     private var wrapper: LlmWrapper? = null
     private var runtimeId: String = ""
     private var sdkReady = false
@@ -75,7 +77,9 @@ class GenieXLlmEngine(
         (System.nanoTime() - started) / 1_000_000
     }
 
-    override suspend fun complete(request: LlmRequest): LlmResult {
+    override suspend fun complete(request: LlmRequest): LlmResult = generateLock.withLock { generate(request) }
+
+    private suspend fun generate(request: LlmRequest): LlmResult {
         warmUp()
         val llm = checkNotNull(wrapper)
         val started = System.nanoTime()
@@ -136,5 +140,8 @@ class GenieXLlmEngine(
 
     companion object {
         const val DEFAULT_MODEL = "qualcomm/Qwen3-4B-Instruct-2507"
+
+        /** Debug builds only (set from `--es model <store name>` in MainActivity): measure another bundle without a rebuild. */
+        @Volatile var debugModel: String? = null
     }
 }
