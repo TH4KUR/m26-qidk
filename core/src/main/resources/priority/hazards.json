@@ -15,7 +15,18 @@
         "is burning",
         "are burning",
         "aag",
-        "आग"
+        "आग",
+        "jal raha",
+        "jal rahi",
+        "जल रहा",
+        "जल रही",
+        "lapten",
+        "लपटें",
+        "aag lagi",
+        "आग लगी",
+        "aag lag gayi",
+        "आग लग गई",
+        "फायर"
       ],
       "notWhen": [
         "fire drill",
@@ -39,7 +50,12 @@
         "explode",
         "bomb",
         "dhamaka",
-        "धमाका"
+        "धमाका",
+        "cylinder phat",
+        "सिलेंडर फट",
+        "cylinder blast",
+        "ब्लास्ट",
+        "बम"
       ]
     },
     {
@@ -63,7 +79,16 @@
         "saans nahi",
         "बेहोश",
         "सांस नहीं",
-        "दिल का दौरा"
+        "दिल का दौरा",
+        "दिल का हमला",
+        "dil ka hamla",
+        "dil ka daura",
+        "dam ghut raha",
+        "दम घुट रहा",
+        "saans phool rahi",
+        "साँस नहीं",
+        "mar gaya",
+        "मर गया"
       ],
       "peopleIntrinsic": true
     },
@@ -89,9 +114,27 @@
         "बंदूक",
         "गोली",
         "चाकू",
-        "हथियार"
+        "हथियार",
+        "goli chali",
+        "goli chal rahi",
+        "गोली चली",
+        "गोली चल रही",
+        "firing",
+        "फायरिंग",
+        "goli maari",
+        "गोली मारी"
       ],
-      "peopleIntrinsic": true
+      "peopleIntrinsic": true,
+      "notWhen": [
+        "dawai ki goli",
+        "dawa ki goli",
+        "goli kha",
+        "goli li",
+        "दवाई की गोली",
+        "दवा की गोली",
+        "गोली खा",
+        "गोली ली"
+      ]
     },
     {
       "label": "structural_collapse",
@@ -107,7 +150,16 @@
         "wall fell",
         "trapped under",
         "debris",
-        "rubble"
+        "rubble",
+        "chhat gir gayi",
+        "छत गिर गई",
+        "deewar gir gayi",
+        "दीवार गिर गई",
+        "malba",
+        "मलबा",
+        "dhah gayi",
+        "ढह गई",
+        "ढह गया"
       ]
     },
     {
@@ -123,11 +175,23 @@
         "smell gas",
         "gas",
         "lpg",
-        "गैस"
+        "गैस",
+        "गैस लीक",
+        "gas ki badbu",
+        "gas ki smell",
+        "गैस की बदबू"
       ],
       "notWhen": [
         "gas station",
-        "gas bill"
+        "gas bill",
+        "gas stove",
+        "gas cooktop",
+        "gas agency",
+        "gas connection",
+        "gas burner",
+        "गैस स्टोव",
+        "गैस बिल",
+        "गैस चूल्हा"
       ]
     },
     {
@@ -144,7 +208,10 @@
         "dhuan",
         "dhuaan",
         "धुआं",
-        "धुआँ"
+        "धुआँ",
+        "jalne ki badbu",
+        "जलने की बदबू",
+        "स्मोक"
       ],
       "notWhen": [
         "no smoking",
@@ -170,7 +237,12 @@
         "serious injury",
         "khoon",
         "खून",
-        "एम्बुलेंस"
+        "एम्बुलेंस",
+        "khoon beh raha",
+        "खून बह रहा",
+        "hadi toot gayi",
+        "हड्डी टूट गई",
+        "ख़ून"
       ],
       "peopleIntrinsic": true
     },
@@ -182,7 +254,13 @@
         "fainting",
         "passed out",
         "chakkar aaya",
-        "चक्कर"
+        "chakkar aa gaya",
+        "chakkar aa raha",
+        "chakkar aa rahe",
+        "चक्कर आया",
+        "चक्कर आ गया",
+        "चक्कर आ रहा",
+        "बेहोश होने"
       ],
       "peopleIntrinsic": true
     },
@@ -215,9 +293,17 @@
         "चोर",
         "चोरी",
         "लूट",
-        "हमला"
+        "हमला",
+        "loot",
+        "dakaiti",
+        "डकैती",
+        "chheen liya",
+        "छीन लिया"
       ],
-      "peopleIntrinsic": true
+      "peopleIntrinsic": true,
+      "notWhen": [
+        "दिल का हमला"
+      ]
     },
     {
       "label": "live_wire",
@@ -231,7 +317,11 @@
         "electric shock",
         "electrocution",
         "current laga",
-        "करंट"
+        "करंट",
+        "current maar raha",
+        "करंट मार रहा",
+        "shock laga",
+        "झटका लगा"
       ]
     },
     {
@@ -248,7 +338,13 @@
         "poisonous",
         "hazardous",
         "radiation",
-        "mercury"
+        "mercury",
+        "तेज़ाब",
+        "tezaab",
+        "ज़हर",
+        "zehar",
+        "केमिकल",
+        "kemikal"
       ]
     },
     {
@@ -269,7 +365,17 @@
         "phase hue",
         "फंसे",
         "फंसा",
-        "फँसे"
+        "फँसे",
+        "phans gaya",
+        "phans gayi",
+        "phans gaye",
+        "फंस गया",
+        "फंस गई",
+        "फंस गए",
+        "atak gayi",
+        "अटक गई",
+        "andar band",
+        "अंदर बंद"
       ],
       "peopleIntrinsic": true
     },
@@ -284,7 +390,9 @@
         "short circuit",
         "short-circuit",
         "chingari",
-        "चिंगारी"
+        "चिंगारी",
+        "स्पार्क",
+        "शॉर्ट सर्किट"
       ]
     },
     {
@@ -321,7 +429,11 @@
         "pipe burst",
         "pipe has burst",
         "baadh",
-        "बाढ़"
+        "बाढ़",
+        "paani bhar gaya",
+        "पानी भर गया",
+        "paani ghus gaya",
+        "पानी घुस गया"
       ],
       "presentIsOngoing": true
     },
@@ -354,12 +466,8 @@
         "twisted",
         "bruise",
         "chot",
-        "gir gaya",
-        "gir gayi",
         "चोट",
-        "घायल",
-        "गिर गया",
-        "गिर गई"
+        "घायल"
       ],
       "notWhen": [
         "power cut",
@@ -379,7 +487,9 @@
         "unattended luggage",
         "loitering",
         "lurking",
-        "संदिग्ध"
+        "संदिग्ध",
+        "lawaris bag",
+        "लावारिस बैग"
       ],
       "peopleIntrinsic": true
     },
@@ -447,7 +557,15 @@
         "blackout",
         "power failure",
         "bijli gayi",
-        "बिजली गई"
+        "बिजली गई",
+        "bijli chali gayi",
+        "बिजली चली गई",
+        "light gayi",
+        "लाइट गई",
+        "batti gul",
+        "बत्ती गुल",
+        "bijli nahi hai",
+        "बिजली नहीं"
       ]
     },
     {
@@ -465,6 +583,11 @@
         "not responding",
         "kharab",
         "खराब"
+      ],
+      "notWhen": [
+        "tabiyat kharab",
+        "तबीयत खराब",
+        "tabiyat theek nahi"
       ]
     },
     {
@@ -566,9 +689,36 @@
         "ghus aaya hai",
         "ghus gaye hain",
         "घुस गया है",
-        "घुस आया है"
+        "घुस आया है",
+        "ghus gaya",
+        "ghus gaye",
+        "ghus aaya",
+        "ghus gayi",
+        "घुस गया",
+        "घुस गए",
+        "घुस आया",
+        "घुस गई"
       ],
       "peopleIntrinsic": true
+    },
+    {
+      "label": "person_fell",
+      "requires": [],
+      "requiresPeople": true,
+      "impact": 3,
+      "peopleIntrinsic": true,
+      "andAnyOf": [
+        "gir gaya",
+        "gir gayi",
+        "gir gaye",
+        "gir pada",
+        "gir padi",
+        "गिर गया",
+        "गिर गई",
+        "गिर गए",
+        "गिर पड़ा",
+        "गिर पड़ी"
+      ]
     }
   ],
   "peopleCues": [
@@ -599,7 +749,25 @@
     "बच्चे",
     "बच्चा",
     "आदमी",
-    "कर्मचारी"
+    "कर्मचारी",
+    "bachchi",
+    "बच्ची",
+    "bachchon",
+    "बच्चों",
+    "mahila",
+    "महिला",
+    "bujurg",
+    "बुजुर्ग",
+    "mareez",
+    "मरीज",
+    "ladki",
+    "लड़की",
+    "ladka",
+    "लड़का",
+    "aurat",
+    "औरत",
+    "vyakti",
+    "व्यक्ति"
   ],
   "resolutionCues": [
     "isolated",
@@ -627,7 +795,19 @@
     "बुझा दिया",
     "बंद कर दिया",
     "रोक दिया",
-    "काबू"
+    "काबू में",
+    "kaabu mein",
+    "kabu mein",
+    "bujh gayi",
+    "bujh gaya",
+    "bujhi",
+    "बुझ गई",
+    "बुझ गया",
+    "बुझी",
+    "theek ho gaya",
+    "ठीक हो गया",
+    "khatam ho gaya",
+    "खत्म हो गया"
   ],
   "lowUrgencyCues": [
     "not urgent",
@@ -638,25 +818,24 @@
     "koi jaldi nahi",
     "jaldi nahi",
     "कोई जल्दी नहीं",
-    "cosmetic"
+    "cosmetic",
+    "aaram se",
+    "आराम से",
+    "jab time mile",
+    "जब टाइम मिले",
+    "emergency nahi",
+    "इमरजेंसी नहीं"
   ],
   "distressCues": [
-    "help",
     "hurry",
     "please hurry",
     "quickly",
-    "emergency",
     "urgent",
-    "oh my god",
-    "omg",
-    "somebody call",
     "please come",
     "jaldi",
-    "bachao",
-    "madad",
-    "बचाओ",
-    "मदद",
-    "जल्दी"
+    "जल्दी",
+    "turant",
+    "तुरंत"
   ],
   "distressEmotions": [
     "angry",
@@ -728,5 +907,49 @@
       "minImpact": 2,
       "minImmediacy": 3
     }
+  ],
+  "distressStrongCues": [
+    "help",
+    "emergency",
+    "oh my god",
+    "omg",
+    "somebody call",
+    "bachao",
+    "bachaao",
+    "bacha lo",
+    "madad",
+    "kuch karo",
+    "he bhagwan",
+    "बचाओ",
+    "बचा लो",
+    "मदद",
+    "कुछ करो",
+    "हे भगवान",
+    "इमरजेंसी",
+    "हेल्प"
+  ],
+  "cancelCues": [
+    "false alarm",
+    "mock drill",
+    "it was a drill",
+    "only a drill",
+    "just a drill",
+    "drill",
+    "by mistake",
+    "my mistake",
+    "it was nothing",
+    "no emergency",
+    "sorry",
+    "galti se",
+    "galat alarm",
+    "jhootha alarm",
+    "drill thi",
+    "koi baat nahi",
+    "गलती से",
+    "गलत अलार्म",
+    "झूठा अलार्म",
+    "ड्रिल थी",
+    "कोई बात नहीं",
+    "मॉक ड्रिल"
   ]
 }

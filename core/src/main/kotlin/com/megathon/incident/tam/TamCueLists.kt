@@ -2,6 +2,7 @@ package com.megathon.incident.tam
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.text.Normalizer
 
 @Serializable
 internal data class CueFile(
@@ -10,6 +11,7 @@ internal data class CueFile(
     val ongoing: List<String> = emptyList(),
     val progressive: List<String> = emptyList(),
     val completed: List<String> = emptyList(),
+    val resolution: List<String> = emptyList(),
     val planned: List<String> = emptyList(),
     val hedged: List<String> = emptyList(),
     val negated: List<String> = emptyList(),
@@ -30,6 +32,8 @@ data class TamCueLists(
     /** Plain progressive markers (Hindi "raha hai"); ongoing, but not an escalation by themselves. */
     val progressive: List<String>,
     val completed: List<String>,
+    /** The subset of completion cues meaning the problem itself ended (not "called", "informed"). */
+    val resolution: List<String>,
     val planned: List<String>,
     val hedged: List<String>,
     val negated: List<String>,
@@ -44,9 +48,9 @@ data class TamCueLists(
 
         fun fromJson(vararg documents: String): TamCueLists {
             val files = documents.map { json.decodeFromString(CueFile.serializer(), it) }
-            fun merged(pick: (CueFile) -> List<String>) = files.flatMap(pick).map { it.lowercase().trim() }.filter { it.isNotEmpty() }.distinct()
+            fun merged(pick: (CueFile) -> List<String>) = files.flatMap(pick).map { Normalizer.normalize(it, Normalizer.Form.NFC).lowercase().trim() }.filter { it.isNotEmpty() }.distinct()
             return TamCueLists(
-                ongoing = merged { it.ongoing }, progressive = merged { it.progressive }, completed = merged { it.completed }, planned = merged { it.planned },
+                ongoing = merged { it.ongoing }, progressive = merged { it.progressive }, completed = merged { it.completed }, resolution = merged { it.resolution }, planned = merged { it.planned },
                 hedged = merged { it.hedged }, negated = merged { it.negated }, past = merged { it.past },
                 present = merged { it.present }, future = merged { it.future }, clauseBreaks = merged { it.clauseBreaks },
             )
