@@ -26,7 +26,9 @@ import com.megathon.incident.session.SessionUi
 import com.megathon.incident.session.StageRecord
 import com.megathon.incident.speech.DemoSpeechEngine
 import com.megathon.incident.speech.GenieXLlmEngine
+import com.megathon.incident.speech.SenseVoiceSignalEngine
 import com.megathon.incident.speech.SherpaCliSpeechEngine
+import com.megathon.incident.speech.SignalReading
 import com.megathon.incident.speech.SystemTtsSpeaker
 import com.megathon.incident.testing.Compute
 import com.megathon.incident.testing.FakeLlmEngine
@@ -72,6 +74,10 @@ data class AppUi(
     val ttsOffline: Boolean?,
     val undoLabel: String?,
     val needsMicPermission: Boolean,
+    /** The latest voice tags (emotion, sound event) SenseVoice read from the audio; null when none were read. */
+    val voiceTags: SignalReading? = null,
+    /** Why there are no voice tags, in words (the bundle is missing, or the last read failed); null when not a failure. */
+    val voiceTagsNote: String? = null,
 )
 
 private data class Local(
@@ -91,6 +97,8 @@ private data class Local(
     val ttsOffline: Boolean? = null,
     val undoLabel: String? = null,
     val needsMicPermission: Boolean = false,
+    val voiceTags: SignalReading? = null,
+    val voiceTagsNote: String? = null,
 )
 
 class AppViewModel(app: Application, private val selection: EngineSelection) : AndroidViewModel(app) {
@@ -104,6 +112,10 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     private val speaker = SystemTtsSpeaker(app)
     private val meter = NetworkMeter(app)
     private val mutex = Mutex()
+
+    // Voice tags are optional: a missing SenseVoice bundle is noticed once and then not retried every turn.
+    private var tagEngine: SenseVoiceSignalEngine? = null
+    private var tagEngineUnavailable: String? = null
 
     private var blocked: String? = null
     private val speech = runCatching { factory.speech(selection.speech) }.onFailure { blocked = explain(it) }.getOrNull()
@@ -123,6 +135,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             simulatedNote = simulatedNote(),
             network = l.network, showProof = l.showProof, ttsOffline = l.ttsOffline, undoLabel = l.undoLabel,
             needsMicPermission = l.needsMicPermission,
+            voiceTags = l.voiceTags, voiceTagsNote = l.voiceTagsNote,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, AppUi(
         screen = Screen.HOME, listening = false, processing = false, elapsedMs = 0, levels = emptyList(), session = session.ui.value,
@@ -204,8 +217,42 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             android.util.Log.i(TAG, "heard [${heard.compute}] in ${heard.elapsedMs} ms: ${heard.text}")
             runCatching { factory.checkResult(heard.compute) }.onFailure { blocked = explain(it) }
             local.update { it.copy(heardNow = heard.text.ifBlank { null }) }
-            session.onUtterance(heard.text, StageRecord("Hear", engine.name, heard.compute, heard.elapsedMs))
+            val tags = if (heard.text.isBlank()) null else readVoiceTags(pcm)
+            tags?.let { session.recordStage(StageRecord("Tags", "SenseVoice (sherpa-onnx, QNN)", it.compute, it.elapsedMs)) }
+            session.onUtterance(heard.text, StageRecord("Hear", engine.name, heard.compute, heard.elapsedMs), tags?.signals.orEmpty())
             finishTurn(before, journalBefore, null)
+        }
+    }
+
+    /**
+     * SenseVoice's tags for the same audio, or null. Never blocks the report: any failure is logged and the turn
+     * goes on without signals. Only used with a real speech engine, so the tags always describe the audio that was heard.
+     */
+    private suspend fun readVoiceTags(pcm: ShortArray): SignalReading? {
+        if (selection.speech == SpeechKind.FAKE) return null
+        tagEngineUnavailable?.let { why ->
+            local.update { it.copy(voiceTags = null, voiceTagsNote = why) }
+            return null
+        }
+        val engine = tagEngine ?: try {
+            SenseVoiceSignalEngine(getApplication<Application>()).also { tagEngine = it }
+        } catch (e: EngineUnavailableException) {
+            tagEngineUnavailable = e.message ?: "SenseVoice is not available"
+            android.util.Log.w(TAG, "voice tags unavailable: ${e.message}")
+            local.update { it.copy(voiceTags = null, voiceTagsNote = tagEngineUnavailable) }
+            return null
+        }
+        return try {
+            engine.read(pcm).also { r ->
+                android.util.Log.i(TAG, "tags [${r.compute}] in ${r.elapsedMs} ms: emotion=${r.reading?.emotion} event=${r.reading?.event} -> ${r.signals.map { it.label }}")
+                local.update { it.copy(voiceTags = r, voiceTagsNote = null) }
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "voice tags failed", e)
+            local.update { it.copy(voiceTags = null, voiceTagsNote = "The last read failed: ${e.message?.take(120) ?: "unknown error"}") }
+            null
         }
     }
 
