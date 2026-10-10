@@ -1,0 +1,27 @@
+{
+  "branch": "origin/e/data-eval",
+  "revision": "2fdd88b3084388d83fc8deb5a6097f768d155f62",
+  "files": [
+    {
+      "path": "app/src/main/assets/eval/gold_v1.jsonl",
+      "rows": 40,
+      "sha256": "e1f1c009fd00a3d48d5f2e2d22733fb446be4ceb5c9a6f6c998f737fb61c21bb",
+      "splits": {
+        "holdout": 13,
+        "dev": 27
+      },
+      "new_exact_utterance_overlaps": 0
+    },
+    {
+      "path": "app/src/main/assets/eval/gold_homophones.jsonl",
+      "rows": 8,
+      "sha256": "6edfd738679eb7514f57f8427ca1f10994250cd3be20e4ee8da87547d5e471e3",
+      "splits": {
+        "holdout": 2,
+        "dev": 6
+      },
+      "new_exact_utterance_overlaps": 0
+    }
+  ],
+  "new_gold_sha256": "d57aa7e1bcb43b4ac02ae434c6017bf6d58f8a0e7b0cb6c9840cfd8bc53ba139"
+}

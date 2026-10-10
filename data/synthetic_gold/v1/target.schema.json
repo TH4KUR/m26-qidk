@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Synthetic SFT sparse update_report target (stricter than legacy parser)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tool",
+    "arguments"
+  ],
+  "properties": {
+    "tool": {
+      "const": "update_report"
+    },
+    "arguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "incident_type": {
+          "type": "string",
+          "enum": [
+            "water_leak_flood",
+            "fire_smoke",
+            "electrical",
+            "spill_chemical",
+            "injury",
+            "illness",
+            "near_miss",
+            "property_damage",
+            "equipment_failure",
+            "security",
+            "environmental",
+            "other"
+          ]
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "none",
+            "minor",
+            "moderate",
+            "severe",
+            "critical"
+          ]
+        },
+        "location": {
+          "type": "string",
+          "minLength": 1
+        },
+        "date_time_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "persons_involved": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "equipment_asset": {
+          "type": "string",
+          "minLength": 1
+        },
+        "immediate_actions": {
+          "type": "string",
+          "minLength": 1
+        },
+        "witnesses": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "incident_type": {
+              "type": "string",
+              "minLength": 1
+            },
+            "severity": {
+              "type": "string",
+              "minLength": 1
+            },
+            "location": {
+              "type": "string",
+              "minLength": 1
+            },
+            "date_time_text": {
+              "type": "string",
+              "minLength": 1
+            },
+            "persons_involved": {
+              "type": "string",
+              "minLength": 1
+            },
+            "equipment_asset": {
+              "type": "string",
+              "minLength": 1
+            },
+            "immediate_actions": {
+              "type": "string",
+              "minLength": 1
+            },
+            "witnesses": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "dependentRequired": {
+        "incident_type": [
+          "evidence"
+        ],
+        "severity": [
+          "evidence"
+        ],
+        "location": [
+          "evidence"
+        ],
+        "date_time_text": [
+          "evidence"
+        ],
+        "persons_involved": [
+          "evidence"
+        ],
+        "equipment_asset": [
+          "evidence"
+        ],
+        "immediate_actions": [
+          "evidence"
+        ],
+        "witnesses": [
+          "evidence"
+        ]
+      }
+    }
+  },
+  "$comment": "Cross-field evidence equality and input grounding are checked by build_dataset.py."
+}

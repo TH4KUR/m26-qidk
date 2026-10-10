@@ -1,0 +1,27 @@
+{
+  "gold_sha256": "d57aa7e1bcb43b4ac02ae434c6017bf6d58f8a0e7b0cb6c9840cfd8bc53ba139",
+  "raw_inputs_with_all_mandatory_answers": 480,
+  "date_and_clock_resolvable_inputs": 480,
+  "train": 360,
+  "validation": 60,
+  "test": 60,
+  "family_split_leakage": 0,
+  "e_exact_utterance_overlap": 0,
+  "python_tests": {
+    "run": 18,
+    "failed": 0
+  },
+  "app_compatibility": {
+    "targets_accepted_by_real_parser": 480,
+    "inputs_match_real_prompt_builder": 480
+  },
+  "core_tests": {
+    "run": 793,
+    "failed": 0,
+    "method": "Fresh compilation of all core production and test Kotlin sources using cached K2 compiler 2.2.0 + serialization plugin 2.2.0, JVM target 17, Java 21 runtime, JUnit 4.13.2; abstract contract base excluded, inherited tests run via concrete classes."
+  },
+  "normal_gradle_command": "Blocked by missing JDK 17; no repository toolchain configuration changed.",
+  "independent_human_adjudication": false,
+  "qwen_inference_or_finetuning_run": false,
+  "model_accuracy": "not_measured"
+}
