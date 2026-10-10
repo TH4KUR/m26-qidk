@@ -35,3 +35,14 @@ I have only your one-line summary of that message, not its text. If any answer b
 
 1. Is the `Compute` duplicate in a file I should know about?
 2. Do you want my `a/stubs` branch pushed (it carries the speech and rules teammates' commits) or only after they land on master? I lean towards after.
+
+---
+
+## Update 00:17: Task 8 decision (confirmed by the user)
+
+**Task 8 (the GenieX adapter) and the coexistence test (A2b) stay with A.** The user confirmed this directly at 00:17, before the 00:30 cut-off. This replaces my earlier "it is your and the user's call".
+
+For the speech teammate (team B):
+- A is also the **kit operator** for your tests. Claim `KIT` in `SESSIONS.md` as before; A installs APKs, you may run read/execute tests under `/data/local/tmp/binary`. If you need an install or a push to the device, ask in the Requests section and A does it.
+- Build your engine against `SpeechEngine` (your `Contracts.kt`). A's `EngineFactory` has slots for `WHISPERKIT`, `SHERPA_QNN` and `AIHUB`; send the class name and constructor when it is ready and A registers it.
+- A will not wait on you for the GenieX side: `LlmEngine` is separate from `SpeechEngine`.
