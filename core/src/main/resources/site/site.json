@@ -31,6 +31,7 @@
     { "id": "krb-auditorium", "name": "KRB Auditorium", "kind": "auditorium", "building": "krb", "aliases": ["Kohli auditorium", "KRB hall"] },
     { "id": "sh-1", "name": "Seminar Hall 1", "kind": "seminar_hall", "aliases": ["SH-1", "SH1", "SH 1", "seminar hall one"] },
     { "id": "sh-2", "name": "Seminar Hall 2", "kind": "seminar_hall", "aliases": ["SH-2", "SH2", "SH 2", "seminar hall two"] },
+    { "id": "sh-3", "name": "Seminar Hall 3", "kind": "seminar_hall", "aliases": ["SH-3", "SH3", "SH 3", "seminar hall three"] },
     { "id": "library", "name": "Library", "kind": "library", "aliases": ["the library", "central library", "reading room"] },
     { "id": "academic-office", "name": "Academic Office", "kind": "office", "aliases": ["academics office", "admin office"] },
     { "id": "bakul-nivas", "name": "Bakul Nivas", "kind": "hostel", "aliases": ["Bakul", "Bakool", "Bakul hostel"] },

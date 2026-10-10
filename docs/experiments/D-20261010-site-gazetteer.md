@@ -10,7 +10,7 @@
 - Web search for blocks missing from OSM and for room numbers.
 
 ## Result
-55 places (41 from the sources below plus 14 Himalaya rooms from the team's check), 20 assets, 6 people. No duplicate IDs, no alias shared by two entries, every `building`/`place` reference resolves. The file passes the `tools/blindcheck.words` patterns (no college or city name inside it).
+56 places (41 from the sources below, SH-3 and 14 Himalaya rooms from the team's check), 20 assets, 6 people. No duplicate IDs, no alias shared by two entries, every `building`/`place` reference resolves. The file passes the `tools/blindcheck.words` patterns (no college or city name inside it).
 
 | Entry | Evidence | Confidence |
 |---|---|---|
@@ -19,7 +19,7 @@
 | Vindhya A2, A4, A6, C2, C4, C6 | OSM nodes; "Vindhya A2" = director's office per a CVIT directions page | medium (other wings likely exist, e.g. A3; add on site) |
 | Nilgiri Block | Foursquare "Nilgiri (IIIT Main Building)", Wikimedia Commons file "IIIT Hyderabad Nilgiri.jpg", a ResearchGate figure "Block II, Nilgiri Building" | medium |
 | Kohli Research Block (KRB), KRB Auditorium | News of its opening (https://www.ap7am.com/en/37245/ktr-opens-kohli-research-block-at-iiit), ICFHR 2022 venue page (https://iapr.org/archives/icfhr2022/venue.php.html), HSRC talk notices naming "KRB Auditorium" | high |
-| SH-1, SH-2 | OSM nodes only | medium (confirm they are "Seminar Hall 1/2") |
+| SH-1, SH-2, SH-3 | OSM nodes (SH-1, SH-2); team confirmed all three | high |
 | Library, Academic Office | OSM | high |
 | Bakul, Old/New Parijaat, Palash (OBH), Kadamba Nivas (NBH) | Official page + OSM ("Kadamba Nivas (New Boys Hostel)") | high |
 | Kadamba, Yuktahar, Palash (North/South), Bakul messes | Official page + OSM | high |
