@@ -32,7 +32,7 @@ Official docs say QIDK = SM8550P [V]. But IIIT-H users report newer kits:
 - Maven `com.qualcomm.qti:geniex-android`. Runtimes: `llama_cpp` (GGUF Q4_0 on the NPU) and `qairt` (AI Hub bundles, NPU only). Local GGUF via `HubSource.LOCALFS`.
 - `SamplerConfig` has `grammarString`/`grammarPath` (GBNF), which the public API reference doesn't document.
 - `LlmWrapper.applyChatTemplate(messages, tools: String?, enableThinking, addGenerationPrompt)` takes a tool-schema JSON.
-- Reference app: `qualcomm/ai-hub-apps` branch `release/geniex_chat_android`.
+- Reference app: `qualcomm/ai-hub-apps`, folder `geniex_chat_android/` on the default `release` branch (the old `release/geniex_chat_android` branch no longer exists) [V 2026-10-10]. It pins `geniex-android` **0.3.5**, AGP 8.13.0, Kotlin 2.2.0, compileSdk/targetSdk 34, minSdk 31, NDK 27.3.13750724, Gradle 9.1.0, and ships **no Gradle wrapper**.
 
 **WhisperKit Android NPU STT (ungated, English only, archived):** `com.argmaxinc:whisperkit:0.3.3` + `com.qualcomm.qti:qnn-runtime:2.44.0` + `com.qualcomm.qti:qnn-litert-delegate:2.44.0`, profile `QUALCOMM_TINY_EN` / `QUALCOMM_BASE_EN`. **The `com.qualcomm.qnn` group does not exist on Maven Central (404); the group is `com.qualcomm.qti`.** Verified on an SM8750 QIDK by sm8750-edge-ai-lab. It has no language or task API, so it cannot do Hindi or Telugu.
 
@@ -49,6 +49,7 @@ Official docs say QIDK = SM8550P [V]. But IIIT-H users report newer kits:
 **NPU access [V]**
 - `/dev/fastrpc-cdsp` is 0664 system (unsigned PD, the one apps use); `fastrpc-cdsp-secure` and `fastrpc-adsp-secure` are 0644. Daemons `cdsprpcd`, `adsprpcd`, `sscrpcd` run. `libcdsprpc.so` and `libadsprpc.so` are on `/vendor/etc/public.libraries.txt`, so the manifest `uses-native-library` line in §4 is valid.
 - `/vendor/dsp/cdsp` holds only Qualcomm test and system skels: **ship our own `libQnnHtpV79Skel.so`** (§2).
+- [V 2026-10-10] The `geniex-android` 0.3.5 AAR (81 MB) already bundles the Hexagon libs: `libQnnHtpV79Skel.so`, `libQnnHtp.so`, `libggml-hexagon.so`, `libggml-htp-v79.so` and more (seen in the APK build log). An APK built on it ships its own v79 skel with no extra step. The reference app `com.geniex.demo` (JDK 17 build, 101 MB APK) installs and starts on the kit with no crash, and loads `libgeniex*.so` and `libggml-hexagon.so`. Model download/load/chat on the NPU not yet tested.
 - Sideloaded `com.qc.posedetectionYoloNAS` bundles SNPE **2.46.0** with V73/V75/V79/V81 stubs and skels. Not yet run by us: launching it is the quickest NPU smoke test.
 
 **Preinstalled speech stack**
@@ -56,9 +57,13 @@ Official docs say QIDK = SM8550P [V]. But IIIT-H users report newer kits:
 - [INF] This may be an on-NPU Whisper path reachable via `SpeechRecognizer`. Test it offline, with Wi-Fi off, before relying on it. The default recogniser is Google's: never use it.
 - [V] Default TTS is Google (`com.google.android.tts`), CPU: disclose it (§5).
 
-**Host gaps [V]**
-- Missing: Android SDK, NDK, Android Studio, QAIRT. Present: adb 35, JDK 21 (plan says 17), Docker, cmake, ninja, `hf` CLI.
-- **Laptop `/` is 99% full (1.7 GB free).** Free about 25 GB before installing anything.
+**Host toolchain [V, installed 2026-10-10]**: `source ~/Android/env.sh` (already sourced from `~/.bashrc` and `~/.zshrc`) puts all of this on PATH.
+- Android Studio Rabbit 1 | 2026.2.1 in `~/Android/android-studio` (bundled JBR 25; first-run wizard not yet done). SDK in `~/Android/Sdk`: platform-tools 37.0.1, platforms 34/35/36, build-tools 35.0.0, NDK 27.3.13750724, cmdline-tools. `sdkmanager` is deprecated but works.
+- **Use the SDK's `adb` (37.0.1), not apt's 35.0.0**: `env.sh` puts it first. Two adb versions kill each other's server.
+- Gradle 9.1.0 (`~/dev-tools/gradle`), JDK 21 default plus 17 installed. **The laptop's JDK 21 is runtime-only (no `javac`): build with `JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64`**, otherwise Gradle fails with "does not provide the required capabilities: [JAVA_COMPILER]". scrcpy 1.25 (apt, untested on Android 16), Docker, cmake, ninja, `hf` CLI.
+- llama.cpp b11541: `llama-server` (CPU) and `llama-server-vulkan` (RTX 4060 appears as `Vulkan1`, Intel iGPU as `Vulkan0`). No CUDA build: the CUDA 13.4 release needs a newer driver than the installed 580 (CUDA 13.0).
+- Clones in `~/src`: `WhisperKitAndroid` (has `gradlew`, compileSdk 35) and `ai-hub-apps` (sparse, `geniex_chat_android/` only).
+- Not installed: QAIRT (main path doesn't need it). Laptop `/` is 88% full (~12 GB free); `~/android-dl` holds 1.7 GB of installers that can go.
 
 ## 1c. Speech and emotion stack (decided 2026-10-10; spec D9, D17, D18)
 Full evidence: `reports/Indic ASR and TTS on Snapdragon.md` and `research_notes/Indic ASR and TTS on Snapdragon/`.

@@ -1,0 +1,37 @@
+diff --git a/sherpa-onnx/jni/offline-recognizer.cc b/sherpa-onnx/jni/offline-recognizer.cc
+index 129404f..6e0b429 100644
+--- a/sherpa-onnx/jni/offline-recognizer.cc
++++ b/sherpa-onnx/jni/offline-recognizer.cc
+@@ -171,6 +171,20 @@ static OfflineRecognizerConfig GetOfflineConfig(JNIEnv *env, jobject config,
+                             enableSegmentTimestamps, whisper_config_cls,
+                             whisper_config);
+ 
++  fid = env->GetFieldID(whisper_config_cls, "qnnConfig",
++                        "Lcom/k2fsa/sherpa/onnx/QnnConfig;");
++  qnn_config = env->GetObjectField(whisper_config, fid);
++  qnn_config_cls = env->GetObjectClass(qnn_config);
++
++  SHERPA_ONNX_JNI_READ_STRING(ans.model_config.whisper.qnn_config.backend_lib,
++                              backendLib, qnn_config_cls, qnn_config);
++
++  SHERPA_ONNX_JNI_READ_STRING(ans.model_config.whisper.qnn_config.context_binary,
++                              contextBinary, qnn_config_cls, qnn_config);
++
++  SHERPA_ONNX_JNI_READ_STRING(ans.model_config.whisper.qnn_config.system_lib,
++                              systemLib, qnn_config_cls, qnn_config);
++
+   fid = env->GetFieldID(model_config_cls, "fireRedAsr",
+                         "Lcom/k2fsa/sherpa/onnx/OfflineFireRedAsrModelConfig;");
+   jobject fire_red_asr_config = env->GetObjectField(model_config, fid);
+diff --git a/sherpa-onnx/kotlin-api/OfflineRecognizer.kt b/sherpa-onnx/kotlin-api/OfflineRecognizer.kt
+index 30b1bcc..3d6c928 100644
+--- a/sherpa-onnx/kotlin-api/OfflineRecognizer.kt
++++ b/sherpa-onnx/kotlin-api/OfflineRecognizer.kt
+@@ -96,6 +96,7 @@ data class OfflineWhisperModelConfig(
+     var tailPaddings: Int = 1000, // Padding added at the end of the samples
+     var enableTokenTimestamps: Boolean = false,
+     var enableSegmentTimestamps: Boolean = false,
++    var qnnConfig: QnnConfig = QnnConfig(), // used when provider is "qnn": encoder and decoder context binaries
+ )
+ 
+ data class OfflineCanaryModelConfig(

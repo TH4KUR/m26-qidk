@@ -1,6 +1,6 @@
 # Person C: core rules, decisions, results
 
-Branch `c/core-rules` · 2026-10-10 · Owner: C · **Status: implemented and tested** (385 tests, 0 failing, 1 deliberately skipped; `./gradlew :core:test`).
+Branch `c/core-rules` · 2026-10-10 · Owner: C · **Status: implemented and tested** (424 tests, 0 failing, 1 deliberately skipped; `./gradlew :core:test`).
 
 Tags: **[DECIDED]** settled and implemented · **[LEAD]** needs the lead's sign-off · **[MEASURED]** a number from a run on 2026-10-10 · **[UNMEASURED]** built and property-tested, effect not measured.
 
@@ -10,11 +10,11 @@ Companion files: `docs/core-rules/shared-types-changes.md` (for A and D), `docs/
 
 | Package | What it does |
 |---|---|
-| `domain` | Shared types (`ValueStatus`, `ReportState`, `JournalEntry`, `LlmHint`...), `EnumNormalizer`, `TemporalResolver`, `GroundingValidator` |
-| `llm` | `ToolCallParser` (lenient syntax, strict content, duplicate keys rejected), `PayloadValidator`, `LlmEngine` contract, `Compute` |
+| `domain` | Shared types (`ValueStatus`, `ReportState`, `JournalEntry`, `LlmHint`...), `EnumNormalizer`, `TemporalResolver` (clock times, offsets, days, weeks), `GroundingValidator` (exact grounding + near-miss) |
+| `llm` | `ToolCallParser` (lenient syntax, strict content, duplicate keys rejected), `PayloadValidator` |
 | `tam` | `TamDetector` + editable `cues_en.json` / `cues_hi.json`, `HedgeDetector` for D, shared `CueMatching` |
 | `priority` | Hazard lexicon → impact/immediacy, four 1–20 strategies, `PriorityAdvisor`, `TriageLanes`, `SeveritySuggester`, `UrgencyEvaluator` |
-| `testing` | `FakeLlmEngine`, `FakeHedgeDetector` (labelled `SIMULATED`) |
+| `testing` | `FakeHedgeDetector` (the LLM engine contract and fake are A's) |
 
 ## 2. The 1–20 urgency idea [DECIDED]
 **Severity** (a report field the reporter states) and **urgency** (advice with reasons) are separate (spec D18). Urgency = impact (1–5) × immediacy (1–4); bands LOW 1–4, MEDIUM 5–9, HIGH 10–14, URGENT 15–20.
@@ -65,7 +65,8 @@ Companion files: `docs/core-rules/shared-types-changes.md` (for A and D), `docs/
 - Hazard recognition is a keyword lexicon: unlisted hazards become "unknown, impact 3" and rely on the key question or the model hint.
 - ASR errors are not modelled in the scenario sets (typed text). Real Whisper output will be noisier.
 - Commas do not split TAM clauses, so "we will call maintenance, it is still leaking" is one PLANNED clause that is still ONGOING.
-- `TemporalResolver` handles common English/Hinglish forms and spoken hours ("ten am", "nau baje"); not "day before yesterday", "last Tuesday", "noon".
+- `TemporalResolver` handles common English/Hinglish forms, spoken hours ("ten am", "nau baje") and weeks ("last week", "this week", "N weeks ago" as a Monday-start range or one approximate date); not "day before yesterday", "last Tuesday", "noon", "for a week" (a duration, deliberately null).
+- **Near-miss grounding [UNMEASURED]:** tested only on hand-written near-misses. It reads D's shared sound-alike table (about a dozen groups) plus a one-letter rule, so it will miss most real Whisper errors; its job is to turn a would-be rejection or a bare "not found" into a chip that shows the heard words. Real error rates need E's recordings.
 - Hindi lists are model-reviewed only. "kal se", "hoga" and "chahiye" need a native speaker's decision (listed in the review notes).
 - SenseVoice/YamNet signals and the model hint are tested with fakes only.
 

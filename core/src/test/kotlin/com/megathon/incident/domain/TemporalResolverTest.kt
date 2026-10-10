@@ -189,4 +189,82 @@ class TemporalResolverTest {
     @Test fun hindiNumberWordBaje() = assertEquals(LocalTime.of(9, 0), r("subah nau baje").time)
 
     @Test fun aNumberWordThatIsNotAnHourIsIgnored() = assertNull(resolver.resolve("one of the pipes near the lab", afternoon))
+
+    // ---- weeks (Monday-start ISO weeks; capture is Sunday 2026-10-11 15:00 IST) --------------------
+
+    private val mondayMorning = Instant.parse("2026-10-12T04:30:00Z") // Monday 2026-10-12 10:00 IST
+
+    @Test fun lastWeekIsAMondayToSundayRangeWithNoDate() {
+        val v = r("last week")
+        assertNull(v.date)
+        assertNull(v.time)
+        assertEquals(LocalDate.of(2026, 9, 28), v.from)
+        assertEquals(LocalDate.of(2026, 10, 4), v.to)
+        assertTrue(v.approximate)
+        assertTrue(v.needsClarification)
+    }
+
+    @Test fun lastWeekInHinglishAndDevanagariGivesTheSameRange() {
+        for (phrase in listOf("pichhle hafte", "pichle hafte", "पिछले हफ्ते", "पिछले हफ़्ते")) {
+            val v = r(phrase)
+            assertEquals(LocalDate.of(2026, 9, 28), v.from, phrase)
+            assertEquals(LocalDate.of(2026, 10, 4), v.to, phrase)
+            assertNull(v.date, phrase)
+        }
+    }
+
+    @Test fun thisWeekRunsFromMondayToToday() {
+        for (phrase in listOf("earlier this week", "this week", "is hafte", "इस हफ्ते")) {
+            val v = r(phrase)
+            assertNull(v.date, phrase)
+            assertEquals(LocalDate.of(2026, 10, 5), v.from, phrase)
+            assertEquals(LocalDate.of(2026, 10, 11), v.to, phrase)
+            assertTrue(v.needsClarification, phrase)
+        }
+    }
+
+    @Test fun onAMondayThisWeekIsJustTodayAndLastWeekIsTheSevenDaysBefore() {
+        val thisWeek = r("this week", mondayMorning)
+        assertEquals(LocalDate.of(2026, 10, 12), thisWeek.from)
+        assertEquals(LocalDate.of(2026, 10, 12), thisWeek.to)
+        val lastWeek = r("last week", mondayMorning)
+        assertEquals(LocalDate.of(2026, 10, 5), lastWeek.from)
+        assertEquals(LocalDate.of(2026, 10, 11), lastWeek.to)
+    }
+
+    @Test fun lastWeekAcrossTheYearBoundary() {
+        val newYearsDay = Instant.parse("2026-01-01T04:30:00Z") // Thursday
+        val v = r("last week", newYearsDay)
+        assertEquals(LocalDate.of(2025, 12, 22), v.from)
+        assertEquals(LocalDate.of(2025, 12, 28), v.to)
+    }
+
+    @Test fun aWeekAgoIsASingleApproximateDateWithoutATime() {
+        for (phrase in listOf("a week ago", "one week ago", "ek hafte pehle", "एक हफ्ते पहले")) {
+            val v = r(phrase)
+            assertEquals(LocalDate.of(2026, 10, 4), v.date, phrase)
+            assertNull(v.from, phrase)
+            assertNull(v.time, phrase)
+            assertTrue(v.approximate, phrase)
+            assertTrue(v.needsClarification, phrase)
+        }
+        assertEquals(LocalDate.of(2026, 9, 27), r("2 weeks ago").date)
+    }
+
+    @Test fun aPartOfDayIsKeptNextToTheWeekRange() {
+        val v = r("last week in the evening")
+        assertEquals(PartOfDay.EVENING, v.partOfDay)
+        assertEquals(LocalDate.of(2026, 9, 28), v.from)
+        assertNull(v.time)
+    }
+
+    @Test fun aDurationIsNotAPointInTime() {
+        assertNull(resolver.resolve("it has been leaking for a week", afternoon))
+    }
+
+    @Test fun anExplicitDayBeatsAWeekWord() {
+        val v = r("yesterday, earlier this week")
+        assertEquals(LocalDate.of(2026, 10, 10), v.date)
+        assertNull(v.from)
+    }
 }
