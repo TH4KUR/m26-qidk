@@ -1,15 +1,16 @@
 # Status: agent B (speech engines, signals, accent contest)
 
 Owner: agent B only. Snapshot.
-Last updated: 2026-10-11 04:25 IST
-Read up to: A=017 C=009 D=000 E=010
+Last updated: 2026-10-11 04:54 IST
+Read up to: A=018 C=009 D=004 E=010
 
 ## Doing now
-- User requests substantially more corrections/updates to already-reported mandatory and optional fields. Revising synthetic gold; C review clearance and automated follow-up held (B/015) until a replacement revision is pushed.
+- Expanded update-heavy dataset pushed at 51c1124; C replacement review requested (B/016). Training blocked by the stated-none validator bug and pending independent review; human approval is required before any fine-tuning.
 - Ready to compare A's prompt results. E/010 now provides the phone-recording folder and manifests; its requested audio contest/export is queued separately from the human's current dataset push/review task.
 
 ## Done and ready for others (with file/commit)
-- b/speech-engines 959d671: 480 synthetic gold candidates (360/60/60, 144 families), generator/dynamic temporal oracle, app parser/prompt contract test, data card, and C review checklist. All raw inputs answer all mandatory questions. 18 Python tests and 793 core tests passed via the documented Kotlin/JUnit fallback; no Qwen inference or training, no independent semantic/human adjudication yet.
+- 51c1124, including master 9bf0d36: 800 synthetic candidates (600/100/100), 80 new four-turn sequences, 264 saved-context calls, all eight fields updated. Current app history/time-key input contract checked on all 800; 24 Python tests pass. Core fallback 876/877 passing, one explicit validator regression fails. Runtime replay audit: 46/320 non-temporal after-states mismatch due to none-rating rejection; no inference/training. Dataset tests skip only when the data folder is absent from a submission mirror; mirror dry-run blind scan clean (306 files).
+- Original, superseded pilot at 959d671: 480 synthetic gold candidates (360/60/60, 144 families), generator/dynamic temporal oracle, app parser/prompt contract test, data card, and C review checklist. All raw inputs answer all mandatory questions. 18 Python tests and 793 core tests passed via the documented Kotlin/JUnit fallback; no Qwen inference or training, no independent semantic/human adjudication yet.
 - b/speech-engines pushed at 6ea0e5b, including prompt commit 9625063 and master d3d1cc3 merge 6d13586.
 - Raw export and exact subset filters in tools/accent_contest/contest.py: 12 tests pass, independent review findings fixed. Commands in tool README.
 - Exported 320 cached public-proxy rows off-repo, no new inference; format validation only.
@@ -19,15 +20,15 @@ Read up to: A=017 C=009 D=000 E=010
 - Speech contracts/signals/engine code already on master. No WhisperKit/JNI work; A operates kit.
 
 ## Blocked on / waiting for
-- C: hold clearance of B/014 while B expands update coverage (B/015); await replacement request. After verification, fine-tuning is next only with human intervention and explicit approval; do not run it autonomously.
+- C: exact-revision review on B/016, including resolution/recheck of stated severity none being rejected as negation. After verification, fine-tuning is next only with human intervention and explicit approval; do not run it autonomously.
 - A: deployed v8/candidate results on same build/settings and input-history patch (B/010).
 - E/010: 14 scripted references are supplied; 20 own-words references remain unchecked. Audio access and contest/export execution are not verified by this dataset handoff.
 
 ## Needs from others
-- C: acknowledge B/014, independently cross-verify labels and temporal/validator/deployment compatibility, return PASS/BLOCKED with reviewed revision and failing IDs.
+- C: acknowledge B/016, independently cross-verify all 800 labels, temporal and update transitions, fix/adjudicate the validator blocker, return exact-revision PASS/BLOCKED.
 - A: relay B/010; return raw/prediction/meta files and hashes.
 - D: probes in B/011; tell A results/commit.
 - E: human-checked own-words references; carry E/010's speaker/noise/final-state/holdout limits into any future phone table.
 
 ## Current limitation
-- E/010 has now supplied a Drive link and phone manifests, but this dataset task has not verified access or run speech inference. Prompt efficacy and real-speech WER remain unmeasured by B. Handoffs 010-014 are sent; C's dataset review is pending.
+- E/010 has now supplied a Drive link and phone manifests, but this dataset task has not verified access or run speech inference. Prompt efficacy and real-speech WER remain unmeasured by B. Handoffs 010-016 are sent; C's replacement dataset review is pending and training remains gated.
