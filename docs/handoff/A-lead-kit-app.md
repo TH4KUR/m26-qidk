@@ -133,8 +133,13 @@ cd ~ && tar czf sherpa-qnn-sm8750.tar.gz bundle
 On your laptop with the kit: `scp ubuntu@<vm-ip>:~/sherpa-qnn-sm8750.tar.gz .`, untar, `adb push bundle/. /data/local/tmp/binary/`, then in `adb shell`: `cd /data/local/tmp/binary; chmod +x sherpa-onnx-offline; export LD_LIBRARY_PATH=$PWD; export ADSP_LIBRARY_PATH="$PWD;$ADSP_LIBRARY_PATH"` (**semicolon, not colon**) and run `./sherpa-onnx-offline --provider=qnn --tokens=<tokens-file> --whisper.qnn-backend-lib=./libQnnHtp.so --whisper.qnn-system-lib=./libQnnSystem.so --whisper.qnn-context-binary=<encoder>.bin,<decoder>.bin --whisper-language=hi --whisper-task=transcribe <16kHz-mono.wav>`.
 **Verified in sherpa-onnx source:** Whisper on QNN takes **two** context binaries (encoder, decoder, comma-separated) and the flag names above. **Not known:** the file names inside the tarball (use `ls`), and that `--provider=qnn`, `--tokens` and `LD_LIBRARY_PATH` behave as in the docs' SenseVoice example. **Compare the transcript with a CPU run; watch for "!!!!".**
 
-### Submission push (you only)
-You push to the submission repo at M2 (4:00 AM) and the final (11:00 AM); see section 9 for what to mirror and the double-blind rules. Fill in the README **Build** and **Run** sections before the final.
+### Submission push (you only; D22)
+1. Clone the submission repo once, outside this repo: `git clone https://github.com/IIIT-ECell/megathon26-readyornot.git` (if `megathon26-readyornot/` already exists inside your checkout, reuse it; it is git-excluded locally).
+2. In that clone set a **neutral** git identity (`git config user.name`, `git config user.email`). The script refuses an identity that matches a name or college pattern.
+3. From this repo on `master`: `tools/mirror_to_submission.sh ../megathon26-readyornot` (dry run). Read the output, then re-run with `--apply`. It mirrors **committed** content only.
+4. In the clone: copy E's checked PDFs into `deliverables/`, run `git status`, review, `git add -A && git commit -m "..." && git push origin main`.
+5. **Rehearse once before 2:30 AM** so a scan failure is found early. Findings are fixed in this repo (commit) and the script is re-run. E keeps `tools/blindcheck.words` current with every teammate's name, username and email.
+Fill in the README **Build** and **Run** sections before the final; they must work from the mirrored code.
 
 ## 8. Stubs, fakes and contract tests (the team pattern)
 Five people build in parallel, so **nobody waits for the real NPU engine.** Every dependency on someone else's work gets an **interface in `:core`** and a **fake**, until the real one lands.
@@ -169,7 +174,7 @@ Five people build in parallel, so **nobody waits for the real NPU engine.** Ever
 
 **Submission repo:** `IIIT-ECell/megathon26-readyornot` (private; only `main` is evaluated, and only the latest commit at each deadline). It is **separate from this team repo**. Its README has empty **Build** and **Run** sections that must be filled before the final.
 **Double-blind (all PDFs and the video):** put **"Team 087"** at the top of every PDF; **no team name, member names, college or city names** anywhere: not in slides, video, window titles, terminal prompts, usernames, hostnames or file names visible on screen. Run `tools/blindcheck.sh <file.pdf>` (E provides it) before every submission.
-**Proposed (not an organiser rule):** E drafts the PDFs from `docs/templates/report-template.tex`; **A pushes**. A mirrors **only** `app/`, `core/`, the Gradle files, `tools/`, README and LICENSE into a clone of the submission repo, then commits and pushes `main`. Research and planning docs (which name the college) stay in the private team repo.
+**Workflow (settled, D22):** all development, branches, research and planning stay in **this private repo (`m26-qidk`); only A merges to `master`.** The submission repo gets **clean snapshots only**, made by **A** with `tools/mirror_to_submission.sh <clone> [--apply]` (dry run first). The script exports the committed `app/`, `core/`, Gradle files and `tools/`, strips audio, models and binaries, scans contents and file names against `tools/blindcheck.words`, and never touches README, LICENSE or `deliverables/`; it never commits or pushes. **Nobody except A pushes to the submission repo.** E builds the PDFs from `docs/templates/report-template.tex` and checks them with `tools/blindcheck.sh`; A copies them into `deliverables/`. Keep names, the college and anything identifying out of code, comments, strings and file names, because they will be mirrored and scanned.
 
 ## 10. Starter prompt for your Claude
 > Read `docs/handoff/A-lead-kit-app.md`, then the files it lists under "Read first". I am person A. Work on branch `a/lead-kit-app` only, in my folders, test-first. Do my first-90-minutes tasks now. Ask me before changing shared types or touching another person's folders. Do not run `adb` against the kit unless I say I am in a booked slot.
