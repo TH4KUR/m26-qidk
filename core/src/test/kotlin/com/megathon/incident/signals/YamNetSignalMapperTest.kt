@@ -21,9 +21,36 @@ class YamNetSignalMapperTest {
         val signals = map(
             "Smoke detector, smoke alarm" to 0.55f,
             "Fire alarm" to 0.35f,
-            "Alarm" to 0.90f,
         )
         assertEquals(listOf("fire alarm"), signals.map { it.label })
+    }
+
+    @Test
+    fun aBeepingAlarmTheModelOnlyCallsAlarmStillGivesAGenericSignalNeverFireAlarm() {
+        // On a clock-alarm clip the model says "Alarm clock" and "Alarm" and "Fire alarm" only about 0.12; a generic
+        // alarm signal keeps it visible without claiming a fire alarm.
+        assertEquals(listOf("alarm"), map("Alarm" to 0.60f, "Fire alarm" to 0.12f).map { it.label })
+        assertTrue(map("Alarm" to 0.40f).isEmpty(), "a weak generic alarm is not a signal")
+        assertTrue(map("Alarm clock" to 0.95f).isEmpty(), "an alarm clock is not an alarm")
+        // A real smoke alarm scores both: two labels, the stronger first.
+        assertEquals(listOf("alarm", "fire alarm"), map("Fire alarm" to 0.90f, "Alarm" to 0.95f).map { it.label })
+    }
+
+    @Test
+    fun rainIsNotRunningWater() {
+        // "Water" scores 0.96 on rain as well as on a leak; the rain classes tell them apart.
+        assertTrue(map("Water" to 0.96f, "Rain" to 0.96f).isEmpty())
+        assertTrue(map("Water" to 0.90f, "Rain on surface" to 0.31f).isEmpty())
+        assertTrue(map("Water" to 0.90f, "Raindrop" to 0.30f).isEmpty())
+        assertEquals(listOf("running water"), map("Water" to 0.60f, "Pour" to 0.80f, "Rain" to 0.10f).map { it.label })
+    }
+
+    @Test
+    fun breakingGlassAlsoCountsFromBreakingAndFromAWeakerShatter() {
+        assertEquals("glass breaking", map("Breaking" to 0.60f).single().label)
+        assertTrue(map("Breaking" to 0.40f).isEmpty(), "Breaking alone is generic, so it needs a clear score")
+        assertEquals("glass breaking", map("Shatter" to 0.20f).single().label)
+        assertTrue(map("Shatter" to 0.10f).isEmpty())
     }
 
     @Test
