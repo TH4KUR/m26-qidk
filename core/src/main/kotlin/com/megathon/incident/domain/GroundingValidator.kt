@@ -32,6 +32,12 @@ object GroundingValidator {
         return overlap(contentTokens(value), evidenceTokens.toSet()) >= OVERLAP_WITH_EVIDENCE
     }
 
+    /** True when [phrase] occurs in [text] as a whole-token, in-order sequence (case, punctuation ignored). */
+    fun containsPhrase(text: String, phrase: String): Boolean {
+        val needle = tokens(phrase)
+        return needle.isNotEmpty() && containsSequence(tokens(text), needle)
+    }
+
     internal fun tokens(text: String): List<String> =
         Normalizer.normalize(text, Normalizer.Form.NFC).lowercase()
             .split(SEPARATORS).filter { it.isNotEmpty() }
