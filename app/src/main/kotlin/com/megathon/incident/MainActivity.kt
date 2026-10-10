@@ -24,6 +24,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Debug builds: `--es model qualcomm/Qwen3-8B` loads that GenieX bundle from the app's model store instead of the default 4B.
+        if (Engines.isDebuggable(this)) intent.getStringExtra("model")?.let { com.megathon.incident.speech.GenieXLlmEngine.debugModel = it }
         // Debug builds: `--es record <clipName>` opens a tap-to-record screen that writes filesDir/recordings/<clipName>.wav
         // (16 kHz mono PCM16) for the speech data collection. The normal report flow is not started.
         val recordClip = if (Engines.isDebuggable(this)) intent.getStringExtra("record") else null
