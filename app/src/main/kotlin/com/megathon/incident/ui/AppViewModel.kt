@@ -1,0 +1,360 @@
+package com.megathon.incident.ui
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import com.megathon.incident.audio.MicRecorder
+import com.megathon.incident.data.FileReportStore
+import com.megathon.incident.device.NetworkMeter
+import com.megathon.incident.device.NetworkProof
+import com.megathon.incident.domain.Field
+import com.megathon.incident.domain.Priority
+import com.megathon.incident.engine.EngineFactory
+import com.megathon.incident.engine.EngineSelection
+import com.megathon.incident.engine.EngineUnavailableException
+import com.megathon.incident.engine.Engines
+import com.megathon.incident.engine.LlmKind
+import com.megathon.incident.engine.SimulatedEngineInReleaseException
+import com.megathon.incident.engine.SpeechKind
+import com.megathon.incident.session.Pipeline
+import com.megathon.incident.session.QuickReply
+import com.megathon.incident.session.ReportSession
+import com.megathon.incident.session.SessionState
+import com.megathon.incident.session.SessionUi
+import com.megathon.incident.session.StageRecord
+import com.megathon.incident.speech.DemoSpeechEngine
+import com.megathon.incident.speech.SherpaCliSpeechEngine
+import com.megathon.incident.speech.SystemTtsSpeaker
+import com.megathon.incident.testing.Compute
+import com.megathon.incident.testing.FakeLlmEngine
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
+enum class Screen { HOME, REPORT, CHECK, SENT }
+
+/** Everything the screens draw. The report itself lives in [SessionUi]. */
+data class AppUi(
+    val screen: Screen,
+    val listening: Boolean,
+    val processing: Boolean,
+    val elapsedMs: Long,
+    val levels: List<Float>,
+    val session: SessionUi,
+    val selected: Field?,
+    val editing: Field?,
+    val justFilled: Set<Field>,
+    /** What was just heard, shown while the model is still reading it. */
+    val heardNow: String?,
+    val speaking: Boolean,
+    val message: String?,
+    /** Set when the build refuses to start (a simulated engine in a release build, or an engine not wired yet). */
+    val blocked: String?,
+    /** What is simulated in this run, in words; null when everything is real. */
+    val simulatedNote: String?,
+    val simulated: Boolean = simulatedNote != null,
+    val network: NetworkProof,
+    val showProof: Boolean,
+    val ttsOffline: Boolean?,
+    val undoLabel: String?,
+    val needsMicPermission: Boolean,
+)
+
+private data class Local(
+    val screen: Screen = Screen.HOME,
+    val listening: Boolean = false,
+    val processing: Boolean = false,
+    val elapsedMs: Long = 0,
+    val levels: List<Float> = emptyList(),
+    val selected: Field? = null,
+    val editing: Field? = null,
+    val justFilled: Set<Field> = emptySet(),
+    val heardNow: String? = null,
+    val speaking: Boolean = false,
+    val message: String? = null,
+    val network: NetworkProof = NetworkProof(false, false, null),
+    val showProof: Boolean = false,
+    val ttsOffline: Boolean? = null,
+    val undoLabel: String? = null,
+    val needsMicPermission: Boolean = false,
+)
+
+class AppViewModel(app: Application, private val selection: EngineSelection) : AndroidViewModel(app) {
+    private val demoSpeech = DemoSpeechEngine()
+    private val factory = EngineFactory(
+        isDebug = Engines.isDebuggable(app),
+        speechProviders = mapOf(SpeechKind.FAKE to { demoSpeech }, SpeechKind.SHERPA_QNN to { SherpaCliSpeechEngine(app) }),
+        llmProviders = mapOf(LlmKind.FAKE to { FakeLlmEngine(name = "DEMO REPLIES") }),
+    )
+    private val recorder = MicRecorder(app)
+    private val speaker = SystemTtsSpeaker(app)
+    private val meter = NetworkMeter(app)
+    private val mutex = Mutex()
+
+    private var blocked: String? = null
+    private val speech = runCatching { factory.speech(selection.speech) }.onFailure { blocked = explain(it) }.getOrNull()
+    private val llm = runCatching { factory.llm(selection.llm) }.onFailure { blocked = blocked ?: explain(it) }.getOrNull()
+    private val session: ReportSession = Pipeline.newSession(llm ?: FakeLlmEngine(), FileReportStore(app))
+
+    private val local = MutableStateFlow(Local(network = meter.read()))
+    private var timer: Job? = null
+    private var clearFilled: Job? = null
+    private var clearUndo: Job? = null
+
+    val ui: StateFlow<AppUi> = combine(local, session.ui) { l, s ->
+        AppUi(
+            screen = l.screen, listening = l.listening, processing = l.processing, elapsedMs = l.elapsedMs, levels = l.levels,
+            session = s, selected = l.selected, editing = l.editing, justFilled = l.justFilled, heardNow = l.heardNow,
+            speaking = l.speaking, message = l.message, blocked = blocked,
+            simulatedNote = simulatedNote(),
+            network = l.network, showProof = l.showProof, ttsOffline = l.ttsOffline, undoLabel = l.undoLabel,
+            needsMicPermission = l.needsMicPermission,
+        )
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, AppUi(
+        screen = Screen.HOME, listening = false, processing = false, elapsedMs = 0, levels = emptyList(), session = session.ui.value,
+        selected = null, editing = null, justFilled = emptySet(), heardNow = null, speaking = false, message = null, blocked = blocked,
+        simulatedNote = simulatedNote(), network = local.value.network, showProof = false, ttsOffline = null, undoLabel = null,
+        needsMicPermission = false,
+    ))
+
+    init {
+        // Speak whatever the session wants said (questions, the emergency line, the summary), one at a time.
+        viewModelScope.launch {
+            session.ui.map { it.say }.filterNotNull().distinctUntilChangedBy { it.id }.collect { say ->
+                if (local.value.listening) return@collect
+                local.update { it.copy(speaking = true) }
+                val started = System.nanoTime()
+                speaker.speak(say.text)
+                local.update { it.copy(speaking = false, ttsOffline = speaker.offline) }
+                session.recordStage(StageRecord("Speak", "Android TTS (system voice)", Compute.CPU, (System.nanoTime() - started) / 1_000_000))
+            }
+        }
+    }
+
+    // ---- microphone ----------------------------------------------------------------------------------------------
+
+    /** One tap starts listening, the next tap stops. Recording never starts by itself. */
+    fun onMicTapped() {
+        if (blocked != null || local.value.processing) return
+        if (local.value.listening) stopAndProcess() else startListening()
+    }
+
+    fun onMicPermissionResult(granted: Boolean) {
+        local.update { it.copy(needsMicPermission = false) }
+        if (granted) startListening() else say("Microphone access is off, so I can't hear you. You can turn it on in Settings, or type your answers.")
+    }
+
+    private fun startListening() {
+        if (!recorder.hasPermission()) { local.update { it.copy(needsMicPermission = true) }; return }
+        speaker.stop()
+        val levels = ArrayDeque<Float>()
+        val ok = recorder.start(
+            viewModelScope,
+            onLevel = { lv ->
+                levels.addLast(lv); if (levels.size > BARS) levels.removeFirst()
+                local.update { it.copy(levels = levels.toList()) }
+            },
+            onLimit = { stopAndProcess() },
+        )
+        if (!ok) { say("I couldn't open the microphone. Another app may be using it."); return }
+        local.update { it.copy(listening = true, elapsedMs = 0, levels = emptyList(), message = null, speaking = false) }
+        timer = viewModelScope.launch {
+            val t0 = System.currentTimeMillis()
+            while (true) { delay(200); local.update { it.copy(elapsedMs = System.currentTimeMillis() - t0) } }
+        }
+    }
+
+    private fun stopAndProcess() {
+        viewModelScope.launch {
+            timer?.cancel()
+            val pcm = recorder.stop()
+            process(pcm)
+        }
+    }
+
+    /** Hear -> read -> merge for one utterance of 16 kHz mono PCM. Shared by the microphone and the debug WAV hook. */
+    private suspend fun process(pcm: ShortArray) {
+        mutex.withLock {
+            local.update { it.copy(listening = false, processing = true, heardNow = null, message = null) }
+            val engine = speech ?: return@withLock
+            val before = session.ui.value.fields
+            val journalBefore = session.ui.value.journal.size
+            val heard = try {
+                engine.transcribe(pcm, "en")
+            } catch (e: Exception) {
+                // Say why, in words and in the log: a real engine that fails must never be silent.
+                android.util.Log.e(TAG, "speech engine failed", e)
+                finishTurn(before, journalBefore, "I couldn't hear that: ${e.message?.take(160) ?: "the speech engine failed"}")
+                return@withLock
+            }
+            android.util.Log.i(TAG, "heard [${heard.compute}] in ${heard.elapsedMs} ms: ${heard.text}")
+            runCatching { factory.checkResult(heard.compute) }.onFailure { blocked = explain(it) }
+            local.update { it.copy(heardNow = heard.text.ifBlank { null }) }
+            session.onUtterance(heard.text, StageRecord("Hear", engine.name, heard.compute, heard.elapsedMs))
+            finishTurn(before, journalBefore, null)
+        }
+    }
+
+    /** Debug builds only: run a 16 kHz mono PCM16 WAV through the same path as the microphone. */
+    fun debugTranscribeFile(path: String) {
+        if (!Engines.isDebuggable(getApplication())) return
+        viewModelScope.launch {
+            val pcm = runCatching { readWav(java.io.File(path)) }.getOrElse {
+                android.util.Log.e(TAG, "cannot read $path", it); say("Can't read that file: ${it.message}"); return@launch
+            }
+            process(pcm)
+        }
+    }
+
+    private fun readWav(file: java.io.File): ShortArray {
+        val b = file.readBytes()
+        var i = 12
+        while (i + 8 <= b.size) {
+            val id = String(b, i, 4)
+            val size = java.nio.ByteBuffer.wrap(b, i + 4, 4).order(java.nio.ByteOrder.LITTLE_ENDIAN).int
+            if (id == "data") {
+                val n = minOf(size, b.size - (i + 8)) / 2
+                val bb = java.nio.ByteBuffer.wrap(b, i + 8, n * 2).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                return ShortArray(n) { bb.short }
+            }
+            i += 8 + size
+        }
+        error("no data chunk")
+    }
+
+    private fun finishTurn(before: List<com.megathon.incident.session.FieldView>, journalBefore: Int, error: String?) {
+        val s = session.ui.value
+        // A spoken correction replaced a value: say what changed and offer undo, as for a tap.
+        s.journal.drop(journalBefore).lastOrNull()?.let { j ->
+            undoPrompt("${com.megathon.incident.session.Labels.fieldLabel(j.field)} changed to ${j.after ?: "empty"}")
+        }
+        val changed = s.fields.filter { f -> before.firstOrNull { it.field == f.field }?.let { it.value != f.value || it.status != f.status } ?: true }
+            .filter { it.value != null }.map { it.field }.toSet()
+        val failed = s.state as? SessionState.Failed
+        val screen = when {
+            s.transcripts.isEmpty() && failed != null -> Screen.HOME
+            else -> Screen.REPORT
+        }
+        local.update { it.copy(processing = false, screen = screen, justFilled = changed, message = error ?: failed?.message, heardNow = null) }
+        flashFilled()
+    }
+
+    // ---- taps and edits ------------------------------------------------------------------------------------------
+
+    fun reply(reply: QuickReply) {
+        speaker.stop()
+        session.answer(reply)
+        local.update { it.copy(screen = Screen.REPORT, justFilled = setOf(reply.field), speaking = false, editing = null) }
+        flashFilled(); undoPrompt("${session.ui.value.fields.first { it.field == reply.field }.label} set to ${reply.label}")
+    }
+
+    fun select(field: Field?) = local.update { it.copy(selected = if (it.selected == field) null else field) }
+    fun startEdit(field: Field) = local.update { it.copy(editing = field, selected = field) }
+    fun cancelEdit() = local.update { it.copy(editing = null) }
+
+    fun saveEdit(field: Field, text: String) {
+        session.edit(field, text)
+        local.update { it.copy(editing = null, screen = Screen.REPORT, justFilled = setOf(field)) }
+        flashFilled(); undoPrompt("${session.ui.value.fields.first { it.field == field }.label} changed")
+    }
+
+    fun acceptSuggestion(field: Field) {
+        session.acceptSuggestion(field)
+        local.update { it.copy(justFilled = setOf(field)) }
+        flashFilled(); undoPrompt("${session.ui.value.fields.first { it.field == field }.label} confirmed")
+    }
+
+    fun undo() { session.undo(); local.update { it.copy(undoLabel = null) } }
+    fun overridePriority(level: Priority, reason: String) = session.overridePriority(level, reason)
+
+    // ---- navigation ----------------------------------------------------------------------------------------------
+
+    fun goCheck() { speaker.stop(); local.update { it.copy(screen = Screen.CHECK, speaking = false) } }
+    fun backToReport() = local.update { it.copy(screen = Screen.REPORT) }
+
+    fun send() {
+        viewModelScope.launch {
+            speaker.stop()
+            session.submit()
+            local.update { it.copy(screen = Screen.SENT, network = meter.read()) }
+        }
+    }
+
+    fun hearAgain() {
+        val text = session.ui.value.spokenSummary ?: return
+        viewModelScope.launch { local.update { it.copy(speaking = true) }; speaker.speak(text); local.update { it.copy(speaking = false) } }
+    }
+
+    fun stopSpeaking() { speaker.stop(); local.update { it.copy(speaking = false) } }
+
+    fun newReport() {
+        speaker.stop()
+        session.reset()
+        demoSpeech.restart()
+        local.update { Local(network = meter.read(), ttsOffline = it.ttsOffline) }
+    }
+
+    fun openProof() = local.update { it.copy(showProof = true, network = meter.read()) }
+    fun closeProof() = local.update { it.copy(showProof = false) }
+    fun dismissMessage() = local.update { it.copy(message = null) }
+
+    // ---- helpers -------------------------------------------------------------------------------------------------
+
+    private fun say(message: String) = local.update { it.copy(message = message) }
+
+    private fun flashFilled() {
+        clearFilled?.cancel()
+        clearFilled = viewModelScope.launch { delay(1800); local.update { it.copy(justFilled = emptySet()) } }
+    }
+
+    private fun undoPrompt(label: String) {
+        clearUndo?.cancel()
+        local.update { it.copy(undoLabel = label) }
+        clearUndo = viewModelScope.launch { delay(6000); local.update { it.copy(undoLabel = null) } }
+    }
+
+    private fun simulatedNote(): String? {
+        val speechFake = selection.speech == SpeechKind.FAKE
+        val llmFake = selection.llm == LlmKind.FAKE
+        return when {
+            speechFake && llmFake -> "scripted demo, not live recognition"
+            speechFake -> "speech is scripted, not live recognition"
+            llmFake -> "speech is live, but the report is filled by canned replies, not a live model"
+            else -> null
+        }
+    }
+
+    private fun explain(t: Throwable): String = when (t) {
+        is SimulatedEngineInReleaseException -> "This build can't start. It would use a simulated engine, and simulated results are blocked in release builds."
+        is EngineUnavailableException -> t.message?.replaceFirstChar { it.uppercase() }.orEmpty().let { if (it.endsWith(".")) it else "$it." }
+        else -> t.message ?: "This build can't start."
+    }
+
+    override fun onCleared() {
+        recorder.cancel()
+        speaker.shutdown()
+    }
+
+    class Factory(private val app: Application, private val selection: EngineSelection) : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T = AppViewModel(app, selection) as T
+    }
+
+    private companion object {
+        const val BARS = 24
+        const val TAG = "Incident"
+    }
+}

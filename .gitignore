@@ -34,3 +34,6 @@ local.properties
 *.iml
 captures/
 !gradle/wrapper/gradle-wrapper.jar
+
+# Speech bundle staged by app/scripts/speech_bundle.sh (native libraries, not committed)
+app/src/speech/

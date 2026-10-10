@@ -29,6 +29,11 @@ android {
 
     // GenieX and the QNN runtime ship .so files that must be extracted to disk to be loaded/executed.
     packaging { jniLibs { useLegacyPackaging = true } }
+
+    // The sherpa-onnx speech CLI and ONNX Runtime are staged locally by `app/scripts/speech_bundle.sh stage` and are not
+    // in git. Packed only when present, so a clean checkout still builds.
+    val speechLibs = file("src/speech/jniLibs")
+    if (speechLibs.exists()) sourceSets.getByName("main").jniLibs.srcDir(speechLibs)
 }
 
 dependencies {
@@ -41,4 +46,6 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.icons.core)
+    implementation(libs.androidx.lifecycle.runtime.compose)
 }
