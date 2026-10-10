@@ -1,0 +1,23 @@
+[
+  {
+    "field": "LOCATION",
+    "original": "lab see four",
+    "proposed": "Lab C4",
+    "reason": "Heard \"lab see four\"; the site has Lab C4.",
+    "source": "GAZETTEER"
+  },
+  {
+    "field": "LOCATION",
+    "original": "north one oh five",
+    "proposed": "North 105",
+    "reason": "Heard \"north one oh five\"; the site has North 105.",
+    "source": "GAZETTEER"
+  },
+  {
+    "field": "EQUIPMENT_ASSET",
+    "original": "the chilla",
+    "proposed": "Chiller 1",
+    "reason": "Heard \"chilla\"; the site has Chiller 1.",
+    "source": "GAZETTEER"
+  }
+]
