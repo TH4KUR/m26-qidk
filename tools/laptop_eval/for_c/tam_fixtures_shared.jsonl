@@ -1,0 +1,15 @@
+{"id":"e_ongoing_still","text":"The pipe is still leaking into the corridor.","tags":["ongoing"],"expect":{"ongoing":true,"completed":false}}
+{"id":"e_completed_turned_off","text":"It was leaking but we turned off the main valve.","tags":["completed"],"expect":{"completed":true,"ongoing":false}}
+{"id":"e_planned_will_call","text":"We will call the electrician tomorrow morning.","tags":["planned"],"expect":{"planned":true,"completed":false}}
+{"id":"e_planned_going_to","text":"I'm going to inform the warden after this.","tags":["planned"],"expect":{"planned":true}}
+{"id":"e_progressive_now_is_action","text":"I'm calling the ambulance right now.","tags":["ongoing","action"],"expect":{"ongoing":true,"planned":false}}
+{"id":"e_hedge_i_think","text":"I think it was the second floor.","tags":["hedge"],"expect":{"hedged":true}}
+{"id":"e_hedge_not_sure","text":"I'm not sure if there was smoke.","tags":["hedge"],"expect":{"hedged":true}}
+{"id":"e_negated_didnt_see","text":"Rahul was there but he didn't see her fall.","tags":["negation"],"expect":{"negated":true}}
+{"id":"e_negated_no_one_hurt","text":"No one got hurt, the area is cordoned off.","tags":["negation","completed"],"expect":{"negated":true,"completed":true}}
+{"id":"e_double_negation","text":"It's not that nobody saw it, Meera saw everything.","tags":["negation","trap"],"expect":{"negated":false}}
+{"id":"e_correction_no_wait","text":"It happened at ten, no wait, half past ten.","tags":["correction"],"expect":{"hedged":false}}
+{"id":"e_asr_lowercase_no_punct","text":"the water is still coming in we have not stopped it yet","tags":["asr-errors","ongoing","negation"],"expect":{"ongoing":true,"completed":false}}
+{"id":"e_should_have_is_not_done","text":"Someone should have switched off the power.","tags":["modality","trap"],"expect":{"completed":false,"planned":false}}
+{"id":"hi_abhi_bhi","text":"Paani abhi bhi aa raha hai, rukha nahi.","tags":["hi","UNREVIEWED","ongoing","negation"],"expect":{"ongoing":true,"completed":false}}
+{"id":"hi_shayad","text":"Shayad dusri manzil pe tha.","tags":["hi","UNREVIEWED","hedge"],"expect":{"hedged":true}}
