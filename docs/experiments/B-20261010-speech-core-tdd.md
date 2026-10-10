@@ -50,7 +50,7 @@ An automated code review (high effort) of `speech/`, `signals/` and `testing/` r
 | `CompositeSignalSource` ran sources one after another | 602 ms for two 300 ms sources | parallel (latency is the slowest source) |
 | `TranscriptAccumulator` and cumulative callbacks (unproven) | "turn off turn off the valve" | an extension of the previous text replaces it; segments that merely start alike are kept |
 | `SummaryText` says "water leak flood" while `AckTemplates` says "water leak" | not a bug: the plan's task 10 pins the pattern ("wire value with `_` replaced by a space") | **not changed**; flagged to A in case friendlier wording is wanted |
-Result: **504 tests, 0 failures, 1 skipped** (C's holdout-three). These are still synthetic-audio and fake-engine tests; nothing here has run on the kit.
+Result: **504 tests, 0 failures, 1 skipped** (C's holdout-three); 514 after the engine-2b `WhisperDecodeLoop` (10 tests, mutation-checked) was added, 134 of them in my packages. These are still synthetic-audio and fake-engine tests; nothing here has run on the kit.
 
 ## Verdict and limits
 - These are unit tests on synthetic tones and fakes. **Nothing here has touched a real microphone, a real speech engine, or the kit.** The detector thresholds (`minRms` 350, `noiseRatio` 3, calibration 300 ms) are starting values that must be tuned on E's kit recordings (fan noise, stressed speech).
