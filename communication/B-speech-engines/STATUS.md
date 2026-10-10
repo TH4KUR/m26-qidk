@@ -1,25 +1,22 @@
 # Status: agent B (speech engines, signals, accent contest)
 
 Owner: agent B only. Overwrite this file freely; it is a snapshot, not a log.
-Last updated: 2026-10-11 02:00 IST
+Last updated: 2026-10-11 02:24 IST
 Read up to: A=002 C=001 D=000 E=008
 
 ## Doing now
-- Accent-contest runner is smoke-tested locally; waiting for E's human-recorded clips and references before producing team accent results or raw transcript rows. On receipt, emit `{clip_id, model, text}` per clip and keep phone/kit subsets separate.
+- Waiting for E's human-recorded clips and references. On receipt, run the accent contest, emit `{clip_id, model, text}` per clip, and report phone/kit subsets separately.
 
 ## Done and ready for others (with file/commit)
-- `b/speech-engines` is at `88b2a25`, fast-forwarded to `origin/master` `c7e2f1e` before the experiment update.
-- `tools/accent_contest/`: 7 unit tests pass. Four local checkpoints completed inference on two generated clips; the result is documented in `docs/experiments/B-20261011-synthetic-inference-smoke.md`. This is pipeline-only evidence, not an accent score.
-- The `:core` speech contracts/fakes, signal sources and earlier proxy experiments are included on the branch (B commit `b1a4233`, now on master).
-- `tools/sherpa_patch/whisper-qnn-jni.patch` remains insurance only; A's app session has an operational sherpa-onnx CLI NPU path, so no JNI work is planned.
-- Answered A's open `AtoB.md` follow-ups in B message 007: the `Compute` location and that `a/stubs` may be pushed now that B/C are on master.
-- Confirmed to E that the current WER normalization will stay unchanged and raw transcript rows will accompany future human-audio runs (B message 008).
+- `b/speech-engines` is pushed at `88b2a25`, one docs-only commit ahead of `origin/master` `c7e2f1e`; B's speech contracts, signals and engine code are already merged to master.
+- `tools/accent_contest/`: 7 unit tests passed. Four local checkpoints completed inference on two generated clips; documented in `docs/experiments/B-20261011-synthetic-inference-smoke.md`. Pipeline-only evidence, not an accent score.
+- `tools/sherpa_patch/whisper-qnn-jni.patch` remains insurance only. A's sherpa-onnx CLI NPU path is working, so no JNI patch or WhisperKit work is planned.
+- Confirmed to E that future human-audio runs will include raw transcript rows and retain current WER normalization (B message 008).
 
 ## Blocked on / waiting for
-- E: actual labeled phone/kit audio and references; no genuine clip-level transcripts or contest result can be produced before they arrive.
-- A: confirmation of a booked speech kit slot. Do not run kit operations without it.
-- User: Android SDK licenses still need acceptance before this laptop can compile Android app code; this does not block local ASR scoring.
+- E: labeled phone/kit audio and references; no genuine clip-level transcripts or accent result can be produced before they arrive.
+- Kit-side validation is with A per the user's direction. No new B code needs pushing for it; the sherpa-onnx CLI evidence is in A's experiment log, and A's message 002 notes the app child-process run. The WhisperKit/SpeechSelfTest Android files remain uncompiled drafts and are not kit-ready.
 
 ## Needs from others
-- E: notify B with the manifest/audio location when labeled phone clips are ready.
-- A: confirm the speech kit slot after the app session's LLM measurement.
+- E: send the manifest and audio location when labeled phone clips are ready.
+- A: record any additional sherpa model, CPU-reference, or microphone A/B results in an A experiment log.
