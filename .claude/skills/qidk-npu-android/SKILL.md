@@ -1,6 +1,6 @@
 ---
 name: qidk-npu-android
-description: Use when building, packaging or debugging an Android app that runs AI models on a Qualcomm QIDK / Snapdragon Hexagon NPU (Megathon 2026 AI Incident Report Assistant) - launching a native NPU inference server from inside an APK, bundling QNN / ggml-hexagon libraries, DSP-runtime-not-available errors, SoC/Hexagon version detection, choosing LLM/Whisper/TTS runtimes for 8 Gen 2 vs 8 Gen 3 vs 8 Elite, or checking what last year's winning Megathon team did.
+description: Use when building, packaging or debugging an Android app that runs AI models on a Qualcomm QIDK / Snapdragon Hexagon NPU (Megathon 2026 AI Incident Report Assistant) - launching a native NPU inference server from inside an APK, bundling QNN / ggml-hexagon libraries, DSP-runtime-not-available errors, SoC/Hexagon version detection, choosing LLM/Whisper/TTS runtimes for 8 Gen 2 vs 8 Gen 3 vs 8 Elite, checking what last year's winning Megathon team did, or needing the measured facts of our own kit (Android version, root, RAM, DSP nodes, preinstalled speech stack, missing host tools).
 ---
 
 # QIDK / Snapdragon NPU on Android — field notes
@@ -11,7 +11,7 @@ Evidence-backed notes from the 2026-10-10 feasibility research (full report: `ex
 ```bash
 adb shell getprop ro.soc.model            # SM8550/SM8550P = 8 Gen 2 (v73), SM8650 = 8 Gen 3 (v75), SM8750 = 8 Elite (v79), SM8850 = 8 Elite Gen5 (v81)
 adb shell getprop ro.build.version.release
-adb shell getprop ro.build.type           # userdebug => adb root / setenforce available
+adb shell getprop ro.build.type           # userdebug => adb root works (verified on our kit)
 adb shell grep MemTotal /proc/meminfo
 ```
 Official docs say QIDK = SM8550P [V]. But IIIT-H users report newer kits:
@@ -25,7 +25,7 @@ Official docs say QIDK = SM8550P [V]. But IIIT-H users report newer kits:
 - Onboard MIC4/5, 3.5 mm headset jack (default headset detection), 2 speakers.
 - HDMI out needs DIP S5702-7 and S5702-8 ON *before* power-up.
 - 12 V DC power, battery optional.
-- RAM and Android version are not stated: check them with `getprop` and `/proc/meminfo`.
+- Android, RAM and the rest were measured on 2026-10-10: see §1b.
 - The guide is confidential: never publish it.
 
 **GenieX Android SDK on SM8750 (verified in source, 2026-10-10):**
@@ -37,6 +37,28 @@ Official docs say QIDK = SM8550P [V]. But IIIT-H users report newer kits:
 **WhisperKit Android NPU STT (ungated):** `com.argmaxinc:whisperkit:0.3.3` + `com.qualcomm.qnn:qnn-runtime:2.34.0` + `com.qualcomm.qnn:qnn-litert-delegate:2.34.0`. Verified on an SM8750 QIDK by sm8750-edge-ai-lab.
 
 **Implementation plan:** `docs/superpowers/plans/2026-10-10-incident-assistant-qidk.md`. The kit is mains-powered only, with no battery (qidk#80) [V].
+
+## 1b. Our kit, measured 2026-10-10 (serial `cacf48a9`; full table: `docs/device/qidk-device-profile-2026-10-10.md`)
+**Device [V]**
+- SM8750P, Android **16** (SDK 36) `qssi_64-userdebug` test-keys over an Android 15 vendor image; kernel 6.6; bootloader unlocked.
+- **`adb root` works**, SELinux stays `Enforcing` after it (`setenforce 0` untested).
+- 8 cores (6 up to 3.53 GHz, 2 up to 4.32 GHz), **15.4 GB RAM**, `/data` 38 GB free, Adreno 830, Hexagon v79 (`cdsp` running).
+- **No camera** (`media.camera`: 0 devices). **Wi-Fi off, airplane mode on.** **Clock is wrong** (device said 2026-01-12): set it before showing timestamps.
+- 1080x2400 built-in screen; ALSA card `sun-qrd-snd-card`; mic path not yet proven (record a clip first).
+
+**NPU access [V]**
+- `/dev/fastrpc-cdsp` is 0664 system (unsigned PD, the one apps use); `fastrpc-cdsp-secure` and `fastrpc-adsp-secure` are 0644. Daemons `cdsprpcd`, `adsprpcd`, `sscrpcd` run. `libcdsprpc.so` and `libadsprpc.so` are on `/vendor/etc/public.libraries.txt`, so the manifest `uses-native-library` line in §4 is valid.
+- `/vendor/dsp/cdsp` holds only Qualcomm test and system skels: **ship our own `libQnnHtpV79Skel.so`** (§2).
+- Sideloaded `com.qc.posedetectionYoloNAS` bundles SNPE **2.46.0** with V73/V75/V79/V81 stubs and skels. Not yet run by us: launching it is the quickest NPU smoke test.
+
+**Preinstalled speech stack**
+- [V] `com.qualcomm.qti.voiceai.speech` registers a `RecognitionService` and a `TextToSpeechService` (`libtts.so`). AIDL HAL `vendor.qti.hardware.qasr.IQasr` is running, with `/vendor/etc/ASR_binary/Whisper/libQnnHtpV79Skel.so` (QNN 2.26.1) and a 36 KB `speech_float.eai` (no weights found there).
+- [INF] This may be an on-NPU Whisper path reachable via `SpeechRecognizer`. Test it offline, with Wi-Fi off, before relying on it. The default recogniser is Google's: never use it.
+- [V] Default TTS is Google (`com.google.android.tts`), CPU: disclose it (§5).
+
+**Host gaps [V]**
+- Missing: Android SDK, NDK, Android Studio, QAIRT. Present: adb 35, JDK 21 (plan says 17), Docker, cmake, ninja, `hf` CLI.
+- **Laptop `/` is 99% full (1.7 GB free).** Free about 25 GB before installing anything.
 
 ## 2. The proven pattern: native NPU server launched from the APK (no root)
 Last year's Megathon winner (github.com/saitejaMaryala/Megathon-2k25, a fork of xororz/local-dream, **CC BY-NC 4.0 — attribute it, non-commercial use only**) ran QNN on the HTP like this [V]:
@@ -65,7 +87,7 @@ Reference code: `app/src/main/java/io/github/xororz/localdream/service/BackendSe
 | TTS on NPU | None — use Android offline `TextToSpeech` and disclose it | None | MeloTTS (ASR-LLM-TTS sample) |
 
 ## 4. Known failures and fixes
-- **`isRuntimeAvailable()` false for DSP:** add `<uses-native-library android:name="libcdsprpc.so" android:required="true"/>` to the manifest. On userdebug builds, also run `adb root && adb shell setenforce 0` (qidk#76) [V].
+- **`isRuntimeAvailable()` false for DSP:** add `<uses-native-library android:name="libcdsprpc.so" android:required="true"/>` to the manifest. On userdebug builds, also run `adb root && adb shell setenforce 0` (qidk#76) [V]; on our kit `adb root` is verified but `setenforce 0` is not yet tried.
 - **Silent wrong NPU output** (identical or garbled text, no error) is the most common failure reported across v68/v73/v81 devices. Always compare NPU output against CPU on 5 golden prompts at startup.
 - **Error 5005 / soc_id mismatch:** the context binary was compiled for a different chip. Recompile for the exact SoC.
 - **Keep prompts under ~1k tokens.** NPU builds often fix the context at 1024.
