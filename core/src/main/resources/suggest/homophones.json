@@ -1,0 +1,17 @@
+{
+  "note": "Words that sound alike, as groups (every member is a variant of every other). Shared by the suggestion engine (D) and the near-miss grounding rule (C). A match found only through this table is always a SUGGESTED chip, never a fill, so a wrong entry costs a chip, not wrong data. Add entries from real mishearings in our recordings and note where they came from.",
+  "groups": [
+    ["week", "weak"],
+    ["two", "to", "too", "2"],
+    ["four", "for", "fore", "4"],
+    ["one", "won", "1"],
+    ["eight", "ate", "8"],
+    ["minor", "miner"],
+    ["fire", "fair"],
+    ["leak", "leek"],
+    ["see", "sea", "c"],
+    ["hall", "haul"],
+    ["severe", "sever"],
+    ["break", "brake"]
+  ]
+}
