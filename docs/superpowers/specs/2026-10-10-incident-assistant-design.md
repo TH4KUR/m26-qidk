@@ -66,8 +66,10 @@ The LLM returns exactly one object:
   "location":"string|null","date_time_text":"string|null",
   "persons_involved":["string"],"equipment_asset":"string|null",
   "immediate_actions":"string|null","witnesses":["string"],
-  "evidence":{"<field>":"exact words from the transcript"}}}
+  "evidence":{"<field>":"exact words from the transcript"},
+  "impact_hint":"1-5|null","ongoing":"true|false|null"}}
 ```
+`impact_hint` and `ongoing` are **optional** and **raise-only** (design note Q6): they are never written to a field. The priority advisor lets `impact_hint` raise the rules' result by at most one step, and `ongoing: true` lift immediacy to at most 3, so the model alone can never reach URGENT or trigger the emergency line. An unparseable hint is dropped, never fatal. Two writes to the same key in one object are rejected, never last-write-wins.
 The app computes `date_time` (ISO-8601 via DateTimeResolver), `description` (a cleaned transcript summary, template-based), and `recommended_follow_up` (a rule table keyed by incident_type and severity).
 
 ## 4b. Signals, suggestions and priority (types)

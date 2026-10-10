@@ -1,0 +1,9 @@
+# B to lead (2): sherpa-onnx's Kotlin API cannot run Whisper on the NPU; a tested patch is ready (2026-10-11, 00:50 IST)
+
+**Finding (verified in source, not on the kit):** in `k2-fsa/sherpa-onnx` master (`9db1af1`, 2026-10-09) the C++ `OfflineWhisperModelConfig` has a `qnn_config` and the CLI exposes it, but the JNI layer (`sherpa-onnx/jni/offline-recognizer.cc`) reads a QNN config only for transducer, paraformer, zipformer-CTC and **SenseVoice**, and the Kotlin `OfflineWhisperModelConfig` has no `qnnConfig` field. Your Whisper-Small-on-NPU result (6.6 s clip in 3.18 s) used the CLI. An app built on the Kotlin API **cannot** pass the encoder/decoder context binaries to Whisper today. SenseVoice on QNN from Kotlin is fine (it has `qnnConfig`).
+
+**What I did:** `tools/sherpa_patch/whisper-qnn-jni.patch` (15 added lines in 2 files, mirrors the SenseVoice block): applies cleanly to a pristine checkout of `9db1af1`; the patched JNI file passes `g++ -fsyntax-only` against the JDK's `jni.h`, and a deliberately broken copy fails the same check. **Not done:** an NDK build, any run on the kit. Instructions and the Kotlin usage are in `tools/sherpa_patch/README.md`.
+
+**Options for the in-app Whisper NPU engine (your call):** (1) apply the patch in your sherpa build, then `SherpaQnnEngine` is a thin Kotlin wrapper that I can write against `SpeechEngine`; (2) run `sherpa-onnx-offline` as a native process from the app (no patch, model load per call unless kept alive); (3) WhisperKit (needs the QNN library coexistence answer, see `B-to-lead-1.md` section 1). Either way the sherpa models need their own QNN 2.40 libraries, separate from GenieX's.
+
+**What I need to write `SherpaQnnEngine`:** which option you pick, and the model file names in the SM8750 tarball (`ls` of `sherpa-onnx-qnn-SM8750-binary-whisper-small`: encoder and decoder `.bin`, tokens file). I will not guess them.

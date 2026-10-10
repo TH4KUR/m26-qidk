@@ -1,0 +1,4 @@
+Sure, here is the report:
+```json
+{"tool":"update_report","arguments":{"location":"Lab 3","evidence":{"location":"in Lab 3"}},}
+```
