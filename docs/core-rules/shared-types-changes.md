@@ -50,6 +50,14 @@ Rules: names (`persons_involved`, `witnesses`) use the sound-alike table only, n
 
 D's planner: ask "which day?" when `temporal.date == null && temporal.from != null`; build the chip from `nearMiss` (`original = heard`, `proposed = meant`).
 
+## Reason codes (additive, `c/core-rules`)
+
+`FieldProposal.reasonCode` and `Rejection.reasonCode` are `ReasonCode?` (null = a plain "heard"): `HEDGED`, `NEGATED`, `PLANNED`, `UNGROUNDED`, `NEAR_MISS`, `NOT_A_NAME`, `NOT_AN_ACTION`, `NOT_STATED`, `UNKNOWN_VALUE`. `note` / `reason` stay the human text; the code is the stable key for per-field scoring. New values may be added later, none will be renamed.
+
+## `PriorityAdvisor.onReport(report)` (additive, `c/core-rules`)
+
+After each merge, `advisor.onReport(report)` lets what the reporter stated raise the advice, never lower it: a filled severity (critical = URGENT, severe = HIGH, moderate = MEDIUM) and a filled incident type that is a hazard in itself (fire/smoke, electrical, injury, chemical spill, security, illness: at least MEDIUM, never URGENT alone). SUGGESTED values do not count. It returns the same `AdvisorOutput` as `onChunk`; calling it again with an unchanged report changes nothing. Owner of the call site: `ReportSession` (A / app session).
+
 ## What each consumer should do
 - **D:** build `ReportLogic` on `ValueStatus` and `ReportState`; use `HedgeDetector` (real or fake) for hedge chips; filter chips with `hasDecided`; obey `PriorityAdvisor.lane()` in the follow-up planner. A hedged or ungrounded model value arrives from `PayloadValidator` as a `FieldProposal` with status `SUGGESTED` and a `note`.
 - **A:** keep your fake engine behind `EngineFactory` and refuse it in release builds; pass the model's `ValidationResult.hint` to `PriorityAdvisor.onChunk`; show `deescalation` as a "lower to LOW?" chip and `keyQuestion` as one spoken question before anything else.
