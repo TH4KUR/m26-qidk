@@ -15,6 +15,7 @@ object DateTimeDisplay {
 
     private val FORMAT = Regex("""^(\d{4}-\d{2}-\d{2}|date missing) (≈?\d{2}:\d{2}|morning|afternoon|evening|night|time missing) \((.*)\)$""", RegexOption.DOT_MATCHES_ALL)
     private val DAY = DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH)
+    private val SPOKEN_DAY = DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.ENGLISH)
 
     fun parse(text: String): Parts? {
         val m = FORMAT.matchEntire(text.trim()) ?: return null
@@ -41,6 +42,42 @@ object DateTimeDisplay {
             time == null -> day
             else -> "$day · $time"
         }
+    }
+
+    /**
+     * The same value as words a voice can read: "today at about 10 in the morning", "yesterday at 2:30 in the afternoon",
+     * "on Saturday 3 October". No weekday-and-month abbreviations, no AM/PM, no clock symbols. What is not known is left out,
+     * and text that is not in the validator's format is returned as it is.
+     */
+    fun spoken(text: String, today: LocalDate): String {
+        val p = parse(text) ?: return text
+        val day = when (p.date) {
+            null -> null
+            today -> "today"
+            today.minusDays(1) -> "yesterday"
+            else -> "on " + p.date.format(SPOKEN_DAY)
+        }
+        val time = when {
+            p.clock != null -> "at " + (if (p.approximate) "about " else "") + clock12Words(p.clock)
+            p.partOfDay == "night" -> "at night"
+            p.partOfDay != null -> "in the ${p.partOfDay}"
+            else -> null
+        }
+        return listOfNotNull(day, time).joinToString(" ").ifEmpty { p.phrase }
+    }
+
+    /** "2:30 in the afternoon"; a whole hour drops the minutes ("10 in the morning"). */
+    private fun clock12Words(hhmm: String): String {
+        val t = LocalTime.parse(hhmm)
+        val h = ((t.hour + 11) % 12) + 1
+        val hour = if (t.minute == 0) "$h" else "%d:%02d".format(h, t.minute)
+        val part = when (t.hour) {
+            in 5..11 -> "in the morning"
+            in 12..16 -> "in the afternoon"
+            in 17..20 -> "in the evening"
+            else -> "at night"
+        }
+        return "$hour $part"
     }
 
     /** `date missing …` becomes the given date; any other text is returned unchanged. */

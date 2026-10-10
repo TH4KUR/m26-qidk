@@ -52,7 +52,7 @@ class ReportSessionTest {
         s.say(slide)
         val state = assertIs<SessionState.Asking>(s.ui.value.state)
         assertEquals(listOf(Field.DATE_TIME, Field.SEVERITY), state.question.asks.map { it.field }, "the time has no date, so the day is asked")
-        assertEquals("Was that today? How severe is it?", s.ui.value.say?.text)
+        assertEquals("Was that today? How bad is it?", s.ui.value.say?.text)
 
         assertEquals("Water leak or flood", s.field(Field.INCIDENT_TYPE).value)
         assertEquals(UiStatus.HEARD, s.field(Field.INCIDENT_TYPE).status)
@@ -144,7 +144,7 @@ class ReportSessionTest {
         s.say("   ")
         assertEquals(0, llm.calls)
         val failed = assertIs<SessionState.Failed>(s.ui.value.state)
-        assertTrue(failed.message.isNotBlank())
+        assertEquals("I didn't catch that. Could you say it again, a little closer to the microphone?", failed.message)
         assertTrue(failed.retryable)
     }
 
@@ -153,7 +153,7 @@ class ReportSessionTest {
         val s = session(llm)
         s.say(slide)
         assertEquals(2, llm.calls)
-        assertIs<SessionState.Failed>(s.ui.value.state)
+        assertEquals("I didn't quite get that. Could you say it again?", assertIs<SessionState.Failed>(s.ui.value.state).message)
         assertTrue(s.ui.value.fields.filter { it.mandatory }.all { it.status == UiStatus.NEEDED })
         assertEquals(listOf(slide), s.ui.value.transcripts, "what was heard is kept so the reporter can retry")
     }
