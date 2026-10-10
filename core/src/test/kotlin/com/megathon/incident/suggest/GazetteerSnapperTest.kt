@@ -41,6 +41,17 @@ class GazetteerSnapperTest {
         assertNull(place("gate 2"))      // the site has Gate 1 (Main Gate), not 2
     }
 
+    /**
+     * Found by measuring on E's gold set: fuzzy matching cut a longer, more specific place down to a
+     * site name that starts the same way ("Felicity Ground gate" -> Felicity Ground). Fuzzy may only fix
+     * spelling, never add or drop words.
+     */
+    @Test fun fuzzyNeverDropsWordsFromAMoreSpecificPlace() {
+        assertNull(place("near the sports ground gate"))   // site has Sports Ground; the gate is more specific
+        assertNull(place("north block parking"))           // site has North Block
+        assertNull(asset("fire alarm"))                    // site has "fire alarm panel": a different thing
+    }
+
     @Test fun aNameWithoutItsNumberIsAmbiguous() = assertNull(place("conference room"))
 
     @Test fun aMisspellingEquallyCloseToTwoNamesGivesNothing() {

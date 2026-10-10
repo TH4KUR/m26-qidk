@@ -67,6 +67,11 @@ class GazetteerSnapper(
         return readings.filter { it != words }
     }
 
+    /**
+     * Spelling fixes only: the same number of words, each word close to its partner (score = the
+     * weakest pair). Adding or dropping words is not a spelling fix: "felicity ground gate" is a more
+     * specific place than "felicity ground", not a misspelling of it.
+     */
     private fun fuzzy(reading: List<String>, kind: EntryKind): SiteEntry? {
         val (ids, text) = split(reading)
         if (text.isEmpty()) return null
@@ -75,8 +80,8 @@ class GazetteerSnapper(
             if (entry.kind != kind) continue
             for (form in listOf(entry.name) + entry.aliases) {
                 val (formIds, formText) = split(asIdentifiers(dropLeadingFillers(words(form))))
-                if (formIds != ids || formText.isEmpty()) continue
-                val score = JaroWinkler.similarity(text, formText)
+                if (formIds != ids || formText.size != text.size) continue
+                val score = text.indices.minOf { i -> JaroWinkler.similarity(text[i], formText[i]) }
                 if (score > (best[entry.id]?.second ?: -1.0)) best[entry.id] = entry to score
             }
         }
@@ -103,10 +108,10 @@ class GazetteerSnapper(
 
         private fun dropLeadingFillers(words: List<String>): List<String> = words.dropWhile { it in FILLERS }
 
-        /** Identifiers (anything with a digit, or a single letter) joined exactly; the remaining words as text. */
-        private fun split(words: List<String>): Pair<String, String> {
+        /** Identifiers (anything with a digit, or a single letter) joined exactly; the remaining words. */
+        private fun split(words: List<String>): Pair<String, List<String>> {
             val (ids, text) = words.partition { w -> w.any(Char::isDigit) || w.length == 1 }
-            return ids.joinToString("") to text.joinToString(" ")
+            return ids.joinToString("") to text
         }
 
         /** The words that changed, plus the one before for context: "conference room to" -> "room to". */
