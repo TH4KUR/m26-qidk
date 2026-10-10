@@ -285,6 +285,25 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         }
     }
 
+    /**
+     * Debug builds only: Whisper (child process) and Qwen3-4B (GenieX, in process) taking turns [loops] times on one WAV,
+     * to check they coexist without crashes or memory growth. Output: `<filesDir>/coexist/<timestamp>/`.
+     */
+    fun debugCoexist(path: String, loops: Int) {
+        if (!Engines.isDebuggable(getApplication())) return
+        val stt = speech
+        val engine = llm
+        if (stt == null || engine == null) { android.util.Log.e(TAG, "coexist: no engines (${blocked ?: "unknown"})"); return }
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val out = runCatching {
+                val pcm = readWav(java.io.File(path))
+                com.megathon.incident.eval.CoexistRunner(getApplication<Application>().filesDir, stt, engine).run(pcm, loops)
+            }
+            out.onSuccess { android.util.Log.i(TAG, "coexist done: ${it.path}") }
+                .onFailure { android.util.Log.e(TAG, "coexist failed", it) }
+        }
+    }
+
     private fun readWav(file: java.io.File): ShortArray {
         val b = file.readBytes()
         var i = 12

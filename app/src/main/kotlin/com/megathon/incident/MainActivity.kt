@@ -46,6 +46,11 @@ class MainActivity : ComponentActivity() {
                 runCatching { File(filesDir, "ttscheck.txt").writeText(lines.joinToString("\n") + "\n") }
             }
         }
+        // Debug builds: `--es coexist <wav path> [--ei loops N]` loops Whisper then the 4B model N times (default 20) and logs PSS and timings.
+        intent.getStringExtra("coexist")?.let { wav ->
+            val n = intent.getStringExtra("loops")?.toIntOrNull() ?: intent.getIntExtra("loops", 20)
+            vm.debugCoexist(wav, n.coerceAtLeast(1))
+        }
         setContent { IncidentTheme { AppRoot(vm) } }
     }
 }

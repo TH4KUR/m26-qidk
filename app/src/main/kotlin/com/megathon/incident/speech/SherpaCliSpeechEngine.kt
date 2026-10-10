@@ -41,6 +41,10 @@ class SherpaCliSpeechEngine(private val context: Context) : SpeechEngine {
     override val name = "Whisper-Small (sherpa-onnx, QNN)"
     private val bundle = SpeechBundle(context)
 
+    /** Exit status of the most recent child process (null before the first run, or if it timed out). For the debug coexistence loop. */
+    @Volatile var lastChildExit: Int? = null
+        private set
+
     init {
         val missing = bundle.missing()
         if (missing.isNotEmpty()) {
@@ -50,6 +54,7 @@ class SherpaCliSpeechEngine(private val context: Context) : SpeechEngine {
 
     override suspend fun transcribe(pcm: ShortArray, language: String): Transcript = withContext(Dispatchers.IO) {
         val started = System.nanoTime()
+        lastChildExit = null
         val wav = File.createTempFile("utterance", ".wav", context.cacheDir)
         try {
             writeWav(wav, pcm)
@@ -72,6 +77,7 @@ class SherpaCliSpeechEngine(private val context: Context) : SpeechEngine {
             }.start()
             val log = process.inputStream.bufferedReader().readText()
             if (!process.waitFor(90, TimeUnit.SECONDS)) { process.destroyForcibly(); error("speech engine timed out") }
+            lastChildExit = process.exitValue()
             check(process.exitValue() == 0) { "speech engine exited with ${process.exitValue()}: ${log.takeLast(300)}" }
 
             val text = parseText(log)
