@@ -49,6 +49,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.megathon.incident.domain.Field
+import com.megathon.incident.domain.Suggestion
 import com.megathon.incident.session.FieldView
 import com.megathon.incident.session.QuickReply
 import com.megathon.incident.session.UiStatus
@@ -113,6 +114,10 @@ fun FieldRow(
     onCancel: () -> Unit,
     onAccept: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Chips from the suggestion engine for this field: proposals the reporter accepts or dismisses. */
+    chips: List<Suggestion> = emptyList(),
+    onAcceptChip: (Suggestion) -> Unit = {},
+    onDismissChip: (Suggestion) -> Unit = {},
 ) {
     val c = Theme.colors
     val reduce = LocalReduceMotion.current
@@ -157,6 +162,12 @@ fun FieldRow(
                     else -> Text("Not mentioned", style = MaterialTheme.typography.bodyLarge, color = c.ink3)
                 }
                 view.hint?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.ink2) }
+            }
+
+            if (chips.isNotEmpty() && !editing) {
+                Column(Modifier.padding(start = Space.s4, end = Space.s4, bottom = Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+                    chips.forEach { chip -> SuggestionChipRow(chip, onAccept = { onAcceptChip(chip) }, onDismiss = { onDismissChip(chip) }) }
+                }
             }
 
             AnimatedVisibility(

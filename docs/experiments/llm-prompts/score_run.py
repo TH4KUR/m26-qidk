@@ -1,8 +1,11 @@
+# usage: E_EVAL_DIR=<dir with E's score.py + gold_v1.jsonl> python3 -I score_run.py <run dir with raw.jsonl + predictions.jsonl>
 import json, sys, statistics as st, collections
-sys.path.insert(0, "/tmp/claude-1000/-home-th4kur-Desktop-m26-qidk/4020479d-b666-4a56-880e-9050f25d9d98/scratchpad/e-eval")
+import os
+E_EVAL = os.environ.get("E_EVAL_DIR", "e-eval")  # folder holding E's score.py and gold_v1.jsonl
+sys.path.insert(0, E_EVAL)
 from score import score, render_markdown
 run_dir = sys.argv[1]
-golds = [json.loads(l) for l in open("/tmp/claude-1000/-home-th4kur-Desktop-m26-qidk/4020479d-b666-4a56-880e-9050f25d9d98/scratchpad/e-eval/gold_v1.jsonl") if l.strip()]
+golds = [json.loads(l) for l in open(os.path.join(E_EVAL, "gold_v1.jsonl")) if l.strip()]
 dev = [g for g in golds if g["split"] == "dev"]
 preds = [json.loads(l) for l in open(f"{run_dir}/predictions.jsonl")]
 raw = [json.loads(l) for l in open(f"{run_dir}/raw.jsonl")]

@@ -3,6 +3,7 @@ package com.megathon.incident.session
 import com.megathon.incident.domain.Field
 import com.megathon.incident.domain.IncidentReport
 import com.megathon.incident.domain.PriorityAdvice
+import com.megathon.incident.domain.Suggestion
 import com.megathon.incident.priority.Deescalation
 import com.megathon.incident.testing.Compute
 
@@ -71,4 +72,6 @@ data class SessionUi(
     val canSubmitNow: Boolean = false,
     /** Set when the reporter cancelled an alarm: a one-tap "lower to LOW?" offer. Never applied by itself. */
     val deescalation: Deescalation? = null,
+    /** Chips from the suggestion engine ("Did you mean Seminar Hall 2?"). Proposals only: the report keeps what was heard until the reporter taps. */
+    val suggestions: List<Suggestion> = emptyList(),
 )

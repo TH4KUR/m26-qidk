@@ -342,7 +342,7 @@ class ReportSessionTest {
         val v = s.ui.value.report.value(Field.DATE_TIME)
         assertEquals("2026-10-11 ≈10:00 (around 10 AM)", v.text)
         assertEquals(ValueStatus.USER_CONFIRMED, v.status)
-        assertEquals("Today · about 10:00 AM", s.field(Field.DATE_TIME).value)
+        assertEquals("Today, Sun 11 Oct · about 10:00 AM", s.field(Field.DATE_TIME).value)
     }
 
     @Test fun tappingYesterdayStoresYesterdayAsConfirmed() {
@@ -352,5 +352,46 @@ class ReportSessionTest {
         s.answer(ask.replies.first { it.label == "Yesterday" })
         assertEquals("2026-10-10 ≈10:00 (around 10 AM)", s.ui.value.report.value(Field.DATE_TIME).text)
         assertEquals(ValueStatus.USER_CONFIRMED, s.ui.value.report.value(Field.DATE_TIME).status)
+    }
+
+    // What the 4B model really returned on the kit for "There's a massive fire in a sh2 right now.": no date_time_text.
+    private val fireNoTime = """{"tool":"update_report","arguments":{"incident_type":"fire_smoke","location":"a sh2","evidence":{"incident_type":"massive fire","location":"a sh2"}}}"""
+
+    @Test fun rightNowIsTheTimeEvenWhenTheModelSkipsIt() {
+        val s = session(Scripted(fireNoTime))
+        s.say("There's a massive fire in a sh2 right now.")
+        val time = s.field(Field.DATE_TIME)
+        assertEquals(UiStatus.HEARD, time.status)
+        assertEquals("Today, Sun 11 Oct · 3:00 PM", time.value, "now means the capture time")
+        assertEquals("right now", time.evidence)
+        assertTrue(s.ui.value.fields.none { it.field == Field.DATE_TIME && it.status == UiStatus.NEEDED })
+    }
+
+    @Test fun aNowPhraseNeverOverwritesADateTheReporterAlreadyGave() {
+        val s = session(Scripted(FakeLlmEngine.DECK_REPLY, fireNoTime))
+        s.say(slide)
+        val before = s.field(Field.DATE_TIME).value
+        s.say("It is still burning right now.")
+        assertEquals(before, s.field(Field.DATE_TIME).value)
+    }
+
+    private val leakYesterdayMorning = """{"tool":"update_report","arguments":{"incident_type":"water_leak_flood","location":"SH2","date_time_text":"yesterday morning","evidence":{"incident_type":"water leak","location":"SH2","date_time_text":"yesterday morning"}}}"""
+
+    @Test fun aKnownDayWithoutAClockTimeIsNotQuestioned() {
+        // Kit run: "It happened yesterday morning." filled When but the app still asked "Which day was this?".
+        val s = session(Scripted(leakYesterdayMorning))
+        s.say("There was a water leak in SH2 yesterday morning.")
+        val time = s.field(Field.DATE_TIME)
+        assertEquals("Yesterday, Sat 10 Oct · morning", time.value)
+        assertEquals(UiStatus.HEARD, time.status)
+        assertNull(time.hint, "the day is known, so there is nothing to ask about it")
+        assertTrue((s.ui.value.state as? SessionState.Asking)?.question?.asks?.none { it.field == Field.DATE_TIME } ?: true)
+    }
+
+    @Test fun relativeTimesResolveAgainstTheInstantTheReporterStoppedSpeaking() {
+        val s = session(Scripted(fireNoTime))
+        val stopped = Instant.parse("2026-10-11T09:36:00Z") // 15:06 IST, six minutes after the session clock
+        runBlocking { s.onUtterance("There's a massive fire in a sh2 right now.", capturedAt = stopped) }
+        assertEquals("Today, Sun 11 Oct · 3:06 PM", s.field(Field.DATE_TIME).value)
     }
 }
