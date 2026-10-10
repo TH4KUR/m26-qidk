@@ -99,6 +99,59 @@ class PriorityAdvisorTest {
         assertTrue(advice.reasons.any { it.contains("YAMNET") }, advice.reasons.toString())
     }
 
+    // ---- what the reporter stated in the report only raises ------------------------------------
+
+    private fun reportWith(vararg pairs: Pair<com.megathon.incident.domain.Field, String>, status: com.megathon.incident.domain.ValueStatus = com.megathon.incident.domain.ValueStatus.REPORTED) =
+        pairs.fold(com.megathon.incident.domain.IncidentReport.empty("r", 0)) { r, (f, v) ->
+            r.with(f, com.megathon.incident.domain.FieldValue(v, status, v))
+        }
+
+    @Test fun aStatedCriticalSeverityRaisesToUrgent() {
+        val a = advisor()
+        a.onChunk("something happened in the lab")
+        val out = a.onReport(reportWith(com.megathon.incident.domain.Field.SEVERITY to "critical"))
+        assertEquals(Priority.URGENT, out.advice.level)
+        assertTrue(out.advice.reasons.any { it.contains("critical") }, out.advice.reasons.toString())
+    }
+
+    @Test fun statedSevereAndModerateRaiseToHighAndMedium() {
+        val severe = advisor().also { it.onChunk("something happened") }.onReport(reportWith(com.megathon.incident.domain.Field.SEVERITY to "severe"))
+        val moderate = advisor().also { it.onChunk("something happened") }.onReport(reportWith(com.megathon.incident.domain.Field.SEVERITY to "moderate"))
+        assertEquals(Priority.HIGH, severe.advice.level)
+        assertTrue(moderate.advice.level >= Priority.MEDIUM)
+    }
+
+    @Test fun aSuggestedSeverityDoesNotRaise() {
+        val a = advisor()
+        val before = a.onChunk("something happened in the lab").advice.level
+        val out = a.onReport(
+            reportWith(com.megathon.incident.domain.Field.SEVERITY to "critical", status = com.megathon.incident.domain.ValueStatus.SUGGESTED),
+        )
+        assertEquals(before, out.advice.level)
+    }
+
+    @Test fun aStatedMinorSeverityNeverLowersAFire() {
+        val a = advisor()
+        assertEquals(Priority.URGENT, a.onChunk("my house is on fire").advice.level)
+        val out = a.onReport(reportWith(com.megathon.incident.domain.Field.SEVERITY to "minor"))
+        assertEquals(Priority.URGENT, out.advice.level)
+    }
+
+    @Test fun anElectricalOrInjuryTypeIsAtLeastMedium() {
+        for (type in listOf("electrical", "injury", "fire_smoke", "spill_chemical", "security", "illness")) {
+            val out = advisor().also { it.onChunk("it is in the corridor") }.onReport(reportWith(com.megathon.incident.domain.Field.INCIDENT_TYPE to type))
+            assertTrue(out.advice.level >= Priority.MEDIUM, "$type was ${out.advice.level}")
+            assertTrue(out.advice.level < Priority.URGENT, "a type alone must not reach URGENT: $type")
+        }
+    }
+
+    @Test fun anOrdinaryTypeDoesNotRaise() {
+        val a = advisor()
+        val before = a.onChunk("the projector is not working").advice.level
+        val out = a.onReport(reportWith(com.megathon.incident.domain.Field.INCIDENT_TYPE to "equipment_failure"))
+        assertEquals(before, out.advice.level)
+    }
+
     // ---- "call 112" ----------------------------------------------------------------------------
 
     @Test fun urgentSpeaksTheEmergencyLineOnce() {
