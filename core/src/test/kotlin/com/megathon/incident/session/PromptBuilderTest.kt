@@ -35,7 +35,7 @@ class PromptBuilderTest {
         .with(Field.DATE_TIME, FieldValue("2026-10-11 morning (today morning)", ValueStatus.REPORTED, "today morning"))
 
     @Test fun theModelSeesWhatTheWorkerSaidEarlierSoThereAndItCanBeResolved() {
-        val req = PromptBuilder.default().build("I told you where it was.", report(), earlier = listOf("There was a huge fire in SH-2.", "Raza is trapped there."))
+        val req = PromptBuilder.default().build("I told you where it was.", report(), earlier = listOf("There was a huge fire in SH-2.", "Anil is trapped there."))
         assertTrue(req.user.contains("Earlier the worker said"))
         assertTrue(req.user.contains("There was a huge fire in SH-2."))
         assertTrue(req.user.indexOf("Earlier") < req.user.indexOf("Report so far"))
