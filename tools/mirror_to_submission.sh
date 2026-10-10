@@ -58,7 +58,8 @@ echo "scan: clean ($(find "$tmp" -type f | wc -l) files)"
 
 # 7. copy: directories are synced (with --delete) ONLY inside the mirrored dirs; root files are copied; README, LICENSE, deliverables/ are never touched
 flags=(-a); [ "$mode" = "--dry-run" ] && flags+=(-n -i)
-for d in "${dirs[@]}"; do [ -d "$tmp/$d" ] && { mkdir -p "$target/$d"; rsync "${flags[@]}" --delete "$tmp/$d/" "$target/$d/" | sed "s|^|  $d: |" | head -40; }; done
+# rsync output is captured first: piping it into `head` would SIGPIPE rsync (pipefail) and leave a half-copied snapshot
+for d in "${dirs[@]}"; do [ -d "$tmp/$d" ] && { mkdir -p "$target/$d"; out="$(rsync "${flags[@]}" --delete "$tmp/$d/" "$target/$d/")"; printf '%s\n' "$out" | sed "s|^|  $d: |" | head -40 || true; }; done
 for f in "${files[@]}"; do [ -f "$tmp/$f" ] && rsync "${flags[@]}" "$tmp/$f" "$target/$f" | sed "s|^|  $f: |"; done
 if [ "$mode" = "--dry-run" ]; then echo "DRY RUN only. Re-run with --apply to copy."; else
   echo "Copied. Now review and publish yourself:"; echo "  cd $target && git status && git add -A && git commit -m '...' && git push origin main"

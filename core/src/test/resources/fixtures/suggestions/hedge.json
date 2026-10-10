@@ -1,0 +1,9 @@
+[
+  {
+    "field": "LOCATION",
+    "original": "Room 2",
+    "proposed": "Room 2",
+    "reason": "The speaker said \"I think\"; confirm the location.",
+    "source": "TEXT_CUE"
+  }
+]
