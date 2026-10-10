@@ -34,7 +34,7 @@ class RuleSuggestionEngine(
             if (value.status !in MACHINE_HEARD) continue
             val text = value.text ?: continue
             val snap = snapper.snap(text, kind) ?: continue
-            chips += Suggestion(field, text, snap.entry.name, snap.reason, Source.GAZETTEER)
+            chips += Suggestion(field, text, snap.proposed, snap.reason, Source.GAZETTEER)
         }
         chips += RoleRules.chips(state, transcript)
         chips += hedgeChips.chips(state, transcript)
