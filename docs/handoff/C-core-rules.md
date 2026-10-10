@@ -16,8 +16,7 @@ Branch: `c/core-rules` · Written 2026-10-10 · Read this whole file first, then
 3. `docs/superpowers/plans/2026-10-10-incident-assistant-qidk.md`, especially **Addendum A** at the end (new tasks A1-A10, 5-person timeline, gates). The old timeline table is superseded.
 4. `.claude/skills/qidk-npu-android/SKILL.md` (kit facts, section 1b and 1c)
 5. Plan Tasks 1 to 4 (`Model.kt`, `ToolCallParser`, `Normalizers`, `GroundingValidator`)
-6. `PLAN-codex.md` sections 5.2 to 5.5 (reference only: validation, negation and correction rules worth adopting as tests)
-`PLAN-codex.md` is a teammate's plan made with another AI. It is a **reference only** (validation rules, negation tests), **not authoritative**: whether it overrides our plan is an open team decision.
+A teammate's earlier alternative plan was **removed from the repo**. **Our spec (D1-D21) and our plan with Addendum A are authoritative.** Its useful ideas (REPORTED/CONFIRMED labels, negation and correction tests, no severity guessing) are already adopted in the spec and in your tasks.
 
 ## 3. Ground rules (apply to everyone)
 - **No cloud inference at runtime, and never claim "runs on the NPU" for something on the CPU.** Say which compute each piece uses; disclose CPU parts.
@@ -30,7 +29,7 @@ Branch: `c/core-rules` · Written 2026-10-10 · Read this whole file first, then
 
 ## 4. Pending team decisions that can change your work
 These are open (see `docs/team-split.md` section 7). **Assume the default until the lead tells you otherwise.**
-1. Which plan is authoritative: **default: our spec and plan with Addendum A.**
+1. Which plan is authoritative: **settled: ours** (the alternative plan was removed from the repo).
 2. Hindi/Telugu: **default: experimental lane**, decided at hour 16 (D19); English is core.
 3. Qualcomm Package Manager login: **default: assume none**, so Voice AI SDK routes are dead.
 4. Severity: **default: rules only suggest it** (D18); the user states or confirms it.
@@ -51,7 +50,7 @@ These are open (see `docs/team-split.md` section 7). **Assume the default until 
 - **Task 4:** `GroundingValidator.isGrounded(value, evidence, transcript)`: evidence must be found in the cumulative transcript (normalised substring, token overlap >= 0.8), else `UNCONFIRMED`.
 - **A5a: tense/aspect/modality (TAM) cue detector** (English and Hindi cue lists, rule-based): aspect ongoing vs completed ("still leaking", "abhi bhi", "ho raha hai" vs "was leaking, we turned it off"), tense planned vs done ("we will call maintenance" is not an immediate action), modality hedged ("I think", "maybe", "shayad", "lagta hai"), negated ("nobody", "nahi"). Effects: planned goes to follow-up, hedged gets an `UNCONFIRMED` chip, negated becomes `EXPLICIT_NONE`. **Get a Hindi speaker to review the Hindi lists.**
 - **A5b: `PriorityAdvisor`** with `app/src/main/assets/policies/priority_rules.json` (copy in `core/src/test/resources/`): output `PriorityAdvice(level LOW|MEDIUM|HIGH|URGENT, reasons)`. **Hard rule: signals can only raise priority, never lower it.** A calm voice, "nobody hurt" or a missing signal never reduces it. URGENT or a danger signal triggers the spoken line "If anyone is in danger, call 112 now." The user can override; overrides are journaled. Inputs: TAM tags, `SeverityRules` suggestion, `Signal`s (SenseVoice emotion, YamNet events) from B.
-- **Tests to include (from the codex plan, adopted):** negation across segments ("Ravi did not see it" never leaves Ravi a witness), corrections ("room 2" becomes "room 3"), no severity guessing, an event never marks an incident critical by itself.
+- **Tests to include (adopted from the earlier alternative plan):** negation across segments ("Ravi did not see it" never leaves Ravi a witness), corrections ("room 2" becomes "room 3"), no severity guessing, an event never marks an incident critical by itself.
 
 ## 6. Interfaces and handovers
 | You give | To | By |
@@ -69,10 +68,55 @@ These are open (see `docs/team-split.md` section 7). **Assume the default until 
 ## 7. Definition of done for your part
 `./gradlew :core:test` green with failing-first tests for every rule above; the slide example parses to the expected fields with date and severity asked; TAM and priority behave on E's recorded clips; priority is never lowered by any signal (a property test).
 
-## 8. Starter prompt for your Claude
+## 7a. Fixtures, fakes and contracts you own
+You own the **shared types and the shared fixtures**: freeze the types by hour 1.5 and announce changes.
+- **`Clock`/`FixedClock`:** inject a clock everywhere (time resolver, journal) so tests are deterministic.
+- **`LlmEngine` interface and its contract tests** (A implements `GenieXLlmEngine`): `interface LlmEngine { val compute: Compute; suspend fun generate(request: ExtractionRequest): String }`. **`FakeLlmEngine`** returns canned `update_report` JSON per input (A needs it in the skeleton).
+- **Canned raw model outputs** in `fixtures/llm/` for the parser tests: valid; wrapped in markdown fences; truncated JSON; wrong tool name; extra properties; duplicate scalar writes; prose only; a native tool-call envelope. These double as test data for A's adapter.
+- **Transcript fixtures** in `fixtures/transcripts/`: the deck example, the same with Whisper-style mistakes ("conference room to", "ten am" for "10 AM", missing punctuation), negation ("Ravi did not see it"), corrections ("no, Room 3"), hedges, planned vs completed actions, Hindi/Hinglish samples (reviewed by a native speaker). D and E use them; do not let anyone copy them.
+- **`TamDetector` / `HedgeDetector` interface** for D: `interface HedgeDetector { fun hedges(text: String): List<IntRange> }`. Publish it with a simple rule fake **by hour 3** so D is not blocked on your full detector (D needs it at hour 6).
+- **`FakeSignalSource` fixtures** until B ships: use B's fake; agree the `Signal` fields with B first.
+- **Property test for `PriorityAdvisor`:** for any combination of signals, adding a signal never lowers the level, and a missing signal never lowers it. This is a hard rule (D18).
+
+## 8. Stubs, fakes and contract tests (the team pattern)
+Five people build in parallel, so **nobody waits for the real NPU engine.** Every dependency on someone else's work gets an **interface in `:core`** and a **fake**, until the real one lands.
+
+1. **Where:** interfaces and fakes in `core/src/main/kotlin/com/megathon/incident/testing/` (so `:app` debug builds can use them); shared fixtures in `core/src/test/resources/fixtures/` (deck example, canned raw LLM outputs, Whisper-style mistakes, signal lists, a test `site.json`). Add to the shared folders; do not copy fixtures.
+2. **Fakes are labelled `SIMULATED`.** `enum class Compute { NPU, CPU, HYBRID, SIMULATED }` is part of every engine's result. The proof strip shows `SIMULATED` in a clearly different colour, and **release builds must refuse to start with a simulated engine** (guard in `EngineFactory`). **A scripted result must never be shown as live recognition.**
+3. **One `EngineFactory` in `:app`** (A) selects speech `FAKE | WHISPERKIT | SHERPA_QNN | AIHUB` and LLM `FAKE | GENIEX`. Default is FAKE until the real engine passes its contract test; a debug setting switches.
+4. **One contract-test suite per interface**, run against the fake now and every real implementation later (same tests, so fake and real cannot drift).
+5. **Interfaces are owned and announced** (chat plus a line in the commit message). Changes go through the owner.
+
+| Interface | Owner | Fake (ship early) | Real | Consumed by |
+|---|---|---|---|---|
+| `SpeechEngine`, `AudioSource`, `Speaker` | B | `FakeSpeechEngine`, `WavFileSource`, `FakeSpeaker` (logs text) | WhisperKit, sherpa-onnx QNN, AI Hub; `AudioRecord`; Android TTS | A (pipeline), E (Judge Bench) |
+| `SignalSource` | B | `FakeSignalSource` (canned alarm/emotion lists per clip ID) | SenseVoice + YamNet | C (priority), A (panel) |
+| `LlmEngine` (contract by C, adapter by A) | C / A | `FakeLlmEngine` (canned `update_report` JSON per input) | `GenieXLlmEngine` | A, C, D, E |
+| `SuggestionEngine` | D | `FakeSuggestionEngine` (returns the "Conference Room 2" chip) | real engine | A (chips UI) |
+| `PriorityAdvisor`, `TamDetector`/`HedgeDetector` | C | simple rule fakes | real | A, D |
+| `Clock` | C | `FixedClock` | system clock | C, D, E |
+| `ReportRepository` | D | `InMemoryReportRepository` | file-based | A |
+| `PipelineRunner` (replays clips for the Judge Bench) | E | `FakePipelineRunner` (reads predictions from a file) | real pipeline | A (Judge Bench UI) |
+
+## 9. Experiment log and submission rules
+**Experiment log (needed for M2):** every experiment or measurement, **including failures**, goes in `docs/experiments/<letter>-<yyyymmdd>-<topic>.md`: date and time, who, goal, setup (device, model, version, commands), data (number of clips, kit mic or phone), result **with denominators**, verdict, next step. E compiles M2 from these. Commit and push your branch at least every 2 hours.
+
+**Deadlines (from the organisers' PDF, as written; no grace period):**
+| When | What |
+|---|---|
+| 10:00 PM, 10 Oct | M1 approach PDF: **done** (`deliverables/M1.pdf` is on the submission repo's `main`) |
+| **4:00 AM, 11 Oct** | `deliverables/M2.pdf` (2 pages: approach changes since M1, **experiments run and results**, testing progress, plan for the remaining time) **plus all code written so far pushed to `main`** |
+| **11:00 AM, 11 Oct** | Final: full code, `README.md` (setup and run steps only, plus links to external weights; do not explain the solution), MIT `LICENSE`, `deliverables/final_report.pdf` (max 3 pages), demo video (max 4 min, screen recording with voiceover, Google Drive "Anyone with the link"), code zip (exclude virtual environments, datasets, model weights) |
+| 11:30 AM, 11 Oct | Slides as PDF, through the slides form |
+
+**Submission repo:** `IIIT-ECell/megathon26-readyornot` (private; only `main` is evaluated, and only the latest commit at each deadline). It is **separate from this team repo**. Its README has empty **Build** and **Run** sections that must be filled before the final.
+**Double-blind (all PDFs and the video):** put **"Team 087"** at the top of every PDF; **no team name, member names, college or city names** anywhere: not in slides, video, window titles, terminal prompts, usernames, hostnames or file names visible on screen. Run `tools/blindcheck.sh <file.pdf>` (E provides it) before every submission.
+**Proposed (not an organiser rule):** E drafts the PDFs from `docs/templates/report-template.tex`; **A pushes**. A mirrors **only** `app/`, `core/`, the Gradle files, `tools/`, README and LICENSE into a clone of the submission repo, then commits and pushes `main`. Research and planning docs (which name the college) stay in the private team repo.
+
+## 10. Starter prompt for your Claude
 > Read `docs/handoff/C-core-rules.md`, then the files it lists under "Read first". I am person C. Work on branch `c/core-rules` only, in my folders, test-first. Do my first-90-minutes tasks now. Ask me before changing shared types or touching another person's folders. Do not run `adb` against the kit unless I say I am in a booked slot.
 
-## 9. Report back to the lead (A) when
+## 11. Report back to the lead (A) when
 - you finish a task (say what passed and what did not, with numbers, not impressions);
 - you are blocked for more than 20 minutes;
 - you need a shared-type change or find something in the spec or plan that is wrong or untested.
