@@ -1,5 +1,8 @@
 package com.megathon.incident.session
 
+import com.megathon.incident.domain.Field
+import com.megathon.incident.domain.FieldValue
+import com.megathon.incident.domain.ValueStatus
 import com.megathon.incident.domain.IncidentReport
 import kotlin.test.Test
 import kotlin.test.assertFalse
@@ -25,5 +28,30 @@ class PromptBuilderTest {
     @Test fun `the report so far and the worker words reach the model`() {
         val req = PromptBuilder.default().build("Smoke from the printer.", IncidentReport.empty("r1", 0))
         assertTrue(req.user.contains("Smoke from the printer."))
+    }
+
+    private fun report() = IncidentReport.empty("r1", 0)
+        .with(Field.INCIDENT_TYPE, FieldValue("fire_smoke", ValueStatus.REPORTED, "huge fire"))
+        .with(Field.DATE_TIME, FieldValue("2026-10-11 morning (today morning)", ValueStatus.REPORTED, "today morning"))
+
+    @Test fun theModelSeesWhatTheWorkerSaidEarlierSoThereAndItCanBeResolved() {
+        val req = PromptBuilder.default().build("I told you where it was.", report(), earlier = listOf("There was a huge fire in SH-2.", "Raza is trapped there."))
+        assertTrue(req.user.contains("Earlier the worker said"))
+        assertTrue(req.user.contains("There was a huge fire in SH-2."))
+        assertTrue(req.user.indexOf("Earlier") < req.user.indexOf("Report so far"))
+        assertTrue(req.user.trimEnd().endsWith("Worker: \"I told you where it was.\""))
+    }
+
+    @Test fun noEarlierLineWhenThisIsTheFirstTurn() {
+        assertFalse(PromptBuilder.default().build("Smoke.", report()).user.contains("Earlier"))
+    }
+
+    @Test fun reportSoFarUsesTheOutputKeyNamesAndTheSpokenPhrase() {
+        // Kit: the model copied the old key "date_time" and the internal date string back into its reply.
+        val user = PromptBuilder.default().build("Anything else.", report()).user
+        assertTrue(user.contains("\"date_time_text\":\"today morning\""), user)
+        assertFalse(user.contains("\"date_time\""))
+        assertFalse(user.contains("2026-10-11"))
+        assertTrue(user.contains("\"incident_type\":\"fire_smoke\""))
     }
 }

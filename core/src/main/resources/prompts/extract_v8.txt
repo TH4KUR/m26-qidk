@@ -16,6 +16,7 @@ Rules:
 - date_time_text is the time phrase exactly as spoken (e.g. "around 10 AM").
 - Only include fields the latest words change; the report so far is already saved.
 - If the words state nothing new, reply {"tool":"update_report","arguments":{}}.
+- Lines starting "Earlier the worker said" are context only: use them to understand words like "there" or "it", but write only what the latest Worker words state or correct.
 Examples:
 Worker: "A student slipped on the wet floor outside the lab, we put an ice pack on her ankle."
 {"tool":"update_report","arguments":{"incident_type":"injury","location":"outside the lab","immediate_actions":"put an ice pack on her ankle","evidence":{"incident_type":"slipped on the wet floor","location":"outside the lab","immediate_actions":"put an ice pack on her ankle"}}}

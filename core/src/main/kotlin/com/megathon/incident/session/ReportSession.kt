@@ -87,7 +87,7 @@ class ReportSession(
         state = SessionState.Extracting
         publish()
 
-        var request = prompts.build(said, report)
+        var request = prompts.build(said, report, earlier = transcripts.dropLast(1).takeLast(2))
         var result = llm.complete(request)
         var parsed = ToolCallParser.parse(result.text)
         if (parsed is ParseResult.Failure) {
