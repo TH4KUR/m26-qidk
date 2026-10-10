@@ -113,7 +113,7 @@ def validate_rows(rows, require_complete_mandatory=False):
         if "messages" in row:
             messages = row["messages"]
             require([m["role"] for m in messages] == ["system", "user", "assistant"], "invalid messages")
-            require(messages[1]["content"] == prompt_user(utterance, saved), "input differs from PromptBuilder format")
+            require(messages[1]["content"] == prompt_user(utterance, saved, row.get("earlier_worker_texts", [])), "input differs from PromptBuilder format")
             require(messages[2]["content"] == compact(target), "assistant content differs from target")
     validate_transitions(rows)
 
@@ -130,6 +130,7 @@ def validate_transitions(rows):
             sequences.setdefault(row["group_id"], []).append(row)
     for sequence in sequences.values():
         previous = None
+        earlier = []
         for index, row in enumerate(sorted(sequence, key=lambda r: r["transition"]["turn_index"])):
             transition = row["transition"]
             label = row["id"]
@@ -141,6 +142,8 @@ def validate_transitions(rows):
             previous_state = previous["transition"]["expected_report_after"] if previous else {}
             if row["report_before"] != previous_state:
                 raise ValueError(f"{label}: stale saved report; differs from previous expected state")
+            if "earlier_worker_texts" in row and row["earlier_worker_texts"] != earlier[-2:]:
+                raise ValueError(f"{label}: earlier worker history differs from previous sequence turns")
             after = dict(row["report_before"])
             args = row["target"]["arguments"]
             changed = set(args) - {"evidence"}
@@ -160,11 +163,21 @@ def validate_transitions(rows):
             if after != transition["expected_report_after"]:
                 raise ValueError(f"{label}: patch cannot produce authored expected final state")
             previous = row
+            earlier.append(row["raw_text"])
 
 
-def prompt_user(utterance, saved):
-    ordered = {key: saved[key] for key in SAVED_ORDER if key in saved}
-    return f'Report so far: {compact(ordered)}\nWorker: "{utterance.strip()}"'
+def prompt_user(utterance, saved, earlier=()):
+    ordered = {}
+    for key in SAVED_ORDER:
+        if key not in saved or key in ("description", "recommended_follow_up"):
+            continue
+        value = saved[key]
+        if key == "date_time":
+            match = re.fullmatch(r"(?:\d{4}-\d{2}-\d{2}|date missing) (?:≈?\d{2}:\d{2}|morning|afternoon|evening|night|time missing) \((.*)\)", value.strip(), re.DOTALL)
+            value = match.group(1) if match else value
+        ordered["date_time_text" if key == "date_time" else key] = value
+    prefix = "".join(f'Earlier the worker said: "{text.strip()}"\n' for text in earlier if text.strip())
+    return f'{prefix}Report so far: {compact(ordered)}\nWorker: "{utterance.strip()}"'
 
 
 def example(group, style, text, labels, tags=(), notes="", before=None):
@@ -303,14 +316,19 @@ def main():
     system = (DEST / "system_prompt.txt").read_text(encoding="utf-8").strip()
     original = resolvable_times(mandatory_complete(base_examples() + edge_examples() + context_examples()))
     rows = assign_splits(original + update_examples())
+    history = {}
     for row in rows:
+        group = row["group_id"]
+        row["earlier_worker_texts"] = history.get(group, [])[-2:] if row["report_before"] else []
         row["temporal_gold"] = time_spec(row["mandatory_answers"]["date_time_text"]["value"])
         row["messages"] = [
             {"role": "system", "content": system},
-            {"role": "user", "content": prompt_user(row["raw_text"], row["report_before"])},
+            {"role": "user", "content": prompt_user(row["raw_text"], row["report_before"], row["earlier_worker_texts"])},
             {"role": "assistant", "content": compact(row["target"])},
         ]
         row["omitted_fields"] = [f for f in FIELDS if f not in row["target"]["arguments"]]
+        if row["style"] in ("initial_turn", "followup_turn") or "transition" in row:
+            history.setdefault(group, []).append(row["raw_text"])
     validate_rows(rows, require_complete_mandatory=True)
     write_jsonl(DEST / "gold.jsonl", rows)
     for split in ("train", "validation", "test"):
@@ -330,6 +348,8 @@ def main():
         "base_git_revision": revision, "independent_human_adjudication": False,
         "generation": "Original 480 rows plus 80 authored four-turn update sequences (320 rows); no external records or model sampling",
         "supersedes_git_revision": "959d6719a25f1804cbc0bbb8761e7499ab331dd3",
+        "deployment_app_revision": "9bf0d36",
+        "input_contract": "Current PromptBuilder: at most two earlier worker utterances; date_time_text contains the saved spoken phrase",
         "sha256": {name: hashlib.sha256((DEST / name).read_bytes()).hexdigest() for name in files},
         "source_sha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in source_files + contract_files},
     }

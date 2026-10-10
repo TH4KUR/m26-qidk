@@ -4,7 +4,7 @@
 
 **Review gate: BLOCKED by the validator defect below and awaiting C's independent cross-verification. Do not use this revision for fine-tuning until C has cleared its labels and app compatibility.** After verification, the next step is a fine-tuning experiment involving the human user. C must not start training, provision compute, export weights, or deploy a model without the user's explicit go-ahead. The review scope and required verdict are in [B's handoff to C](../../../docs/handoff/B-synthetic-gold-to-C.md).
 
-These are machine-checked synthetic gold **candidates**, not independently human-adjudicated labels. There are **224 scenario families**, not 800 independent incidents: 96 authored fact sets with four controlled variants each, 24 semantic-contrast pairs, 24 initial/follow-up pairs, and **80 four-turn update sequences**. The original 480 rows and their splits are unchanged; 320 rows were added. Names, assets, and situations are fictional. No real incident records, recordings, or external teacher-model API were used. ASR-like noise is manufactured, not measured Whisper output.
+These are machine-checked synthetic gold **candidates**, not independently human-adjudicated labels. There are **224 scenario families**, not 800 independent incidents: 96 authored fact sets with four controlled variants each, 24 semantic-contrast pairs, 24 initial/follow-up pairs, and **80 four-turn update sequences**. The original 480 narratives, labels, saved states, and splits are preserved; 320 rows were added. Model-message formatting was refreshed for master 9bf0d36. Names, assets, and situations are fictional. No real incident records, recordings, or external teacher-model API were used. ASR-like noise is manufactured, not measured Whisper output.
 
 ## Files
 
@@ -25,14 +25,15 @@ These are machine-checked synthetic gold **candidates**, not independently human
 | `runtime_update_audit.json` | Exhaustive new-sequence validator/merge replay; downstream failures remain blockers |
 | `validation_results.json` | Recorded Python/core test results and app-compatibility checks |
 
-Every training record has one system message, one user message, and one assistant message. Follow-ups are **independent calls with an explicit report snapshot**, matching this checkout's `PromptBuilder`; they are not chat history that the current app never sends. Saved values are strings, including comma-separated names and the rendered `date_time`. The user message is exactly:
+Every training record has one system message, one user message, and one assistant message. Follow-ups are **independent calls with an explicit report snapshot**, matching master 9bf0d36's `PromptBuilder` and `ReportSession`. Up to two actual earlier worker utterances are included as context lines. Saved values are strings, including comma-separated names. `report_before` metadata retains the internal rendered `date_time`; the model sees its spoken phrase under `date_time_text`, as in the current app. The user message is exactly:
 
 ```text
-Report so far: {saved fields in the app's field order}
+Earlier the worker said: "previous worker utterance"
+Report so far: {saved extraction fields in the app's field order}
 Worker: "raw report"
 ```
 
-The assistant content is a JSON **string**, containing exactly one `{"tool":"update_report","arguments":{...}}` object. Metadata, symbolic temporal rules, and resolved timestamps never enter model messages.
+The assistant content is a JSON **string**, containing exactly one `{"tool":"update_report","arguments":{...}}` object. Metadata, symbolic temporal rules, and resolved timestamps never enter model messages. The earlier-worker line is absent for initial reports and repeated at most twice for subsequent calls.
 
 ## Updating an already-reported answer
 
@@ -53,7 +54,7 @@ The cases cover severity upgrades and downgrades; incident reclassification; loc
 
 Each new row's `transition` metadata records its turn index, previous row ID, operation, changed fields, frozen capture reference, and independently authored complete `expected_report_after`. The next turn's `report_before` must equal that state. Mechanical validation rejects a stale precondition or a patch that cannot produce the authored state. This state oracle is annotation metadata and is never supplied to the model as an answer. All four turns of a sequence stay in one split.
 
-The sequences use controlled sentence patterns and a finite set of narrative values. They are targeted correction regressions, not independent natural conversations. The model still receives one app-format extraction call at a time, not a four-turn chat history absent from this checkout's prompt builder.
+The sequences use controlled sentence patterns and a finite set of narrative values. They are targeted correction regressions, not independent natural conversations. The model still receives one app-format extraction call at a time, with the same two-utterance history window as `ReportSession`, rather than four chat-role messages.
 
 ## Label policy
 
@@ -67,7 +68,7 @@ The sequences use controlled sentence patterns and a finite set of narrative val
 - Missing optional fields are omitted. No nulls, empty strings/lists, invented names, or dummy `none` list members. No-op patches use empty arguments. Lists and action strings replace the saved field; addition examples restate the full desired value with current evidence.
 - Description and recommended follow-up are derived by app code and are excluded from extraction targets. Urgency hints are excluded too.
 
-The runtime parser is more permissive than the training schema. In particular, it accepts some null/empty values and unknown properties. The targets deliberately teach a consistent sparse format. This checkout's default system prompt still shows nulls/empty lists: **use the supplied system prompt for the training/inference comparison**, or measure that mismatch explicitly. No shipping prompt was changed by this task.
+The runtime parser is more permissive than the training schema. In particular, it accepts some null/empty values and unknown properties. The targets deliberately teach a consistent sparse format. The shipping `extract_v8.txt` and supplied SFT prompt both use sparse patches, but their full instructions differ. **Freeze the supplied system prompt for the training/inference comparison**, or measure any system-prompt mismatch explicitly. No shipping prompt was changed by this task.
 
 ## Relative time and dynamic gold
 
@@ -107,7 +108,7 @@ That dataset labels final report states and has its own scorer. This dataset lab
 
 Keep E's held-out data as an external benchmark. The 100 synthetic test rows hold out complete families, but they share generation patterns with training. They are useful regression cases and cannot establish real-world generalization by themselves.
 
-The current `EvalRunner` filters for `split == dev` and consumes `turns`, ignoring the saved-state preconditions and patch labels here. **Do not pass these files directly to that runner.** Use the explicit `messages` inputs and `target` outputs in a per-call evaluator, or write an adapter that preserves the seeds and per-call capture times.
+The current app evaluation reader expects E's `dev`/`holdout` final-state schema and the `EvalRunner` filters for `split == dev` and consumes `turns`, ignoring the saved-state preconditions and patch labels here. **Do not pass these files directly to that runner.** Use the explicit `messages` inputs and `target` outputs in a per-call evaluator, or write an adapter that preserves the seeds and per-call capture times.
 
 ## Reproduce and validate
 
@@ -123,7 +124,7 @@ The checks reject unsupported enums/fields, bad shapes, empty values, fabricated
 
 `SyntheticGoldContractTest` additionally checks all 800 tool targets against the actual Kotlin parser and all model inputs against the actual `PromptBuilder`. Normal invocation is `./gradlew :core:test` with the repository's required JDK 17.
 
-For this revision, **22 Python tests passed** and the parser/prompt contract checks passed for all **800** records. The full core suite ran **794 tests: 793 passed and one failed**. The new exhaustive sequence validator/merge regression exposes a downstream severity bug; see `runtime_update_audit.json` and the blocker below. The host has a Java runtime but no JDK, so normal Gradle execution was blocked. The fallback freshly compiled all core/test Kotlin with cached K2 and serialization compiler plugins, targeted JVM 17 bytecode, and ran JUnit on the Java 21 runtime. No repository toolchain setting was changed. See `validation_results.json`.
+For this revision, **24 Python tests passed** and the parser/prompt contract checks passed for all **800** records. The full core suite ran **877 tests: 876 passed and one failed**. The new exhaustive sequence validator/merge regression exposes a downstream severity bug; see `runtime_update_audit.json` and the blocker below. The host has a Java runtime but no JDK, so normal Gradle execution was blocked. The fallback freshly compiled all core/test Kotlin with cached K2 and serialization compiler plugins, targeted JVM 17 bytecode, and ran JUnit on the Java 21 runtime. No repository toolchain setting was changed. See `validation_results.json`.
 
 ## Known blocker from sequential replay
 
@@ -137,7 +138,7 @@ The new validator/merge test currently fails for this documented reason. Do not 
 
 Load only `train.jsonl` for training and `validation.jsonl` for model selection. Use Qwen's native chat template and train on assistant tokens. TRL supports these conversational `messages` records and assistant-only loss; generation-marker support depends on the installed template/version. Verify the loss mask rather than assuming it is correct. [TRL SFT documentation](https://huggingface.co/docs/trl/sft_trainer).
 
-`tokenizer_check.json` records actual lengths from the Qwen3-4B-Instruct-2507 tokenizer, including this dataset's system prompt and chat template. Every complete record fits within 1,024 tokens and hence within the 4,096-token deployment context recorded in the app. Changes to input, output, system prompt, or template require a new check.
+`tokenizer_check.json` records actual lengths from the Qwen3-4B-Instruct-2507 tokenizer, including this dataset's system prompt and chat template. With the current app history window, the longest complete record is **1080 tokens**; 32 records exceed 1,024 but all fit within the **4,096-token** primary deployment context. A 1,024-token bundle would need history trimming or a separate export and fresh length/contract checks. Changes to input, output, system prompt, or template require a new check.
 
 Compare the unfine-tuned baseline and the fine-tuned candidate with identical prompts, tokenizer, decoding settings, capture references, and post-processing. Measure the update slice separately: changed-field precision/recall, stale saved values after a correction, preservation of unchanged fields, full-list replacement, repeated-correction success, final sequence state, and no-op accuracy. Report mandatory and optional update fields separately, and include the prior-state precondition rather than testing only the raw sentence.
 
@@ -145,4 +146,4 @@ Track first-call JSON validity; type/location/time/severity accuracy; each optio
 
 **No fine-tuning or Qwen inference was run in this task. Improvement is unmeasured.** The NPU bundle and its deployment were not modified.
 
-The current app resolver's English offset lexicon includes number words only through twelve and does not cover every annotated relative or spoken-clock phrase here. It also loses the approximate flag in its numeric-offset path. Use these cases to separate resolver defects from extraction errors; adding synthetic labels alone cannot repair downstream code.
+Master 9bf0d36 expands the app resolver's offset number words, including fifteen, twenty, and fifty, but does not cover every annotated weekday, anchored offset, or spoken-clock phrase here. It also loses the approximate flag in its numeric-offset path. Use these cases to separate resolver defects from extraction errors; adding synthetic labels alone cannot repair downstream code.

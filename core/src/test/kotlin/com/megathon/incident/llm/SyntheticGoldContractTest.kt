@@ -23,13 +23,20 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import org.junit.Assume.assumeTrue
 
 /** Proves SFT targets parse in the app and inputs match the actual prompt builder. */
 class SyntheticGoldContractTest {
+    private fun datasetDirectory(): File {
+        val directory = listOf(File("../data/synthetic_gold/v1"), File("data/synthetic_gold/v1"))
+            .firstOrNull { it.isDirectory }
+        assumeTrue("Synthetic dataset is deliberately omitted from the submission mirror", directory != null)
+        return requireNotNull(directory)
+    }
+
     @Test
     fun `synthetic targets and saved contexts obey the shipping extraction boundary`() {
-        val directory = listOf(File("../data/synthetic_gold/v1"), File("data/synthetic_gold/v1"))
-            .first { it.isDirectory }
+        val directory = datasetDirectory()
         val system = File(directory, "system_prompt.txt").readText().trim()
         val lines = File(directory, "gold.jsonl").readLines().filter { it.isNotBlank() }
         assertEquals(800, lines.size)
@@ -42,7 +49,8 @@ class SyntheticGoldContractTest {
                 Field.valueOf(key.uppercase()) to FieldValue(value.jsonPrimitive.content, ValueStatus.REPORTED)
             }.toMap()
             val report = IncidentReport(id, 0, fields)
-            val request = PromptBuilder(system).build(row.getValue("raw_text").jsonPrimitive.content, report)
+            val earlier = row.getValue("earlier_worker_texts").jsonArray.map { it.jsonPrimitive.content }
+            val request = PromptBuilder(system).build(row.getValue("raw_text").jsonPrimitive.content, report, earlier)
             val messages = row.getValue("messages").jsonArray
             assertEquals(messages[0].jsonObject.getValue("content").jsonPrimitive.content, request.system, "$id: system")
             assertEquals(messages[1].jsonObject.getValue("content").jsonPrimitive.content, request.user, "$id: prompt format")
@@ -51,8 +59,7 @@ class SyntheticGoldContractTest {
 
     @Test
     fun `update sequence gold replaces saved fields through the real validator and merge`() {
-        val directory = listOf(File("../data/synthetic_gold/v1"), File("data/synthetic_gold/v1"))
-            .first { it.isDirectory }
+        val directory = datasetDirectory()
         val rows = File(directory, "gold.jsonl").readLines().filter { it.isNotBlank() }
             .map { Json.parseToJsonElement(it).jsonObject }.filter { "transition" in it }
         assertEquals(320, rows.size)

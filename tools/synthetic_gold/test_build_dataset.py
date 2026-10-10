@@ -124,6 +124,21 @@ class DatasetValidationTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "changed.fields"):
             dataset.validate_rows(rows)
 
+    def test_rejects_history_from_an_unrelated_sequence(self):
+        rows = self.transition_pair()
+        rows[1]["earlier_worker_texts"] = ["A different incident in another building."]
+        with self.assertRaisesRegex(ValueError, "history"):
+            dataset.validate_rows(rows)
+
+    def test_prompt_uses_saved_time_phrase_and_app_history_format(self):
+        actual = dataset.prompt_user("Actually it was yesterday.", {
+            "date_time": "2026-10-11 ≈10:00 (around 10 AM today)",
+            "description": "Derived description must not enter extraction context",
+        }, ["It happened today."])
+        self.assertEqual('Earlier the worker said: "It happened today."\n'
+                         'Report so far: {"date_time_text":"around 10 AM today"}\n'
+                         'Worker: "Actually it was yesterday."', actual)
+
     def test_committed_corpus_exercises_repeated_updates_to_every_field(self):
         rows = [json.loads(line) for line in (dataset.DEST / "gold.jsonl").read_text().splitlines()]
         sequences = {}

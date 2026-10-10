@@ -1,5 +1,5 @@
 {
-  "gold_sha256": "01dd1ec0b16540681b6efa00b9b324eb70057933b3d73282c8fc4ad97a9e20d1",
+  "gold_sha256": "9e00c787e1c6da572f4f95d28c96fa7091db4a60fbcf9dca366547a3c543f389",
   "raw_inputs_with_all_mandatory_answers": 800,
   "date_and_clock_resolvable_inputs": 800,
   "train": 600,
@@ -7,14 +7,15 @@
   "test": 100,
   "family_split_leakage": 0,
   "e_exact_utterance_overlap": 0,
-  "original_rows_and_splits_preserved": 480,
   "python_tests": {
-    "run": 22,
+    "run": 24,
     "failed": 0
   },
   "app_compatibility": {
     "targets_accepted_by_real_parser": 800,
-    "inputs_match_real_prompt_builder": 800
+    "inputs_match_real_prompt_builder": 800,
+    "history_window": "Up to two actual earlier worker utterances, matching ReportSession",
+    "saved_time_format": "date_time_text with spoken phrase, matching current PromptBuilder"
   },
   "update_coverage": {
     "new_four_turn_sequences": 80,
@@ -26,8 +27,8 @@
     "rows_replacing_previously_saved_values": 178
   },
   "core_tests": {
-    "run": 794,
-    "passed": 793,
+    "run": 877,
+    "passed": 876,
     "failed": 1,
     "failing_test": "SyntheticGoldContractTest.update sequence gold replaces saved fields through the real validator and merge",
     "method": "Fresh compilation of all core production and test Kotlin sources with cached K2 compiler 2.2.0 + serialization plugin 2.2.0, JVM target 17, Java 21 runtime, JUnit 4.13.2; abstract contract base excluded, inherited tests run via concrete classes."
@@ -45,5 +46,13 @@
   "independent_human_adjudication": false,
   "qwen_inference_or_finetuning_run": false,
   "model_accuracy": "not_measured",
-  "training_gate": "blocked pending C review and downstream compatibility resolution; human approval required before training"
+  "training_gate": "blocked pending C review and downstream compatibility resolution; human approval required before training",
+  "original_narratives_labels_saved_states_and_splits_preserved": 480,
+  "deployment_app_revision": "9bf0d36",
+  "tokenizer_context": {
+    "max_total_tokens": 1080,
+    "over_1024": 32,
+    "over_4096": 0
+  },
+  "submission_mirror_behavior": "Dataset tests use JUnit assumptions to skip when the non-mirrored data folder is absent; this is not a review clearance."
 }

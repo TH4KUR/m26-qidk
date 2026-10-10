@@ -1,14 +1,15 @@
 {
   "branch": "origin/e/data-eval",
-  "revision": "2fdd88b3084388d83fc8deb5a6097f768d155f62",
+  "revision": "f525178cc7e013280c1ccffdb018a2df538178e5",
+  "previous_inspected_revision": "2fdd88b3084388d83fc8deb5a6097f768d155f62",
   "files": [
     {
       "path": "app/src/main/assets/eval/gold_v1.jsonl",
       "rows": 40,
       "sha256": "e1f1c009fd00a3d48d5f2e2d22733fb446be4ceb5c9a6f6c998f737fb61c21bb",
       "splits": {
-        "holdout": 13,
-        "dev": 27
+        "dev": 27,
+        "holdout": 13
       },
       "new_exact_utterance_overlaps": 0
     },
@@ -17,11 +18,12 @@
       "rows": 8,
       "sha256": "6edfd738679eb7514f57f8427ca1f10994250cd3be20e4ee8da87547d5e471e3",
       "splits": {
-        "holdout": 2,
-        "dev": 6
+        "dev": 6,
+        "holdout": 2
       },
       "new_exact_utterance_overlaps": 0
     }
   ],
-  "new_gold_sha256": "01dd1ec0b16540681b6efa00b9b324eb70057933b3d73282c8fc4ad97a9e20d1"
+  "new_gold_sha256": "9e00c787e1c6da572f4f95d28c96fa7091db4a60fbcf9dca366547a3c543f389",
+  "audit_note": "Current post-rename benchmark checked in-process; held-out narratives were not displayed or used for authoring. Exact overlap only, no semantic-overlap claim."
 }
