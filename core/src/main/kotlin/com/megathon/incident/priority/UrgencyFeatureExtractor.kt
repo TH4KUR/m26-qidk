@@ -33,6 +33,8 @@ data class UrgencyFeatures(
     val ongoing: Boolean,
     val lowUrgencyStated: Boolean,
     val reasons: List<UrgencyReason>,
+    /** Sounds heard that call for the emergency line on their own (gunshot, fire alarm, screaming...). */
+    val dangerSignals: List<String> = emptyList(),
 )
 
 /**
@@ -139,6 +141,7 @@ class UrgencyFeatureExtractor(
         }
 
         // ---- sound and emotion signals: only ever raise --------------------------------------
+        val dangerSignals = mutableListOf<String>()
         for (sig in input.signals) {
             when (sig.kind) {
                 "event" -> {
@@ -146,7 +149,10 @@ class UrgencyFeatureExtractor(
                     val def = cfg.signals.firstOrNull { d -> d.matches.any { label.contains(it) } } ?: continue
                     impact = maxOf(impact, def.minImpact)
                     immediacy = maxOf(immediacy, def.minImmediacy)
-                    if (def.minImmediacy >= 4) ongoing = true
+                    if (def.minImmediacy >= 4) {
+                        ongoing = true
+                        if (def.label !in dangerSignals) dangerSignals += def.label
+                    }
                     reasons += UrgencyReason("${def.label} heard → impact ≥ ${def.minImpact}, immediacy ≥ ${def.minImmediacy}", sig.source)
                 }
                 "emotion" -> if (cfg.distressEmotions.any { sig.label.equals(it, ignoreCase = true) }) {
@@ -174,6 +180,7 @@ class UrgencyFeatureExtractor(
             ongoing = ongoing,
             lowUrgencyStated = lowUrgency,
             reasons = reasons,
+            dangerSignals = dangerSignals,
         )
     }
 
