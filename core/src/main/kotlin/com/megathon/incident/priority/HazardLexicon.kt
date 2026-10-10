@@ -13,6 +13,8 @@ data class HazardDef(
     val notWhen: List<String> = emptyList(),
     /** In present or unknown tense this hazard is happening now (fire, gas, an armed robber). */
     val presentIsOngoing: Boolean = false,
+    /** The hazard is itself about people (a fight, an injury), so a people cue must not add +1 again. */
+    val peopleIntrinsic: Boolean = false,
 )
 
 /** A hazard that only counts when a required hazard and one of [andAnyOf] share a clause. */
@@ -23,6 +25,7 @@ data class CompoundDef(
     val andAnyOf: List<String>,
     val impact: Int,
     val forceOngoing: Boolean = false,
+    val peopleIntrinsic: Boolean = false,
 )
 
 /** A sound event (YamNet) raising the minimum impact and immediacy. Never lowers anything. */

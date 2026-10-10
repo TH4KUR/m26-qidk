@@ -150,4 +150,21 @@ class UrgencyFeatureExtractorTest {
     }
 
     @Test fun hindiNegatedFire() = assertFalse("fire" in labels("aag nahi lagi hai, sirf paani leak hai"))
+
+    @Test fun becameUnconsciousIsNotTreatedAsResolved() {
+        // "ho gaya" means it happened; it must not read as "it is over".
+        val r = f("ek aadmi behosh ho gaya hai")
+        assertEquals(5, r.impact)
+        assertTrue(r.immediacy >= 3, "immediacy was ${r.immediacy}")
+    }
+
+    @Test fun peopleInherentToTheHazardAreNotCountedAgain() {
+        // A fight is about people; the people cue must not add another +1.
+        assertEquals(3, f("two people are fighting in the canteen").impact)
+    }
+
+    @Test fun hangingWireIsAHazard() =
+        assertTrue(f("a wire is hanging from the ceiling near the staircase").impact >= 3)
+
+    @Test fun devanagariLeakWordIsRecognised() = assertTrue("leak" in labels("थोड़ा पानी लीक हो रहा है"))
 }

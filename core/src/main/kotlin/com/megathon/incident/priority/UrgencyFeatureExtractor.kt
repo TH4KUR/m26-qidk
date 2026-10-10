@@ -50,7 +50,10 @@ class UrgencyFeatureExtractor(
     private data class Piece(val text: String, val tam: Tam)
 
     /** A hazard family hit, or a compound built from one. */
-    private data class Found(val label: String, val impact: Int, val phrase: String, val presentIsOngoing: Boolean, val forceOngoing: Boolean)
+    private data class Found(
+        val label: String, val impact: Int, val phrase: String,
+        val presentIsOngoing: Boolean, val forceOngoing: Boolean, val peopleIntrinsic: Boolean,
+    )
 
     private data class ScannedPiece(val tam: Tam, val negated: Boolean, val found: List<Found>)
 
@@ -81,7 +84,7 @@ class UrgencyFeatureExtractor(
                 if (CueMatching.find(CueMatching.mask(t, low), cfg.distressCues).isNotEmpty()) distress = true
             }
             val found = if (negated) emptyList() else {
-                val base = raw.map { Found(it.def.label, it.def.impact, it.phrase, it.def.presentIsOngoing, false) }
+                val base = raw.map { Found(it.def.label, it.def.impact, it.phrase, it.def.presentIsOngoing, false, it.def.peopleIntrinsic) }
                 base + compoundHits(t, raw.map { it.def.label })
             }
             ScannedPiece(p.tam, negated, found)
@@ -121,7 +124,10 @@ class UrgencyFeatureExtractor(
             }
         }
 
-        if (peopleAtRisk && impact in 3..4) {
+        val topImpact = scanned.flatMap { it.found }.maxOfOrNull { it.impact } ?: 0
+        val peopleAreInherent = topImpact > 0 &&
+            scanned.flatMap { it.found }.filter { it.impact == topImpact }.all { it.peopleIntrinsic }
+        if (peopleAtRisk && !peopleAreInherent && impact in 3..4) {
             impact += 1
             reasons += UrgencyReason("people may be at risk → impact +1", Source.TEXT_CUE)
         }
@@ -176,7 +182,6 @@ class UrgencyFeatureExtractor(
         val base = when {
             tam.aspect == Aspect.ONGOING -> 4
             tam.modality == Modality.PLANNED || tam.tense == Tense.FUTURE -> if (h.impact <= 1) 2 else 3
-            tam.aspect == Aspect.COMPLETED -> 2
             tam.tense == Tense.PAST -> if (resolved || h.impact <= 2) 2 else 3
             h.presentIsOngoing -> 4
             else -> if (h.impact <= 2) 2 else 3
@@ -201,7 +206,7 @@ class UrgencyFeatureExtractor(
         cfg.compounds.mapNotNull { c ->
             if (c.requires.none { it in presentLabels }) return@mapNotNull null
             CueMatching.find(t, c.andAnyOf).firstOrNull()
-                ?.let { Found(c.label, c.impact, it.phrase, presentIsOngoing = false, forceOngoing = c.forceOngoing) }
+                ?.let { Found(c.label, c.impact, it.phrase, presentIsOngoing = false, forceOngoing = c.forceOngoing, peopleIntrinsic = c.peopleIntrinsic) }
         }
 
     /** TAM clauses, further split at commas so negation stays local ("no fire, only smoke"). */
