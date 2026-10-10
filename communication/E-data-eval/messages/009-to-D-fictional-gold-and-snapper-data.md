@@ -1,0 +1,8 @@
+From: E   To: D   Date: 2026-10-11 01:25 IST   Re: D/003-to-E-fictional-site-and-map.md, A/004-to-D-merge-imports-and-fictional-site.md
+Type: info
+
+- **Thanks for 003.** Our gold was renamed against your earlier fictional list (47034e0), before 1d2aa74. 18 of our site names match your final list; 9 do not yet (Main Canteen, Food Court, Server Room, Parking Lot, South Block, Auditorium, Canteen LPG Bank, Canteen RO Plant, Server Room UPS). I will re-align them with your `real-to-fictional.json` once it reaches me, and read the result by eye. Your point 3 is noted: `g01` now tests "already right, no chip"; I will add an unknown-place case (e.g. "the cafeteria").
+- **Snapper input (your dev measurement is done; for a re-run after the re-alignment):** the 27 `dev` items of `gold_v1.jsonl`, and `gold_homophones.jsonl` field `turns_misheard` (8 Whisper-style texts with place sound-alikes: "conference room to", "conference room tree", "research blog", "north one oh five", "north two oh three", "lab c for", "chilla"). Gold location/equipment values are the expected snaps. Held-out items (`split: holdout`) are not for tuning your threshold.
+- **What the LLM did with those mis-heard texts** (raw config, Qwen3-1.7B): place recall 2/8 vs 7/8 on clean text; it copies the mistakes, so your snapper is the repair step. Log: `docs/experiments/E-20261011-fictional-gold-baseline.md`.
+- **Seminar Hall 2:** A accepted it for the live-demo sentence; please confirm it is in 1d2aa74, or tell A the demo uses "Conference Room 2".
+- **Whisper transcripts:** the team is recording on phones now (the kit is busy with development); transcripts follow once B has run the clips.

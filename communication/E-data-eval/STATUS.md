@@ -1,25 +1,20 @@
 # Status: agent E (data, evaluation, pitch)
 
 Owner: agent E only. Overwrite this file freely; it is a snapshot, not a log.
-Last updated: 2026-10-11 00:45 IST
-Read up to: A=000 B=000 C=004 D=000 (also legacy `docs/messages/lead-to-E.md` incl. the 00:35 demo-only names note, `AtoB.md` on master)
+Last updated: 2026-10-11 01:25 IST
+Read up to: A=005 B=007 C=004 D=003
 
 ## Doing now
-- Paused for replies to messages 002–006. Next on `e/data-eval`, in this order: switch committed eval data to the fictional site list (lead 00:35 decision), recordings with A, model runs on a GPU, M2 draft by 03:00.
+- Phone recordings by the team (the kit is busy with development); then re-align 9 site names with D's map, M2 draft (due 03:00).
 
-## Done and ready for others (with file/commit) — branch `e/data-eval`, head `164c8aa`
-- Gold set `app/src/main/assets/eval/gold_v1.jsonl` (40: 27 dev, 13 held out) and `gold_homophones.jsonl` (8 sound-alike items, clean + mis-heard text). Source: `tools/laptop_eval/build_gold.py`. Rules: `docs/eval-guide.md`.
-- Recording plan: `docs/recording-sheets.md` + `app/src/main/assets/eval/manifest.jsonl` (50 clips: S1–S5 x 8, plus 10 Hindi/Telugu; uses B's `clip_id/wav/reference` keys).
-- Scorers: `tools/laptop_eval/score.py` (precision, recall, hallucination per field, Wilson CI, counts always shown), `wer.py` (WER/CER, B's normalisation); Kotlin `core/.../eval/EvalScorer.kt` (same 29 shared cases in `core/src/test/resources/fixtures/eval/scorer_cases.jsonl`).
-- `core/.../testing/FakePipelineRunner.kt` + `PipelineRunner` interface for the Judge Bench screen (reads `predictions.jsonl`).
-- LLM runner `tools/laptop_eval/run_eval.py` + `prompts/` (system prompt, grammar schema v2). Parser port `parse.py` matches C's `ToolCallParser` on C's fixtures.
-- Experiment logs: `docs/experiments/E-20261011-llm-contest-r1.md`, `E-20261011-homophones-and-schema.md`.
-- Tests: Python 95 passing; Kotlin 504 passing (run on an export of `b/speech-engines` + my files).
+## Done and ready for others (with file/commit) — branch `e/data-eval` (push pending, see 007)
+- **Gold on fictional names** (decision 00:35; 9 names still to re-align with D's final list 1d2aa74 via D's map): `app/src/main/assets/eval/gold_v1.jsonl` (40: 27 dev, 13 held out), `gold_homophones.jsonl` (8, clean + mis-heard), `manifest.jsonl` (50 clips), `docs/recording-sheets.md`. Old run outputs with real names deleted; a test scans every mirrored eval file against master's scan list (96 Python tests pass with both lists).
+- **Baseline to cite:** `docs/experiments/E-20261011-fictional-gold-baseline.md` (Qwen3-1.7B, laptop CPU, gold text): grammar v2 valid calls 20/20, recall 76/98, mandatory recall 56/61, hallucination 17/62; free decoding valid 6/20, recall 28/98.
+- Scorers (Python `score.py`, `wer.py`; Kotlin `eval/EvalScorer.kt`), `testing/FakePipelineRunner.kt`, runner `run_eval.py`, grammar schema v2, parser port matching C's `ToolCallParser`.
 
 ## Blocked on / waiting for
-- A: merge of B + C into `master` (my Kotlin needs C's types and B's `testing.Compute`); push of `a/stubs` (Judge Bench should replay through A's `Pipeline` + `ReplayLlmEngine`); a kit slot for recordings; GPU access (002).
-- A + C: one rule for undated past times (003).
+- App session: push of `a/stubs` (Judge Bench replays through its `Pipeline` + `ReplayLlmEngine`); a 16 kHz recording route (tinycap numbers or app recorder) and the demo mic.
+- User: GPU logins (A 005 #3); teammates for phone recordings now, a second human labeller and a native Hindi reader for C.
 
 ## Needs from others
-- A: 002. B: 004. C: 005. D: 006.
-- The user: a second human labeller and a native Hindi reader for C (names stay out of the repo).
+- D: `real-to-fictional.json` off-repo (D 003, item 2).
