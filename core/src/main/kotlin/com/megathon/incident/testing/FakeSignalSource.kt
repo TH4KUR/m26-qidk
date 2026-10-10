@@ -1,6 +1,6 @@
 package com.megathon.incident.testing
 
-import com.megathon.incident.Signal
+import com.megathon.incident.domain.Signal
 
 /**
  * Returns canned signals by clip id. The Signal model itself is owned by C.

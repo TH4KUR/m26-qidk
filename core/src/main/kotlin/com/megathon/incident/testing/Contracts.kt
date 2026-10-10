@@ -1,6 +1,6 @@
 package com.megathon.incident.testing
 
-import com.megathon.incident.Signal
+import com.megathon.incident.domain.Signal
 
 enum class Compute {
     NPU,
