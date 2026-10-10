@@ -2,6 +2,7 @@ package com.megathon.incident.priority
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.text.Normalizer
 
 /** One hazard family. [impact] is 1..5; phrases are lower-case English, romanised Hindi or Devanagari. */
 @Serializable
@@ -51,7 +52,20 @@ class HazardLexicon(val file: LexiconFile) {
         private val json = Json { ignoreUnknownKeys = true }
         private const val DEFAULT_RESOURCE = "/priority/hazards.json"
 
-        fun fromJson(document: String) = HazardLexicon(json.decodeFromString(LexiconFile.serializer(), document))
+        private fun nfc(s: String) = Normalizer.normalize(s, Normalizer.Form.NFC).lowercase()
+        private fun List<String>.nfc() = map { nfc(it) }
+
+        /** Phrases are NFC-normalised so nukta and matra spellings of the same word compare equal. */
+        private fun LexiconFile.normalized() = copy(
+            hazards = hazards.map { it.copy(phrases = it.phrases.nfc(), notWhen = it.notWhen.nfc()) },
+            compounds = compounds.map { it.copy(andAnyOf = it.andAnyOf.nfc()) },
+            peopleCues = peopleCues.nfc(), resolutionCues = resolutionCues.nfc(), lowUrgencyCues = lowUrgencyCues.nfc(),
+            distressCues = distressCues.nfc(),
+            signals = signals.map { it.copy(matches = it.matches.nfc()) },
+        )
+
+        fun fromJson(document: String) =
+            HazardLexicon(json.decodeFromString(LexiconFile.serializer(), document).normalized())
 
         fun loadDefault(): HazardLexicon {
             val stream = HazardLexicon::class.java.getResourceAsStream(DEFAULT_RESOURCE)

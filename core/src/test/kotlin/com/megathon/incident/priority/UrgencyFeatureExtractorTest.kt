@@ -184,5 +184,20 @@ class UrgencyFeatureExtractorTest {
     @Test fun suspiciousPersonIsNotBoostedForBeingAPerson() =
         assertEquals(3, f("there is a suspicious person near the parking lot").impact)
 
+    @Test fun aheadIsNotFire() = assertFalse("fire" in labels("आगे जाकर बाएं मुड़ो"))
+
+    @Test fun outOfControlFireIsNotReportedAsResolved() {
+        val r = f("आग बेकाबू है")
+        assertFalse(r.resolved)
+        assertEquals(5, r.impact)
+    }
+
+    @Test fun nuktaVariantsOfTheSameWordBothMatch() {
+        val precomposed = "तेज़ाब गिरा है"   // तेज़ाब with U+095B
+        val decomposed = "तेज़ाब गिरा है" // ज + nukta
+        assertTrue("chemical" in labels(precomposed), labels(precomposed).toString())
+        assertTrue("chemical" in labels(decomposed), labels(decomposed).toString())
+    }
+
     @Test fun devanagariLeakWordIsRecognised() = assertTrue("leak" in labels("थोड़ा पानी लीक हो रहा है"))
 }

@@ -2,6 +2,7 @@ package com.megathon.incident.tam
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.text.Normalizer
 
 @Serializable
 internal data class CueFile(
@@ -44,7 +45,7 @@ data class TamCueLists(
 
         fun fromJson(vararg documents: String): TamCueLists {
             val files = documents.map { json.decodeFromString(CueFile.serializer(), it) }
-            fun merged(pick: (CueFile) -> List<String>) = files.flatMap(pick).map { it.lowercase().trim() }.filter { it.isNotEmpty() }.distinct()
+            fun merged(pick: (CueFile) -> List<String>) = files.flatMap(pick).map { Normalizer.normalize(it, Normalizer.Form.NFC).lowercase().trim() }.filter { it.isNotEmpty() }.distinct()
             return TamCueLists(
                 ongoing = merged { it.ongoing }, progressive = merged { it.progressive }, completed = merged { it.completed }, planned = merged { it.planned },
                 hedged = merged { it.hedged }, negated = merged { it.negated }, past = merged { it.past },

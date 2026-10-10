@@ -45,7 +45,7 @@ enum class ValueStatus { MISSING, UNKNOWN, EXPLICIT_NONE, REPORTED, SUGGESTED, U
 
 /** Where a signal, suggestion or reason came from; shown on every chip (spec §4b). */
 @Serializable
-enum class Source { TEXT_CUE, SENSEVOICE, YAMNET, GAZETTEER, RULE }
+enum class Source { TEXT_CUE, SENSEVOICE, YAMNET, GAZETTEER, RULE, LLM }
 
 @Serializable
 data class FieldValue(
@@ -110,3 +110,38 @@ enum class Priority { LOW, MEDIUM, HIGH, URGENT }
 
 @Serializable
 data class PriorityAdvice(val level: Priority, val reasons: List<String>, val overriddenByUser: Boolean = false)
+
+/** What happened to a field. The original value is always kept in [JournalEntry.before]. */
+@Serializable
+enum class JournalKind { HEARD, CORRECTED, SUGGESTION_ACCEPTED, SUGGESTION_REJECTED, USER_EDITED }
+
+/**
+ * One append-only change to a field (spec D16: "the original stays in the journal").
+ * Type owned by C; the logic that appends entries and the storage that persists them are D's.
+ */
+@Serializable
+data class JournalEntry(
+    val atEpochMs: Long,
+    val field: Field,
+    val kind: JournalKind,
+    val before: FieldValue,
+    val after: FieldValue,
+    /** Set for SUGGESTION_ACCEPTED / SUGGESTION_REJECTED so the same chip is not offered again. */
+    val suggestion: Suggestion? = null,
+)
+
+/** The report plus its change journal. Pending chips are not stored: `suggest()` is recomputed. */
+@Serializable
+data class ReportState(val report: IncidentReport, val journal: List<JournalEntry> = emptyList()) {
+    fun record(entry: JournalEntry): ReportState = copy(journal = journal + entry)
+
+    /** True when this exact chip was already accepted or rejected, so it must not reappear. */
+    fun hasDecided(s: Suggestion): Boolean = journal.any {
+        (it.kind == JournalKind.SUGGESTION_ACCEPTED || it.kind == JournalKind.SUGGESTION_REJECTED) &&
+            it.suggestion?.let { x -> x.field == s.field && x.original == s.original && x.proposed == s.proposed } == true
+    }
+
+    companion object {
+        fun empty(id: String, nowEpochMs: Long) = ReportState(IncidentReport.empty(id, nowEpochMs))
+    }
+}
