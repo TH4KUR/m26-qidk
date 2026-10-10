@@ -57,12 +57,12 @@ def build_messages(system: str, fields: dict, utterance: str, no_think: bool = F
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
-def run_items(items: list[dict], complete, system: str, no_think: bool = False):
+def run_items(items: list[dict], complete, system: str, no_think: bool = False, turns_key: str = "turns"):
     raw_log, predictions = [], []
     for item in items:
         fields: dict = {}
         captured_at = datetime.now(IST).isoformat(timespec="seconds")
-        for turn, utterance in enumerate(item["turns"]):
+        for turn, utterance in enumerate(item[turns_key]):
             res = complete(build_messages(system, fields, utterance, no_think))
             parsed = parse(res["text"])
             if parsed.ok:
@@ -103,6 +103,8 @@ def main() -> None:
     ap.add_argument("--grammar", action="store_true", help="constrain decoding with prompts/update_report.schema.json")
     ap.add_argument("--no-think", action="store_true", help="Qwen3: append /no_think and disable thinking")
     ap.add_argument("--max-tokens", type=int, default=320)
+    ap.add_argument("--variant", choices=["clean", "misheard"], default="clean",
+                    help="misheard: feed turns_misheard (homophone set) to test recovery from context")
     args = ap.parse_args()
 
     items = [json.loads(l) for l in Path(args.gold).read_text(encoding="utf-8").splitlines() if l.strip()]
@@ -114,10 +116,12 @@ def main() -> None:
     complete = llama_server(args.server, args.max_tokens, schema, enable_thinking=not args.no_think)
     system = Path(args.prompt).read_text(encoding="utf-8")
 
-    run_id = f"{datetime.now(IST):%Y%m%d-%H%M}-{args.model}-{'grammar' if args.grammar else 'free'}-{args.split}"
+    run_id = (f"{datetime.now(IST):%Y%m%d-%H%M}-{args.model}-{'grammar' if args.grammar else 'free'}-{args.split}"
+              f"-{Path(args.gold).stem}-{args.variant}")
     out = HERE / "runs" / run_id
     out.mkdir(parents=True, exist_ok=True)
-    raw_log, preds = run_items(items, complete, system, args.no_think)
+    raw_log, preds = run_items(items, complete, system, args.no_think,
+                               "turns_misheard" if args.variant == "misheard" else "turns")
     summary = score(items, preds)
     parse_ok = sum(r["parse_code"] is None for r in raw_log)
     toks = [r["completion_tokens"] for r in raw_log if r["completion_tokens"] is not None]

@@ -11,11 +11,12 @@ from score import FIELDS, FILLED, MANDATORY
 
 REPO = Path(__file__).resolve().parents[2]
 GOLD = REPO / "app/src/main/assets/eval/gold_v1.jsonl"
+HOMOPHONES = REPO / "app/src/main/assets/eval/gold_homophones.jsonl"
 INCIDENT_TYPES = {"water_leak_flood", "fire_smoke", "electrical", "spill_chemical", "injury", "illness", "near_miss",
                   "property_damage", "equipment_failure", "security", "environmental", "other"}
 SEVERITIES = {"none", "minor", "moderate", "severe", "critical"}
 STATUSES = {"MISSING", "UNKNOWN", "EXPLICIT_NONE", "REPORTED", "SUGGESTED"}
-SOURCES = {"handwritten", "broad", "osha", "multiturn"}
+SOURCES = {"handwritten", "broad", "osha", "multiturn", "homophone"}
 
 
 @pytest.fixture(scope="module")
@@ -46,7 +47,7 @@ def test_every_slot_is_well_formed(items):
             assert st in STATUSES, (it["id"], f)
             if st in FILLED | {"SUGGESTED"}:
                 if f == "date_time":
-                    assert any(slot.get(k) is not None for k in ("time", "part_of_day", "minutes_ago", "date_offset_days")), it["id"]
+                    assert slot.get("vague") or any(slot.get(k) is not None for k in ("time", "part_of_day", "minutes_ago", "date_offset_days")), it["id"]
                     assert slot.get("text"), it["id"]
                 else:
                     v = slot["value"]
@@ -91,5 +92,41 @@ def test_no_blindcheck_words(items):
     words = REPO / "tools/blindcheck.words"
     patterns = [l.strip() for l in words.read_text(encoding="utf-8").splitlines() if l.strip() and not l.lstrip().startswith("#")]
     text = GOLD.read_text(encoding="utf-8")
+    for p in patterns:
+        assert not re.search(p, text, re.IGNORECASE), p
+
+
+@pytest.fixture(scope="module")
+def homophones():
+    return [json.loads(l) for l in HOMOPHONES.read_text(encoding="utf-8").splitlines() if l.strip()]
+
+
+def test_homophone_set_is_well_formed(homophones):
+    test_every_slot_is_well_formed(homophones)
+    test_missing_mandatory_matches_gold_for_single_turn_items(homophones)
+    assert len(homophones) >= 8
+    for it in homophones:
+        assert it["source"] == "homophone"
+        assert len(it["turns_misheard"]) == len(it["turns"]), it["id"]
+        assert it["turns_misheard"] != it["turns"], it["id"]
+
+
+def test_homophone_set_covers_the_requested_confusions(homophones):
+    misheard = " ".join(t for it in homophones for t in it["turns_misheard"]).lower()
+    for word in ("last weak", "miner", "fair alarm", "leek", "for people", "to chairs", "chilla"):
+        assert word in misheard, word
+
+
+def test_gold_uses_site_canonical_names_somewhere(items, homophones):
+    text = json.dumps(items + homophones)
+    for name in ("Seminar Hall 2", "Vindhya C4", "Himalaya 305", "Kohli Research Block", "Kadamba Mess",
+                 "Yuktahar", "Bakul Nivas", "Parijaat", "Palash Nivas", "Aarogya Centre", "chiller"):
+        assert name in text, name
+
+
+def test_homophone_file_has_no_blindcheck_words():
+    words = REPO / "tools/blindcheck.words"
+    patterns = [l.strip() for l in words.read_text(encoding="utf-8").splitlines() if l.strip() and not l.lstrip().startswith("#")]
+    text = HOMOPHONES.read_text(encoding="utf-8")
     for p in patterns:
         assert not re.search(p, text, re.IGNORECASE), p

@@ -1,8 +1,9 @@
 """Source of the gold set. Edit the items here, then run:  python3 build_gold.py
 It writes app/src/main/assets/eval/gold_v1.jsonl (labelling rules: docs/eval-guide.md).
 
-Campus place names are PLACEHOLDERS until D's site.json exists: every one is in SITE_NAMES so a
-single swap keeps the gold, the recording sheets and the gazetteer in step.
+Campus place names follow D's site.json (core/src/main/resources/site/site.json on d/core-suggestions):
+the spoken words may use an alias ("Old Boys Hostel"), and the canonical name is always in `alts`, so a
+snapped suggestion scores as correct.
 OSHA items are first-person spoken rewrites of Simar123456/spectra-osha-sir (test split); the
 source record id is kept in "source_ref".
 """
@@ -15,12 +16,8 @@ from pathlib import Path
 from score import FIELDS, MANDATORY
 
 OUT = Path(__file__).resolve().parents[2] / "app/src/main/assets/eval/gold_v1.jsonl"
+OUT_HOMOPHONES = OUT.with_name("gold_homophones.jsonl")
 
-# Placeholder campus names (verify against site.json; D owns the real list).
-SITE_NAMES = ["Kadamba Mess", "Himalaya building", "H-105", "Vindhya", "Kohli Research Block", "KRB", "Bakul Nivas",
-              "Old Boys Hostel", "Yuktahar mess", "Felicity Ground", "Nilgiri", "North mess", "Palash Nivas",
-              "Parijaat Nivas", "Amphitheatre", "admin block", "library", "makerspace", "health centre",
-              "sports complex", "campus store"]
 
 
 # ---- slot helpers --------------------------------------------------------------------------
@@ -50,19 +47,22 @@ def unk():
     return {"status": "UNKNOWN"}
 
 
-def dt(text, time=None, day=None, pod=None, approx=False, minutes_ago=None, status="REPORTED"):
+def dt(text, time=None, day=None, pod=None, approx=False, minutes_ago=None, status="REPORTED", vague=False):
     """day: date offset vs capture (0 today, -1 yesterday, None = no day said: C keeps the date missing)."""
     slot = {"status": status, "date_offset_days": day, "time": time, "part_of_day": pod,
             "approximate": approx, "text": text}
     if minutes_ago is not None:
         slot["minutes_ago"] = minutes_ago
+    if vague:  # said, but no resolvable date or time ("last week"): the app keeps both missing and asks
+        slot["vague"] = True
     return slot
 
 
 ITEMS: list[dict] = []
+HOMOPHONE_ITEMS: list[dict] = []
 
 
-def item(id_, source, turns, tags=(), missing=None, source_ref=None, **fields):
+def item(id_, source, turns, tags=(), missing=None, source_ref=None, misheard=None, **fields):
     gold = {f: fields.get(f, {"status": "MISSING"}) for f in FIELDS}
     if missing is None:
         missing = [f for f in MANDATORY if gold[f]["status"] not in ("REPORTED", "USER_CONFIRMED", "USER_EDITED")]
@@ -70,7 +70,9 @@ def item(id_, source, turns, tags=(), missing=None, source_ref=None, **fields):
            "gold": gold, "missing_mandatory": missing, "tags": list(tags)}
     if source_ref:
         row["source_ref"] = source_ref
-    ITEMS.append(row)
+    if misheard:
+        row["turns_misheard"] = list(misheard)
+    (HOMOPHONE_ITEMS if source == "homophone" else ITEMS).append(row)
 
 
 DECK = "There was a water leak near Conference Room 2 around 10 AM. Maintenance has already isolated the area."
@@ -94,9 +96,9 @@ item("g03", "handwritten",
      ["Hi, the lift in Himalaya building is stuck between the first and second floor since around 3:30 this afternoon. "
       "Two students were inside, Arjun and Meera, they're out now. Security called the lift technician."],
      ["ongoing"],
-     incident_type=v("equipment_failure"), location=v("Himalaya building", "Himalaya building lift"),
+     incident_type=v("equipment_failure"), location=v("Himalaya building", "Himalaya Block", "Himalaya"),
      date_time=dt("around 3:30 this afternoon", "15:30", day=0, approx=True),
-     persons_involved=names("Arjun", "Meera"), equipment_asset=v("lift", "elevator"),
+     persons_involved=names("Arjun", "Meera"), equipment_asset=v("lift", "Himalaya Lift", "elevator"),
      immediate_actions=v("called the lift technician", "security called the lift technician"))
 
 item("g04", "handwritten",
@@ -112,7 +114,7 @@ item("g05", "handwritten",
       "We opened the windows and put the spill kit on it. Priya was handling it, she's fine. It's moderate, the lab is closed now."],
      ["relative_time", "trap_equipment"],
      incident_type=v("spill_chemical"), severity=v("moderate"),
-     location=v("fourth floor lab of Kohli Research Block", "Kohli Research Block fourth floor lab", "KRB fourth floor lab"),
+     location=v("fourth floor lab of Kohli Research Block", "Kohli Research Block fourth floor lab", "KRB fourth floor lab", "Kohli Research Block"),
      date_time=dt("About ten minutes ago", approx=True, minutes_ago=10), persons_involved=names("Priya"),
      immediate_actions=v("opened the windows and put the spill kit on it"))
 
@@ -135,7 +137,7 @@ item("g08", "handwritten",
      ["My bicycle was stolen from the cycle stand outside the Old Boys Hostel last night. "
       "I've told the security guard at the main gate."],
      ["relative_time"],
-     incident_type=v("security"), location=v("cycle stand outside the Old Boys Hostel", "Old Boys Hostel"),
+     incident_type=v("security"), location=v("cycle stand outside the Old Boys Hostel", "Old Boys Hostel", "Palash Nivas"),
      date_time=dt("last night", day=-1, pod="night", approx=True), equipment_asset=v("bicycle"),
      immediate_actions=v("told the security guard at the main gate"))
 
@@ -143,7 +145,7 @@ item("g09", "handwritten",
      ["There's a strong gas smell behind Yuktahar mess near the gas cylinders, since maybe half an hour. "
       "I think it's a leak. Nobody has gone near it yet."],
      ["hedged", "relative_time"],
-     incident_type=v("spill_chemical", "environmental"), location=v("behind Yuktahar mess"),
+     incident_type=v("spill_chemical", "environmental"), location=v("behind Yuktahar mess", "Yuktahar Mess"),
      date_time=dt("since maybe half an hour", approx=True, minutes_ago=30, status="SUGGESTED"),
      equipment_asset=v("gas cylinders"))
 
@@ -168,10 +170,10 @@ item("g11", "broad",
      immediate_actions=v("cut the power to the rack"))
 
 item("g12", "broad",
-     ["A visitor fainted at the reception desk in the admin block about five minutes ago. She's conscious now and sitting down. "
+     ["A visitor fainted at the front desk of the Academic Office about five minutes ago. She's conscious now and sitting down. "
       "Ravi from the front office saw it happen, and we've called the campus doctor."],
      ["relative_time"],
-     incident_type=v("illness"), location=v("reception desk in the admin block", "admin block reception"),
+     incident_type=v("illness"), location=v("front desk of the Academic Office", "Academic Office"),
      date_time=dt("about five minutes ago", approx=True, minutes_ago=5), witnesses=names("Ravi"),
      immediate_actions=v("called the campus doctor"))
 
@@ -179,7 +181,7 @@ item("g13", "broad",
      ["A delivery van reversed out of the parking lot near the main gate without looking and nearly hit a security guard, "
       "around 6:45 this evening. The guard is okay. I noted down the van number."],
      [],
-     incident_type=v("near_miss"), location=v("parking lot near the main gate"),
+     incident_type=v("near_miss"), location=v("parking lot near the main gate", "Main Gate"),
      date_time=dt("around 6:45 this evening", "18:45", day=0, approx=True), equipment_asset=v("delivery van", "van"),
      immediate_actions=v("noted down the van number"))
 
@@ -187,7 +189,7 @@ item("g14", "broad",
      ["Oil caught fire in a pan in the North mess kitchen at lunch, around 1 PM. The cook, Suresh, put it out with the fire blanket. "
       "Nobody was hurt, just a lot of smoke."],
      ["negation", "named_but_unhurt"],
-     incident_type=v("fire_smoke"), location=v("North mess kitchen"),
+     incident_type=v("fire_smoke"), location=v("North mess kitchen", "Palash Mess", "North mess"),
      date_time=dt("around 1 PM", "13:00", approx=True), persons_involved=names("Suresh"),
      equipment_asset=v("pan"), immediate_actions=v("put it out with the fire blanket"))
 
@@ -206,10 +208,10 @@ item("g16", "broad",
      date_time=dt("at 8:10 PM", "20:10"), equipment_asset=v("vending machine"), witnesses=names("Meera"))
 
 item("g17", "broad",
-     ["The 3D printer in the makerspace overheated and the nozzle has melted. I noticed it when I came in at 9 this morning, "
+     ["The 3D printer in Himalaya 305 overheated and the nozzle has melted. I noticed it when I came in at 9 this morning, "
       "it was left running overnight. I've unplugged it."],
      [],
-     incident_type=v("equipment_failure"), location=v("makerspace"),
+     incident_type=v("equipment_failure"), location=v("Himalaya 305", "H-305"),
      date_time=dt("at 9 this morning", "09:00", day=0), equipment_asset=v("3D printer"),
      immediate_actions=v("unplugged it"))
 
@@ -221,10 +223,10 @@ item("g18", "broad",
      equipment_asset=v("water tank"))
 
 item("g19", "broad",
-     ["I think the fire alarm went off in Parijaat Nivas, maybe the second floor, around 11:30 PM. Everyone came out. "
+     ["I think the fire alarm went off in New Parijaat, maybe the second floor, around 11:30 PM. Everyone came out. "
       "I'm not sure if there was actual smoke."],
      ["hedged"],
-     incident_type=v("fire_smoke"), location=sug("second floor of Parijaat Nivas", "Parijaat Nivas"),
+     incident_type=v("fire_smoke"), location=sug("second floor of New Parijaat", "New Parijaat Nivas", "New Parijaat"),
      date_time=dt("around 11:30 PM", "23:30", approx=True), equipment_asset=v("fire alarm"))
 
 item("g20", "broad",
@@ -276,10 +278,10 @@ item("g25", "osha",
      equipment_asset=v("lamp", "lamp cord"), immediate_actions=v("applying pressure with a towel"))
 
 item("g26", "osha",
-     ["A staff member fell near the sales counter of the campus store and hit her head on the counter. "
+     ["A staff member fell near the counter of the stationery shop and hit her head on the counter. "
       "She has a cut above her eye. It happened at 11 this morning. We cleaned the wound with the first aid kit."],
      [], source_ref="2023010014",
-     incident_type=v("injury"), location=v("sales counter of the campus store", "campus store"),
+     incident_type=v("injury"), location=v("counter of the stationery shop", "Kadamb Stationery Shop", "stationery shop"),
      date_time=dt("at 11 this morning", "11:00", day=0), immediate_actions=v("cleaned the wound with the first aid kit"))
 
 item("g27", "osha",
@@ -294,7 +296,7 @@ item("g28", "osha",
      ["A patient in the health centre pushed one of our nurses, Lakshmi, and she fell and hit her head. She seems dizzy. "
       "This was at 8:30 tonight. The guard has calmed the patient down now."],
      [], source_ref="2023010065",
-     incident_type=v("injury", "security"), location=v("health centre"),
+     incident_type=v("injury", "security"), location=v("health centre", "Aarogya Centre"),
      date_time=dt("at 8:30 tonight", "20:30", day=0), persons_involved=names("Lakshmi"),
      immediate_actions=v("calmed the patient down", "the guard has calmed the patient down"))
 
@@ -322,10 +324,10 @@ item("g31", "osha",
      equipment_asset=v("bulk bags"), immediate_actions=v("calling the ambulance"))
 
 item("g32", "osha",
-     ["While we were removing an old electric pole near the sports complex, the power lines touched Naveen's hands. "
+     ["While we were removing an old electric pole near the Football Ground, the power lines touched Naveen's hands. "
       "He got a shock and burns on both hands. This was at 4:40 PM. The power company has cut the supply."],
      [], source_ref="2023010083",
-     incident_type=v("electrical", "injury"), location=v("near the sports complex", "sports complex"),
+     incident_type=v("electrical", "injury"), location=v("near the Football Ground", "Football Ground"),
      date_time=dt("at 4:40 PM", "16:40"), persons_involved=names("Naveen"),
      equipment_asset=v("power lines", "electric pole"), immediate_actions=v("cut the supply", "the power company has cut the supply"))
 
@@ -345,15 +347,15 @@ item("g35", "multiturn",
      ["The projector in H-105 caught fire at ten, no wait, half past ten this morning. I used the extinguisher.",
       "It's moderate, nobody was hurt."],
      ["correction", "negation"], missing=["severity"],
-     incident_type=v("fire_smoke"), severity=v("moderate"), location=v("H-105", "H 105"),
+     incident_type=v("fire_smoke"), severity=v("moderate"), location=v("H-105", "H 105", "Himalaya 105"),
      date_time=dt("half past ten this morning", "10:30", day=0), persons_involved=none(),
      equipment_asset=v("projector"), immediate_actions=v("used the extinguisher"))
 
 item("g36", "multiturn",
-     ["There's a big crack in the wall of the Vindhya stairwell and it looks like it's getting wider.",
+     ["There's a big crack in the wall of the Vindhya C4 stairwell and it looks like it's getting wider.",
       "I don't know when it started.", "It's moderate."],
      ["ongoing", "unknown_answer"], missing=["date_time", "severity"],
-     incident_type=v("property_damage"), severity=v("moderate"), location=v("Vindhya stairwell"), date_time=unk())
+     incident_type=v("property_damage"), severity=v("moderate"), location=v("Vindhya C4 stairwell", "Vindhya C4"), date_time=unk())
 
 item("g37", "multiturn",
      ["Someone fainted in the library.", "Around 2 PM, it's minor, she's okay now, and Kavya saw it happen."],
@@ -374,7 +376,7 @@ item("g39", "multiturn",
       "No, nobody was hurt. It's minor. Arjun saw it too."],
      ["negation"], missing=["severity"],
      incident_type=v("electrical", "fire_smoke"), severity=v("minor"),
-     location=v("KRB second floor lab", "Kohli Research Block second floor lab"),
+     location=v("KRB second floor lab", "Kohli Research Block second floor lab", "Kohli Research Block"),
      date_time=dt("at around 3 PM", "15:00", approx=True), persons_involved=none(),
      equipment_asset=v("laptop charger"), witnesses=names("Arjun"))
 
@@ -387,6 +389,59 @@ item("g40", "multiturn",
      equipment_asset=v("bikes", "two bikes"))
 
 
+# ---- sound-alikes (D's request): clean text, and the same words as Whisper may mis-hear them ----
+
+item("h01", "homophone",
+     ["It happened last week, the ceiling in Seminar Hall 2 started dripping water onto the stage."],
+     ["homophone"], misheard=["it happened last weak the ceiling in seminar hall to started dripping water onto the stage"],
+     incident_type=v("water_leak_flood"), location=v("Seminar Hall 2", "SH-2"),
+     date_time=dt("last week", approx=True, vague=True))
+
+item("h02", "homophone",
+     ["It's a minor leak from the RO plant in Yuktahar, water is all over the floor."],
+     ["homophone"], misheard=["its a miner leak from the r o plant in yuktahar water is all over the floor"],
+     incident_type=v("water_leak_flood"), severity=v("minor"), location=v("Yuktahar", "Yuktahar Mess"),
+     equipment_asset=v("RO plant", "Yuktahar RO Plant", "water purifier"))
+
+item("h03", "homophone",
+     ["The fire alarm went off in KRB at around 9 PM. Nobody was hurt."],
+     ["homophone", "negation"], misheard=["the fair alarm went off in k r b at around nine pm nobody was hurt"],
+     incident_type=v("fire_smoke"), location=v("KRB", "Kohli Research Block"),
+     date_time=dt("at around 9 PM", "21:00", approx=True), persons_involved=none(),
+     equipment_asset=v("fire alarm", "KRB Fire Alarm Panel", "fire alarm panel"))
+
+item("h04", "homophone",
+     ["There was a water leak near Seminar Hall 2 around 10 AM. Maintenance has already isolated the area."],
+     ["homophone", "deck"], misheard=["there was a water leek near seminar hall to around 10 am maintenance has already isolated the area"],
+     incident_type=v("water_leak_flood"), location=v("Seminar Hall 2", "SH-2"),
+     date_time=dt("around 10 AM", "10:00", approx=True),
+     immediate_actions=v("isolated the area", "maintenance has already isolated the area"))
+
+item("h05", "homophone",
+     ["Four people were in the room when the projector in Himalaya 105 started smoking, around 3 PM."],
+     ["homophone"], misheard=["for people were in the room when the projector in himalaya one oh five started smoking around 3 pm"],
+     incident_type=v("fire_smoke"), location=v("Himalaya 105", "H-105"),
+     date_time=dt("around 3 PM", "15:00", approx=True), equipment_asset=v("projector", "H-105 Projector"))
+
+item("h06", "homophone",
+     ["Two chairs were broken in Vindhya C4 this morning when a shelf fell over."],
+     ["homophone"], misheard=["to chairs were broken in vindhya c for this morning when a shelf fell over"],
+     incident_type=v("property_damage"), location=v("Vindhya C4"),
+     date_time=dt("this morning", day=0, pod="morning", approx=True), equipment_asset=v("chairs", "two chairs", "shelf"))
+
+item("h07", "homophone",
+     ["The chiller in KRB is making a loud grinding noise and leaking oil since 2 PM."],
+     ["homophone", "ongoing"], misheard=["the chilla in k r b is making a loud grinding noise and leaking oil since 2 pm"],
+     incident_type=v("equipment_failure"), location=v("KRB", "Kohli Research Block"),
+     date_time=dt("since 2 PM", "14:00", approx=True), equipment_asset=v("chiller", "Chiller 1"))
+
+item("h08", "homophone",
+     ["Someone fainted outside Himalaya 305, we called the Aarogya Centre."],
+     ["homophone"], misheard=["someone fainted outside himalaya three oh five we called the arogya center"],
+     incident_type=v("illness"), location=v("outside Himalaya 305", "Himalaya 305"),
+     immediate_actions=v("called the Aarogya Centre", "called the clinic"))
+
+
 def assign_splits(items: list[dict]) -> None:
     """Every third item (g03, g06, ...) is holdout; g01 always dev."""
     for n, it in enumerate(items, start=1):
@@ -395,6 +450,8 @@ def assign_splits(items: list[dict]) -> None:
 
 if __name__ == "__main__":
     assign_splits(ITEMS)
+    assign_splits(HOMOPHONE_ITEMS)
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text("".join(json.dumps(i, ensure_ascii=False) + "\n" for i in ITEMS), encoding="utf-8")
-    print(f"wrote {len(ITEMS)} items to {OUT}")
+    for path, rows in ((OUT, ITEMS), (OUT_HOMOPHONES, HOMOPHONE_ITEMS)):
+        path.write_text("".join(json.dumps(i, ensure_ascii=False) + "\n" for i in rows), encoding="utf-8")
+        print(f"wrote {len(rows)} items to {path}")

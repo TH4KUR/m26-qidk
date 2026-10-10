@@ -65,3 +65,10 @@ def test_raw_log_keeps_output_and_token_counts():
     assert raw[0]["output"] == DECK_OUT
     assert (raw[0]["prompt_tokens"], raw[0]["completion_tokens"]) == (100, 40)
     json.dumps(raw)  # serialisable
+
+
+def test_misheard_variant_feeds_the_misheard_turns():
+    item = {"id": "h04", "turns": ["clean words"], "turns_misheard": ["water leek near seminar hall to"]}
+    llm = Scripted(DECK_OUT)
+    run_items([item], llm, "SYS", turns_key="turns_misheard")
+    assert "water leek near seminar hall to" in llm.calls[0][1]["content"]
