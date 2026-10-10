@@ -2,7 +2,7 @@
 
 - **Who:** D
 - **Goal:** real campus names for `core/src/main/resources/site/site.json` (lead's decision: real buildings, not a fictional site), used by the suggestion engine's gazetteer snap (spec D16).
-- **Status:** draft, **not verified on site**. `"verified": false` stays in the file until someone walks the campus and ticks the list below.
+- **Status:** place list **confirmed by the team on 2026-10-10** (`"verified": true`). Himalaya rooms 101-105, 201-205 and 301-305 added from that check. Assets and people remain demo values.
 
 ## Setup
 - OpenStreetMap main API, bounding box `78.3430,17.4400,78.3540,17.4490` (`/api/0.6/map`), 116 named features, filtered by hand to on-campus ones. Overpass (`overpass-api.de`, `overpass.kumi.systems`) returned server errors, so the raw map call was used instead.
@@ -10,7 +10,7 @@
 - Web search for blocks missing from OSM and for room numbers.
 
 ## Result
-41 places, 20 assets, 6 people. No duplicate IDs, no alias shared by two entries, every `building`/`place` reference resolves. The file passes the `tools/blindcheck.words` patterns (no college or city name inside it).
+55 places (41 from the sources below plus 14 Himalaya rooms from the team's check), 20 assets, 6 people. No duplicate IDs, no alias shared by two entries, every `building`/`place` reference resolves. The file passes the `tools/blindcheck.words` patterns (no college or city name inside it).
 
 | Entry | Evidence | Confidence |
 |---|---|---|
@@ -34,6 +34,6 @@
 **Assets and people are demo values.** No public source lists asset tags, and real staff names must not be compiled from the web. Asset IDs follow `KIND-PLACE-NN`; people are invented and carry only a role.
 
 ## Verdict and next steps
-- Good enough to build and test the snapper against. Not good enough to claim "real site data" to judges until it is checked.
-- **On-site check (anyone on campus, 15 minutes):** confirm the Vindhya wings and add the missing ones, SH-1/SH-2 names, which building houses the HPC data centre, a few real room numbers in Himalaya/Nilgiri/KRB, and whether "Tarangini" names the amphitheatre.
+- Place names are confirmed by the team; they can be presented as real site data. Asset IDs and people must still be described as demo values.
+- Optional later additions: room numbers in Nilgiri, KRB and Vindhya, and which building houses the HPC data centre.
 - Add real Whisper mishearings from E's recordings as aliases when they arrive.
