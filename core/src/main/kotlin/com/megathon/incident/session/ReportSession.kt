@@ -81,7 +81,7 @@ class ReportSession(
         var result = llm.complete(request)
         var parsed = ToolCallParser.parse(result.text)
         if (parsed is ParseResult.Failure) {
-            request = prompts.repair(request)
+            request = prompts.repair(request, (parsed as ParseResult.Failure).detail)
             result = llm.complete(request)
             parsed = ToolCallParser.parse(result.text)
         }

@@ -8,7 +8,7 @@ composeBom = "2025.06.00"
 activityCompose = "1.10.1"
 lifecycle = "2.9.0"
 coreKtx = "1.16.0"
-geniex = "0.3.5"
+geniex = "0.3.16"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }

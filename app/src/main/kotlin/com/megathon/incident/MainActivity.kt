@@ -19,6 +19,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         // Debug builds: `--es wav <path in the app's files dir>` runs that WAV through the real speech path.
         intent.getStringExtra("wav")?.let { vm.debugTranscribeFile(it) }
+        // Debug builds: `--es eval <gold file> [--es prompt <file>] --es run <name> [--es only g01,g02]` (dev split only).
+        intent.getStringExtra("eval")?.let { gold ->
+            vm.debugEval(gold, intent.getStringExtra("prompt"), intent.getStringExtra("run") ?: "run", intent.getStringExtra("only")?.split(',')?.toSet())
+        }
         setContent { IncidentTheme { AppRoot(vm) } }
     }
 }

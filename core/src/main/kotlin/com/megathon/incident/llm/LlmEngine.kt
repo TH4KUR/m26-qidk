@@ -16,6 +16,16 @@ data class LlmResult(
     val elapsedMs: Long,
     /** Where it really ran. Fakes report [Compute.SIMULATED]; the proof strip shows it. */
     val compute: Compute,
+    /** Measured by the engine when it can: time to first token, prompt and generated token counts, decode speed. */
+    val timings: LlmTimings? = null,
+)
+
+data class LlmTimings(
+    val ttftMs: Double,
+    val promptTokens: Int,
+    val generatedTokens: Int,
+    val prefillTokensPerSec: Double,
+    val decodeTokensPerSec: Double,
 )
 
 /** Contract for every LLM backend: [FakeLlmEngine][com.megathon.incident.testing.FakeLlmEngine] now, GenieX later. */

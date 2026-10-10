@@ -25,6 +25,7 @@ import com.megathon.incident.session.SessionState
 import com.megathon.incident.session.SessionUi
 import com.megathon.incident.session.StageRecord
 import com.megathon.incident.speech.DemoSpeechEngine
+import com.megathon.incident.speech.GenieXLlmEngine
 import com.megathon.incident.speech.SherpaCliSpeechEngine
 import com.megathon.incident.speech.SystemTtsSpeaker
 import com.megathon.incident.testing.Compute
@@ -97,7 +98,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     private val factory = EngineFactory(
         isDebug = Engines.isDebuggable(app),
         speechProviders = mapOf(SpeechKind.FAKE to { demoSpeech }, SpeechKind.SHERPA_QNN to { SherpaCliSpeechEngine(app) }),
-        llmProviders = mapOf(LlmKind.FAKE to { FakeLlmEngine(name = "DEMO REPLIES") }),
+        llmProviders = mapOf(LlmKind.FAKE to { FakeLlmEngine(name = "DEMO REPLIES") }, LlmKind.GENIEX to { GenieXLlmEngine(app) }),
     )
     private val recorder = MicRecorder(app)
     private val speaker = SystemTtsSpeaker(app)
@@ -205,6 +206,23 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             local.update { it.copy(heardNow = heard.text.ifBlank { null }) }
             session.onUtterance(heard.text, StageRecord("Hear", engine.name, heard.compute, heard.elapsedMs))
             finishTurn(before, journalBefore, null)
+        }
+    }
+
+    /** Debug builds only: run E's gold dev split through the real pipeline and write predictions for E's scorer. */
+    fun debugEval(gold: String, promptFile: String?, runName: String, only: Set<String>?) {
+        if (!Engines.isDebuggable(getApplication())) return
+        val engine = llm ?: return
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val prompts = promptFile?.let { com.megathon.incident.session.PromptBuilder(java.io.File(it).readText().trim()) }
+                ?: com.megathon.incident.session.PromptBuilder.default()
+            val warm: suspend () -> Long = { (engine as? GenieXLlmEngine)?.warmUp() ?: 0L }
+            android.util.Log.i(TAG, "eval $runName starting")
+            val out = runCatching {
+                com.megathon.incident.eval.EvalRunner(getApplication<Application>().filesDir, engine, warm).run(java.io.File(gold), prompts, runName, only)
+            }
+            out.onSuccess { android.util.Log.i(TAG, "eval $runName done: ${it.path}") }
+                .onFailure { android.util.Log.e(TAG, "eval $runName failed", it) }
         }
     }
 

@@ -22,6 +22,7 @@ object Pipeline {
         store: ReportStore,
         clock: Clock = Clock.systemDefaultZone(),
         zone: ZoneId = ZoneId.of("Asia/Kolkata"),
+        prompts: PromptBuilder = PromptBuilder.default(),
     ): ReportSession {
         val tam = TamDetector(TamCueLists.loadDefault())
         val extractor = UrgencyFeatureExtractor(HazardLexicon.loadDefault(), tam)
@@ -33,7 +34,7 @@ object Pipeline {
             severityHints = SeveritySuggester(extractor),
             newAdvisor = { PriorityAdvisor(extractor, strategy) },
             planner = QuestionPlanner(),
-            prompts = PromptBuilder.default(),
+            prompts = prompts,
             store = store,
             clock = clock,
             zone = zone,
