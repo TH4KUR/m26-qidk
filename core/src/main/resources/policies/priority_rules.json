@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "note": "Authored rules for the 'authored-rules' strategy (spec D18). The score is the HIGHEST rule that fires. A rule fires when impact >= minImpact AND immediacy >= minImmediacy AND every key in 'requires' is true (people, distress, ongoing). Because rules can only add, raising impact or immediacy can never lower a score. People and distress are already folded into impact/immediacy by the feature extractor, so no rule here re-counts them.",
+  "rules": [
+    {
+      "id": "life-threat-now",
+      "minImpact": 5,
+      "minImmediacy": 3,
+      "score": 20,
+      "reason": "life-threatening hazard, present or unresolved"
+    },
+    {
+      "id": "life-threat-contained",
+      "minImpact": 5,
+      "minImmediacy": 1,
+      "score": 12,
+      "reason": "life-threatening hazard type, reported as contained"
+    },
+    {
+      "id": "serious-now",
+      "minImpact": 4,
+      "minImmediacy": 4,
+      "score": 17,
+      "reason": "serious hazard happening now"
+    },
+    {
+      "id": "serious-present",
+      "minImpact": 4,
+      "minImmediacy": 3,
+      "score": 13,
+      "reason": "serious hazard, present or unresolved"
+    },
+    {
+      "id": "serious-other",
+      "minImpact": 4,
+      "minImmediacy": 1,
+      "score": 7,
+      "reason": "serious hazard type, no longer active"
+    },
+    {
+      "id": "hazard-now",
+      "minImpact": 3,
+      "minImmediacy": 4,
+      "score": 12,
+      "reason": "hazard to people happening now"
+    },
+    {
+      "id": "hazard-present",
+      "minImpact": 3,
+      "minImmediacy": 3,
+      "score": 8,
+      "reason": "hazard to people, present or unresolved"
+    },
+    {
+      "id": "hazard-other",
+      "minImpact": 3,
+      "minImmediacy": 1,
+      "score": 5,
+      "reason": "hazard type, no longer active"
+    },
+    {
+      "id": "fault-ongoing",
+      "minImpact": 2,
+      "minImmediacy": 4,
+      "score": 7,
+      "reason": "service or property fault that is continuing"
+    },
+    {
+      "id": "fault-present",
+      "minImpact": 2,
+      "minImmediacy": 3,
+      "score": 5,
+      "reason": "service or property fault needing action soon"
+    },
+    {
+      "id": "fault",
+      "minImpact": 2,
+      "minImmediacy": 1,
+      "score": 3,
+      "reason": "service or property fault"
+    },
+    {
+      "id": "nuisance",
+      "minImpact": 1,
+      "minImmediacy": 1,
+      "score": 1,
+      "reason": "cosmetic or minor nuisance"
+    }
+  ]
+}
