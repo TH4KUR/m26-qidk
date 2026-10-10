@@ -79,7 +79,13 @@ class PayloadValidator(
         enumField(Field.SEVERITY, payload.severity ?: ev["severity"]?.takeIf { EnumNormalizer.severity(it) != null }, ev["severity"], transcript, clauses, mustBeStated = true)
         verbatim(Field.LOCATION, promoted(payload.location, "location"), ev["location"], transcript, clauses)
         verbatim(Field.EQUIPMENT_ASSET, promoted(payload.equipment_asset, "equipment_asset"), ev["equipment_asset"], transcript, clauses)
-        action(promoted(payload.immediate_actions, "immediate_actions"), ev["immediate_actions"], transcript, clauses)
+        val actionText = promoted(payload.immediate_actions, "immediate_actions")
+        if (actionText != null && payload.immediate_actions.isNullOrBlank() && !looksLikeAnAction(actionText, clauses)) {
+            // Written only under evidence{}: an observation ("I saw it at 8:10 PM", "fell over") is not something the reporter did.
+            rejections += Rejection(Field.IMMEDIATE_ACTIONS, "a quote under evidence that is not an action: \"$actionText\"", actionText)
+        } else {
+            action(actionText, ev["immediate_actions"], transcript, clauses)
+        }
         people(Field.PERSONS_INVOLVED, payload.persons_involved, ev["persons_involved"], transcript, clauses)
         people(Field.WITNESSES, payload.witnesses, ev["witnesses"], transcript, clauses)
         val said = promoted(payload.date_time_text, "date_time_text")
@@ -113,10 +119,13 @@ class PayloadValidator(
         var grounded = GroundingValidator.isGrounded(wire, evidence, transcript, enumValue = true)
         // No usable quote, but the reporter did say a cue word for this very value ("leak" for a water leak, "moderate"
         // for moderate). The words are real and found by rule, not written by the model: take them as the evidence.
+        // "security" in "a security guard" is a job title, not a security incident (same for the model's own quote).
+        if (field == Field.INCIDENT_TYPE && grounded && evidence != null && onlyAsModifier(transcript, evidence)) grounded = false
         if (!grounded) {
-            val cue = if (field == Field.INCIDENT_TYPE) IncidentType.fromWire(wire)?.let { EnumNormalizer.statedTypeCue(it, transcript) }
-            else Severity.fromWire(wire)?.let { EnumNormalizer.statedSeverityCue(it, transcript) }
-            if (cue != null && !negatedNear(transcript, cue)) { evidence = cue; grounded = true }
+            val cues = if (field == Field.INCIDENT_TYPE) IncidentType.fromWire(wire)?.let { EnumNormalizer.statedTypeCues(it, transcript) }.orEmpty()
+            else listOfNotNull(Severity.fromWire(wire)?.let { EnumNormalizer.statedSeverityCue(it, transcript) })
+            val cue = cues.firstOrNull { !negatedNear(transcript, it) && !onlyAsModifier(transcript, it) }
+            if (cue != null) { evidence = cue; grounded = true }
         }
         val miss = missFor(wire, evidence, transcript, enumValue = true)
         val piece = pieceFor(clauses, evidence) ?: miss?.let { pieceFor(clauses, it.heard) }
@@ -152,9 +161,12 @@ class PayloadValidator(
         val grounded = GroundingValidator.isGrounded(text, evidence, transcript)
         val miss = missFor(text, evidence, transcript)
         val piece = pieceFor(clauses, evidence ?: text) ?: miss?.let { pieceFor(clauses, it.heard) }
-        // A place or a thing is not negated by its clause ("no power on the third floor"); an action or a person can be.
-        val clauseNegates = field != Field.LOCATION && field != Field.EQUIPMENT_ASSET
-        if (clauseNegates && piece?.tam?.modality == Modality.NEGATED) {
+        // A place or a thing is not negated by its clause ("no power on the third floor"), only by a negation right at
+        // the quoted words ("not in Room 2"). An action or a person is negated by its whole clause.
+        val placeOrThing = field == Field.LOCATION || field == Field.EQUIPMENT_ASSET
+        val negated = if (placeOrThing) negatedNear(piece?.text ?: transcript, evidence ?: text)
+        else piece?.tam?.modality == Modality.NEGATED
+        if (negated) {
             rejections += Rejection(field, "negated in the transcript: \"${evidence ?: text}\"", text)
             return
         }
@@ -164,6 +176,36 @@ class PayloadValidator(
             piece?.hedged == true -> proposals += FieldProposal(field, FieldValue(text, ValueStatus.SUGGESTED, evidence), "hedged by the reporter")
             else -> proposals += FieldProposal(field, FieldValue(text, ValueStatus.REPORTED, evidence))
         }
+    }
+
+    /** True when every word of [item] is a job, a relationship or a place, so there is no name in it. */
+    private fun isRolePhrase(item: String): Boolean {
+        val words = GroundingValidator.tokens(item)
+        return words.isNotEmpty() && words.all { it in ROLE_WORDS }
+    }
+
+    /** "Rahul was there but he didn't see her fall": being present is not witnessing. Checked in the sentence that names the person. */
+    private fun saidNotToHaveSeen(transcript: String, name: String): Boolean {
+        val sentences = transcript.split(Regex("(?<=[.!?;])\\s+"))
+        return sentences.any { s -> GroundingValidator.containsPhrase(s, name) && DID_NOT_SEE.containsMatchIn(s.lowercase().replace('\u2019', '\'')) }
+    }
+
+    /** [word] occurs in [text], but only ever as the first word of a job or place ("security guard", "medical team"). */
+    private fun onlyAsModifier(text: String, word: String): Boolean {
+        val w = GroundingValidator.tokens(word)
+        if (w.size != 1) return false
+        val t = GroundingValidator.tokens(text)
+        val at = t.indices.filter { t[it] == w[0] }
+        return at.isNotEmpty() && at.all { i -> t.getOrNull(i + 1) in MODIFIED_ROLE_NOUNS }
+    }
+
+    /** A quote promoted from evidence{} must say something the reporter did: an action verb, or a completed-action cue. */
+    private fun looksLikeAnAction(quote: String, clauses: List<TamClause>): Boolean {
+        if (quote.any { it.code in 0x0900..0x097F }) return true // Hindi: no verb list, keep the old behaviour
+        val words = GroundingValidator.tokens(quote)
+        if (words.any { it in ACTION_VERBS }) return true
+        val piece = pieceFor(clauses, quote)
+        return piece?.tam?.aspect == com.megathon.incident.domain.Aspect.COMPLETED
     }
 
     /** "I've informed the team" -> "informed the team", "I'm calling the ambulance now" -> "calling the ambulance": still the reporter's words. */
@@ -200,8 +242,12 @@ class PayloadValidator(
         val misses = mutableListOf<NearMiss>()
         for (item in items.map { it.trim() }.filter { it.isNotEmpty() }) {
             // The field holds named people. "I", "she", "a worker", "our delivery boy" are not names (and the speaker is never listed).
-            if (NOT_A_NAME.containsMatchIn(item) || item.lowercase() in ROLE_WORDS) {
+            if (NOT_A_NAME.containsMatchIn(item) || isRolePhrase(item)) {
                 rejections += Rejection(field, "'$item' is a pronoun or a role, not a name", item)
+                continue
+            }
+            if (field == Field.WITNESSES && saidNotToHaveSeen(transcript, item)) {
+                rejections += Rejection(field, "negated in the transcript: $item did not see it", item)
                 continue
             }
             val itemPiece = pieceFor(clauses, item) ?: piece
@@ -309,8 +355,37 @@ class PayloadValidator(
     }
 
     private companion object {
+        val DID_NOT_SEE = Regex(
+            "(?<![\\p{L}\\p{N}])(?:didn'?t|did not|never|not|couldn'?t|could not|nahi|nahin|नहीं)\\s+(?:\\S+\\s+){0,2}?" +
+                "(?:see|saw|seen|notice|noticed|witness|witnessed|watch|watched|dekha|देखा)(?![\\p{L}\\p{N}])",
+        )
+        val MODIFIED_ROLE_NOUNS = setOf(
+            "guard", "guards", "officer", "officers", "staff", "personnel", "team", "desk", "office", "person", "persons",
+            "man", "men", "supervisor", "incharge", "department", "cabin", "booth",
+            // "water cooler" is not a water leak
+            "cooler", "bottle", "bottles", "tank", "purifier", "dispenser", "fountain", "filter", "heater", "pump",
+        )
+        val ACTION_VERBS = setOf(
+            "put", "puts", "placed", "place", "switch", "switched", "turn", "turned", "shut", "close", "closed", "isolate", "isolated",
+            "inform", "informed", "call", "called", "calling", "notify", "notified", "report", "reported", "evacuate", "evacuated",
+            "clean", "cleaned", "cover", "covered", "apply", "applied", "applying", "give", "gave", "given", "move", "moved",
+            "remove", "removed", "stop", "stopped", "block", "blocked", "cordon", "cordoned", "extinguish", "extinguished",
+            "unplug", "unplugged", "disconnect", "disconnected", "open", "opened", "ventilate", "mop", "mopped", "wipe", "wiped",
+            "bandage", "bandaged", "take", "took", "taken", "bring", "brought", "send", "sent", "ask", "asked", "tell", "told",
+            "alert", "alerted", "lock", "locked", "tape", "taped", "secure", "secured", "warn", "warned", "help", "helped",
+            "escort", "escorted", "treat", "treated", "wash", "washed", "pour", "poured", "spray", "sprayed", "fix", "fixed",
+            "repair", "repaired", "shift", "shifted", "rush", "rushed", "wrap", "wrapped", "elevate", "elevated", "ice", "cool",
+            "kiya", "diya", "liya", "band", "bula", "bulaya", "bata", "hata", "hataya", "rok", "roka", "nikala",
+        )
         val NOT_A_NAME = Regex("^(?:i|me|my|we|us|our|he|she|him|her|his|they|them|their|you|a|an|the|someone|somebody|another|one|none|nobody|no one)(?:\\s|$)", RegexOption.IGNORE_CASE)
-        val ROLE_WORDS = setOf("worker", "workers", "student", "students", "staff", "guard", "driver", "victim", "patient", "people", "person", "man", "woman", "boy", "girl")
+        val ROLE_WORDS = setOf(
+            "worker", "workers", "student", "students", "staff", "guard", "guards", "driver", "victim", "patient", "people", "person",
+            "persons", "man", "men", "woman", "women", "boy", "girl", "member", "members", "employee", "employees", "colleague",
+            "colleagues", "cleaner", "cook", "technician", "operator", "supervisor", "manager", "visitor", "visitors", "customer",
+            "customers", "passenger", "passengers", "child", "children", "kid", "kids", "lady", "gentleman", "guy", "security",
+            "delivery", "maintenance", "shop", "canteen", "warehouse", "hospital", "medical", "assistant", "helper", "intern",
+            "faculty", "teacher", "professor", "resident", "residents", "someone", "somebody", "anyone", "everyone", "team",
+        )
         val COMMA = Regex("[,،]")
 
         val UNIVERSAL_NEGATIVE = listOf(

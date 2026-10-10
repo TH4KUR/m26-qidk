@@ -107,6 +107,14 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
      * time phrase here, and after "no wait" / "I mean" / "sorry" only the corrected wording counts.
      */
     fun findTimePhrase(text: String): String? {
+        // A correction ("no wait, 10 PM") may sit in a later sentence than the first time: the words after the last one win.
+        CORRECTION.findAll(text.lowercase()).lastOrNull()?.let { c ->
+            firstPhraseIn(text.substring(c.range.last + 1))?.let { return it }
+        }
+        return firstPhraseIn(text)
+    }
+
+    private fun firstPhraseIn(text: String): String? {
         for (sentence in text.split(Regex("(?<=[.!?;])\\s+"))) {
             var s = sentence
             CORRECTION.findAll(s.lowercase()).lastOrNull()?.let { s = s.substring(it.range.last + 1) }
@@ -284,7 +292,10 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
             )
         }
         val HALF_PAST = Regex(NB + "half past (\\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)(?![\\p{L}\\p{N}])")
-        val NUMBER_PART_OF_DAY = Regex(NB + "(\\d{1,2})\\s+(?:this\\s+)?(?:morning|afternoon|evening|tonight|night)")
+        // "11 this morning", "8 tonight", "9 at night"; never "2 night guards" or "3 morning shift workers".
+        val NUMBER_PART_OF_DAY = Regex(
+            NB + "(\\d{1,2})\\s+(?:this\\s+(?:morning|afternoon|evening|night)|tonight|in\\s+the\\s+(?:morning|afternoon|evening)|at\\s+night)(?![\\p{L}])",
+        )
         val BARE_HOUR = Regex(
             "(?<![\\p{L}\\p{N}])(?:at|around|about|approximately|approx|roughly)\\s+(\\d{1,2})(?![\\p{N}:])" +
                 "(?!\\s*(?:hours?|minutes?|mins?|people|persons|pm|am))",

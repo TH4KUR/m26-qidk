@@ -906,6 +906,14 @@
       ],
       "minImpact": 2,
       "minImmediacy": 3
+    },
+    {
+      "label": "alarm",
+      "matches": [
+        "alarm"
+      ],
+      "minImpact": 3,
+      "minImmediacy": 3
     }
   ],
   "distressStrongCues": [

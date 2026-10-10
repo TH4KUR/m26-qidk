@@ -34,11 +34,20 @@ object EnumNormalizer {
         Severity.NONE to listOf("none", "no harm", "no damage", "nothing serious", "kuch nahi", "कुछ नहीं"),
     )
 
-    /** The first cue word of [type] that the speaker actually said (whole word), or null. A real quote, never invented. */
-    fun statedTypeCue(type: IncidentType, transcript: String): String? {
-        val t = normalize(transcript) ?: return null
-        return TYPE_RULES.firstOrNull { it.first == type }?.second?.firstOrNull { it != "other" && containsPhrase(t, it) }
+    /**
+     * Words that are cues for a type only in company ("cut" is in "power cut", "fell" in "a branch fell", "nearly" in any
+     * sentence). They may support a type the model named, but they never stand in for a quote.
+     */
+    private val WEAK_TYPE_CUES = setOf("cut", "fall", "fell", "almost", "nearly", "broken", "damage", "other")
+
+    /** Every cue word of [type] that the speaker actually said (whole word), strongest list order first. Real quotes, never invented. */
+    fun statedTypeCues(type: IncidentType, transcript: String): List<String> {
+        val t = normalize(transcript) ?: return emptyList()
+        return TYPE_RULES.firstOrNull { it.first == type }?.second.orEmpty().filter { it !in WEAK_TYPE_CUES && containsPhrase(t, it) }
     }
+
+    /** The first of [statedTypeCues], or null. */
+    fun statedTypeCue(type: IncidentType, transcript: String): String? = statedTypeCues(type, transcript).firstOrNull()
 
     /** Same for severity, restricted to explicit severity words (not "small", "little", "badly"). */
     fun statedSeverityCue(sev: Severity, transcript: String): String? {

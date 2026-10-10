@@ -78,6 +78,21 @@ class PriorityAdvisorTest {
         assertTrue(loud > quiet)
     }
 
+    @Test fun aGenericAlarmRaisesTheAdviceButNeverSpeaksTheEmergencyLine() {
+        // B's YamNet mapper emits "alarm" when it cannot say "fire alarm"; a beeping alarm is worth a look, not a 112 call.
+        val without = advisor().also { it.onChunk("the lab smells odd") }.currentScore
+        val a = advisor()
+        val out = a.onChunk("the lab smells odd", listOf(Signal("event", "alarm", Source.YAMNET, 1)))
+        assertTrue(a.currentScore > without, "score ${a.currentScore} must exceed $without")
+        assertTrue(out.advice.level < Priority.HIGH, "a generic alarm must stay at MEDIUM at most, was ${out.advice.level}")
+        assertNull(out.spoken)
+    }
+
+    @Test fun aFireAlarmStillWinsOverTheGenericAlarmDefinition() {
+        val out = advisor().onChunk("", listOf(Signal("event", "fire alarm", Source.YAMNET, 1)))
+        assertEquals("If anyone is in danger, call 112 now.", out.spoken)
+    }
+
     @Test fun reasonsNameTheirSource() {
         val a = advisor()
         val advice = a.onChunk("", listOf(Signal("event", "screaming", Source.YAMNET, 2))).advice
