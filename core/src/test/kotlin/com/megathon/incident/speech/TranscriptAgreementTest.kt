@@ -64,4 +64,14 @@ class TranscriptAgreementTest {
         assertFalse(strict.agrees)
         assertTrue("11.1%" in strict.detail, strict.detail)
     }
+
+
+    @Test
+    fun devanagariWordsAreNotShreddedIntoFragments() {
+        // Vowel signs (matras) are combining marks; stripping them would split one Hindi word into several tokens.
+        val reference = "शायद पानी बह रहा है"
+        assertEquals(0.0, TranscriptAgreement.wordErrorRate(reference, reference))
+        assertEquals(1.0 / 5, TranscriptAgreement.wordErrorRate(reference, "शायद पानी बह रही है")!!, 1e-9)
+        assertTrue(TranscriptAgreement.compare("शायद पानी बह रही है", reference).agrees)
+    }
 }

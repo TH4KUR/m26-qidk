@@ -7,7 +7,6 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
-import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.coroutines.cancellation.CancellationException
 
 /** Stops the mic from hearing the app's own voice: the loop mutes it while the speaker talks. */
@@ -29,7 +28,7 @@ fun interface TurnHandler {
  * the transcript to the app's [TurnHandler], the reply spoken with the mic muted, then listening again.
  *
  * - A blank transcript is answered with [blankPrompt] and never reaches the handler (so no LLM call).
- * - An engine or handler failure is recorded in [errors], spoken as [failurePrompt], and the loop continues.
+ * - An engine or handler failure (an `Error` such as UnsatisfiedLinkError from a native library included) is recorded in [errors], spoken as [failurePrompt], and the loop continues.
  * - When the chunk flow ends (the user tapped stop in tap-to-talk), an unfinished utterance is still processed.
  * - The segmenter is flushed after every spoken reply, so the tail of the app's own voice is never transcribed.
  */
@@ -44,9 +43,15 @@ class HandsFreeLoop(
     private val blankPrompt: String = "Sorry, I didn't catch that.",
     private val failurePrompt: String = "Sorry, I couldn't process that. Please say it again.",
 ) {
-    private val failed = CopyOnWriteArrayList<String>()
+    private val failed = ArrayDeque<String>()
 
-    val errors: List<String> get() = failed.toList()
+    /** The most recent failures (at most [MAX_ERRORS]); a native library failing every turn must not grow this forever. */
+    val errors: List<String> get() = synchronized(failed) { failed.toList() }
+
+    private fun record(message: String) = synchronized(failed) {
+        failed += message
+        while (failed.size > MAX_ERRORS) failed.removeFirst()
+    }
 
     suspend fun run(chunks: Flow<ShortArray>) {
         chunks.collect { chunk -> segmenter.push(chunk)?.let { handle(it) } }
@@ -58,8 +63,8 @@ class HandsFreeLoop(
             engine.transcribe(pcm, language())
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (error: Exception) {
-            failed += "speech engine ${engine.name}: ${error.message}"
+        } catch (error: Throwable) {
+            record("speech engine ${engine.name}: ${error.message}")
             say(failurePrompt)
             return
         }
@@ -71,8 +76,8 @@ class HandsFreeLoop(
             handler.handle(transcript, VoiceCommandParser.parse(transcript.text))
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (error: Exception) {
-            failed += "turn handler: ${error.message}"
+        } catch (error: Throwable) {
+            record("turn handler: ${error.message}")
             say(failurePrompt)
             return
         }
@@ -85,8 +90,8 @@ class HandsFreeLoop(
             speaker.speak(text)
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (error: Exception) {
-            failed += "speaker: ${error.message}"
+        } catch (error: Throwable) {
+            record("speaker: ${error.message}")
         } finally {
             withContext(NonCancellable) {
                 if (graceMs > 0) delay(graceMs)
@@ -94,5 +99,9 @@ class HandsFreeLoop(
                 gate.unmute()
             }
         }
+    }
+
+    private companion object {
+        const val MAX_ERRORS = 20
     }
 }

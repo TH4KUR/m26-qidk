@@ -1,6 +1,8 @@
 package com.megathon.incident.testing
 
+import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
+import kotlin.test.assertNotEquals
 import kotlin.test.assertContentEquals
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -18,6 +20,21 @@ class WavFileSourceTest {
                 WavFileSource(wav).readPcm()
             }
             assertContentEquals(samples, actual)
+        } finally {
+            Files.deleteIfExists(wav)
+        }
+    }
+
+    @Test
+    fun theFileIsReadOffTheCallersThread() = runBlocking {
+        val wav = Files.createTempFile("speech", ".wav")
+        Files.write(wav, pcm16MonoWav(shortArrayOf(1, 2, 3)))
+        try {
+            val callerThread = Thread.currentThread().name
+            var readerThread = ""
+            val source = WavFileSource(wav, readBytes = { path -> readerThread = Thread.currentThread().name; Files.readAllBytes(path) })
+            source.readPcm()
+            assertNotEquals(callerThread, readerThread, "a blocking read must not run on the caller's dispatcher")
         } finally {
             Files.deleteIfExists(wav)
         }

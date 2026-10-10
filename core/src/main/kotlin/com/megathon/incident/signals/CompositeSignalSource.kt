@@ -3,12 +3,15 @@ package com.megathon.incident.signals
 import com.megathon.incident.domain.Signal
 import com.megathon.incident.testing.Compute
 import com.megathon.incident.testing.SignalSource
-import java.util.concurrent.CopyOnWriteArrayList
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
- * Runs several sources over the same audio (YamNet for sounds, SenseVoice for voice). A source that fails
- * costs only its own signals, and the failure is kept in [failures] for the proof strip and the log.
+ * Runs several sources over the same audio at the same time (YamNet for sounds, SenseVoice for voice), so the
+ * latency is the slowest source, not the sum. A source that fails (an `Error` from a native library included)
+ * costs only its own signals; the most recent failures are kept in [failures] for the proof strip and the log.
  * The reported compute never overclaims: mixed means HYBRID, and any simulated part makes it SIMULATED.
  */
 class CompositeSignalSource(private val sources: List<SignalSource>) : SignalSource {
@@ -20,19 +23,28 @@ class CompositeSignalSource(private val sources: List<SignalSource>) : SignalSou
         else -> sources.firstOrNull()?.compute ?: Compute.CPU
     }
 
-    private val failed = CopyOnWriteArrayList<String>()
+    private val failed = ArrayDeque<String>()
 
-    val failures: List<String> get() = failed.toList()
+    val failures: List<String> get() = synchronized(failed) { failed.toList() }
 
-    override suspend fun signals(pcm: ShortArray): List<Signal> =
-        sources.flatMap { source ->
-            try {
-                source.signals(pcm)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (error: Exception) {
+    override suspend fun signals(pcm: ShortArray): List<Signal> = coroutineScope {
+        sources.map { source -> async { signalsOf(source, pcm) } }.awaitAll().flatten().distinct()
+    }
+
+    private suspend fun signalsOf(source: SignalSource, pcm: ShortArray): List<Signal> =
+        try {
+            source.signals(pcm)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            synchronized(failed) {
                 failed += "${source.name}: ${error.message}"
-                emptyList()
+                while (failed.size > MAX_FAILURES) failed.removeFirst()
             }
-        }.distinct()
+            emptyList()
+        }
+
+    private companion object {
+        const val MAX_FAILURES = 20
+    }
 }

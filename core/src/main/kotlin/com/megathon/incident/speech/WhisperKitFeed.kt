@@ -47,7 +47,10 @@ object WhisperKitFeed {
         }
     }
 
-    /** Collects the callback results of one utterance into one string. Not thread-safe by itself; the caller guards it. */
+    /**
+     * Collects the callback results of one utterance into one string. Handles both separate segments and a
+     * growing cumulative result. Not thread-safe by itself; the caller guards it.
+     */
     class TranscriptAccumulator {
         private val parts = ArrayList<String>()
         private var last: String? = null
@@ -55,7 +58,9 @@ object WhisperKitFeed {
         fun onResult(text: String, segments: List<String>) {
             val chunk = clean(if (segments.isEmpty()) text else segments.joinToString(""))
             if (chunk.isEmpty() || chunk == last) return
-            parts += chunk
+            // A result that extends the previous one word for word is the same sentence growing (cumulative
+            // callbacks), so it replaces it. Which of the two the library really does is unproven on the kit.
+            if (last != null && chunk.startsWith("$last ")) parts[parts.lastIndex] = chunk else parts += chunk
             last = chunk
         }
 

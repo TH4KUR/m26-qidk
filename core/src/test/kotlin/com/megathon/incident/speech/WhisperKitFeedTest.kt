@@ -85,4 +85,22 @@ class WhisperKitFeedTest {
         assertEquals(Compute.HYBRID, WhisperKitFeed.computeLabel(cpu, npu))
         assertEquals(Compute.CPU, WhisperKitFeed.computeLabel(2, 2)) // GPU is not the NPU
     }
+
+
+    @Test
+    fun cumulativeCallbacksReplaceTheEarlierPartialInsteadOfRepeatingIt() {
+        // If the library re-sends the growing text each time, "turn off" then "turn off the valve" is one sentence.
+        val acc = WhisperKitFeed.TranscriptAccumulator()
+        acc.onResult("turn off", emptyList())
+        acc.onResult("turn off the valve", emptyList())
+        assertEquals("turn off the valve", acc.text())
+    }
+
+    @Test
+    fun separateSegmentsThatMerelyStartAlikeAreStillKept() {
+        val acc = WhisperKitFeed.TranscriptAccumulator()
+        acc.onResult("the pump failed", emptyList())
+        acc.onResult("pump two is also leaking", emptyList())
+        assertEquals("the pump failed pump two is also leaking", acc.text())
+    }
 }

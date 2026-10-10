@@ -40,6 +40,11 @@ class EndOfSpeechDetector(private val config: Config = Config()) {
         val calibrationMs: Int = 300,
         /** A frame louder than this is speech, never room noise, even during calibration. */
         val maxCalibrationRms: Double = 1500.0,
+        /**
+         * If the signal never drops below the speech threshold for this long, it is a room that got louder (a fan or
+         * AC switched on), not speech without a breath: the floor is raised to the quietest level seen in that stretch.
+         */
+        val noGapRebaselineMs: Int = 6_000,
     )
 
     private var noiseFloor = 0.0
@@ -48,6 +53,11 @@ class EndOfSpeechDetector(private val config: Config = Config()) {
     private var inSpeech = false
     private var elapsedMs = 0.0
     private var voicedMs = 0.0
+    private var noGapMs = 0.0
+    private var noGapMinRms = Double.MAX_VALUE
+
+    /** Loud time so far in the current utterance (0 when none): what the minimum-speech rule is judged on. */
+    val currentVoicedMs: Double get() = if (inSpeech) voicedMs else 0.0
 
     /** Quiet at the end of the last utterance; valid until the next utterance starts. */
     var trailingQuietMs = 0.0
@@ -76,6 +86,8 @@ class EndOfSpeechDetector(private val config: Config = Config()) {
             elapsedMs = ms
             voicedMs = ms
             trailingQuietMs = 0.0
+            noGapMs = ms
+            noGapMinRms = rms
             return VadEvent.SPEECH_STARTED
         }
 
@@ -83,8 +95,17 @@ class EndOfSpeechDetector(private val config: Config = Config()) {
         if (loud) {
             voicedMs += ms
             trailingQuietMs = 0.0
+            noGapMs += ms
+            noGapMinRms = min(noGapMinRms, rms)
+            if (noGapMs >= config.noGapRebaselineMs) {
+                noiseFloor = max(noiseFloor, noGapMinRms)
+                noGapMs = 0.0
+                noGapMinRms = Double.MAX_VALUE
+            }
         } else {
             trailingQuietMs += ms
+            noGapMs = 0.0
+            noGapMinRms = Double.MAX_VALUE
         }
 
         if (elapsedMs >= config.maxUtteranceMs) {
@@ -109,6 +130,8 @@ class EndOfSpeechDetector(private val config: Config = Config()) {
         inSpeech = false
         elapsedMs = 0.0
         voicedMs = 0.0
+        noGapMs = 0.0
+        noGapMinRms = Double.MAX_VALUE
     }
 
     private fun trackNoise(rms: Double) {

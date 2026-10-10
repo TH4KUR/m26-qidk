@@ -59,4 +59,12 @@ class UtteranceSegmenterTest {
         assertEquals(1, out.size)
         assertTrue(out.single().size * 1000 / rate in 1900..2400)
     }
+
+
+    @Test
+    fun flushDropsAClickThatPushWouldHaveDiscarded() {
+        val segmenter = UtteranceSegmenter()
+        assertTrue(push(segmenter, silence(500) + tone(60)).isEmpty())
+        assertNull(segmenter.flush(), "a 60 ms click is not an utterance, even when the user taps stop")
+    }
 }

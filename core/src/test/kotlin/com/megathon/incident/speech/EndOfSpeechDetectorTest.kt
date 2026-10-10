@@ -107,4 +107,20 @@ class EndOfSpeechDetectorTest {
         // After a reset (mic reopened after TTS) quiet must not produce a stale SPEECH_ENDED.
         assertTrue(feed(detector, silence(2000)).isEmpty())
     }
+
+
+    @Test
+    fun aRoomThatGetsMuchLouderMidSessionIsLearnedNotHeardAsEndlessSpeech() {
+        // Calibrated in a quiet room, then an AC or fan switches on (amplitude 2000, RMS ~1414, far above the old floor).
+        val detector = EndOfSpeechDetector()
+        assertTrue(feed(detector, tone(1000, 260)).isEmpty())
+
+        val events = feed(detector, tone(300, 4000) + tone(10_000, 2000) + tone(3000, 2000))
+        assertEquals(VadEvent.SPEECH_STARTED, events.first().second)
+        val ended = events.first { it.second == VadEvent.SPEECH_ENDED || it.second == VadEvent.MAX_LENGTH || it.second == VadEvent.SPEECH_DISCARDED }
+        assertEquals(VadEvent.SPEECH_ENDED, ended.second, "the false utterance must end on its own, not run to the length cap: $events")
+        assertTrue(ended.first - 1000 < 9_000, "it took ${ended.first - 1000} ms to adapt")
+        // After adapting, the same steady noise is just the room: no new utterance starts.
+        assertEquals(1, events.count { it.second == VadEvent.SPEECH_STARTED }, "events: $events")
+    }
 }

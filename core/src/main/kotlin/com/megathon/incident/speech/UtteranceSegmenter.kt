@@ -6,7 +6,7 @@ package com.megathon.incident.speech
  * clipped) and at most [tailMs] of the quiet that ended it.
  */
 class UtteranceSegmenter(
-    config: EndOfSpeechDetector.Config = EndOfSpeechDetector.Config(),
+    private val config: EndOfSpeechDetector.Config = EndOfSpeechDetector.Config(),
     private val preRollMs: Int = 300,
     private val tailMs: Int = 200,
 ) {
@@ -40,9 +40,12 @@ class UtteranceSegmenter(
         return null
     }
 
-    /** The user tapped stop: return what has been heard so far, or null if there was no speech. */
+    /** The user tapped stop: what has been heard so far, or null if there was no speech (a click is not an utterance). */
     fun flush(): ShortArray? {
-        val out = if (inUtterance) take() else null
+        val long = inUtterance && detector.currentVoicedMs >= config.minSpeechMs
+        val out = if (long) take() else null
+        utterance.clear()
+        inUtterance = false
         detector.reset()
         preRoll.clear()
         preRollSamples = 0

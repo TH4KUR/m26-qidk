@@ -30,9 +30,16 @@ object AckTemplates {
 
         val body = StringBuilder()
         clauses.forEachIndexed { index, (field, text) ->
-            if (index > 0) body.append(if (field == Field.LOCATION && clauses[index - 1].first == Field.INCIDENT_TYPE) " " else ", ")
-            // "at X" only reads well after an incident type; on its own the location needs a verb.
-            body.append(if (field == Field.LOCATION && index > 0 && clauses[index - 1].first == Field.INCIDENT_TYPE) "at $text" else text)
+            // "at X" reads well right after an incident type; on its own the location needs a verb.
+            val afterType = field == Field.LOCATION && index > 0 && clauses[index - 1].first == Field.INCIDENT_TYPE
+            if (index > 0) body.append(if (afterType) " " else ", ")
+            body.append(
+                when {
+                    afterType -> "at $text"
+                    field == Field.LOCATION -> "the location is $text"
+                    else -> text
+                },
+            )
         }
         val opener = OPENERS[Math.floorMod(turn, OPENERS.size)]
         return "$opener: $body."
@@ -40,7 +47,8 @@ object AckTemplates {
 
     private fun clause(report: IncidentReport, field: Field): String? {
         val value = report.value(field)
-        val text = value.text.orEmpty()
+        val text = value.text.orEmpty().trim()
+        if (text.isEmpty() && value.status != ValueStatus.EXPLICIT_NONE) return null
         return when (value.status) {
             ValueStatus.REPORTED, ValueStatus.USER_CONFIRMED, ValueStatus.USER_EDITED -> when (field) {
                 Field.INCIDENT_TYPE -> typeWords(text)

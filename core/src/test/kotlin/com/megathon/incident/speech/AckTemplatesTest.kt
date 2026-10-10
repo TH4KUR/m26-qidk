@@ -66,4 +66,16 @@ class AckTemplatesTest {
             AckTemplates.forChanges(report, listOf(Field.SEVERITY), turn = 2),
         )
     }
+
+
+    @Test
+    fun aLocationOnItsOwnGetsAWordToHangOn() {
+        assertEquals("Got it: the location is Conference Room 2.", AckTemplates.forChanges(report, listOf(Field.LOCATION)))
+    }
+
+    @Test
+    fun aBlankValueIsNeverSpoken() {
+        val blank = report.with(Field.SEVERITY, FieldValue("  ", ValueStatus.REPORTED))
+        assertNull(AckTemplates.forChanges(blank, listOf(Field.SEVERITY)))
+    }
 }

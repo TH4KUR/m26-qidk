@@ -1,5 +1,11 @@
 package com.megathon.incident.testing
 
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -48,4 +54,14 @@ class FakeSpeechEngineTest {
         requireNotNull(javaClass.getResource("/fixtures/$name"))
             .readText()
             .trim()
+
+    @Test
+    fun cancellingDuringTheDelayStopsRightAway() = runBlocking {
+        val engine = FakeSpeechEngine(defaultText = "slow", delayMs = 3_000)
+        val job = launch { engine.transcribe(shortArrayOf(1), "en") }
+        delay(100)
+        val startedAt = System.nanoTime()
+        withTimeout(1_000) { job.cancelAndJoin() }
+        assertEquals(true, (System.nanoTime() - startedAt) / 1_000_000 < 1_000)
+    }
 }

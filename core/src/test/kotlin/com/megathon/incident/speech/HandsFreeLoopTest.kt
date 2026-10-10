@@ -127,4 +127,35 @@ class HandsFreeLoopTest {
 
         assertEquals("handle:water leak in conference room two", log.first())
     }
+
+
+    @Test
+    fun aNativeLibraryErrorDoesNotKillTheLoop() = runBlocking {
+        var calls = 0
+        val broken = object : SpeechEngine {
+            override val name = "native"
+            override suspend fun transcribe(pcm: ShortArray, language: String): Transcript {
+                if (calls++ == 0) throw UnsatisfiedLinkError("libwhisperkit_jni.so not found")
+                return Transcript("second try", language, 1, Compute.SIMULATED)
+            }
+        }
+        val loop = loop(engine = broken)
+        loop.run(mic(silence(500), tone(800), silence(1200), tone(800), silence(1200)))
+
+        assertTrue("handle:second try" in log, log.toString())
+        assertEquals(listOf("speech engine native: libwhisperkit_jni.so not found"), loop.errors)
+    }
+
+    @Test
+    fun theErrorListIsCappedSoALongSessionCannotGrowItForever() = runBlocking {
+        val failing = object : SpeechEngine {
+            override val name = "failing"
+            override suspend fun transcribe(pcm: ShortArray, language: String): Transcript = error("nope")
+        }
+        val loop = loop(engine = failing)
+        val utterances = (1..30).flatMap { listOf(tone(300), silence(1000)) }
+        loop.run(mic(silence(400), *utterances.toTypedArray()))
+
+        assertEquals(20, loop.errors.size)
+    }
 }

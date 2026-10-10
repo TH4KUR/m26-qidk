@@ -36,6 +36,7 @@ object TranscriptAgreement {
         return previous[hyp.size].toDouble() / ref.size
     }
 
+    /** Letters, combining marks (Devanagari and Telugu vowel signs are marks), digits and apostrophes make a word. */
     private fun words(text: String): List<String> =
-        text.lowercase().replace(Regex("[^\\p{L}\\p{N}'\\s]"), " ").split(Regex("\\s+")).filter { it.isNotEmpty() }
+        text.lowercase().replace(Regex("[^\\p{L}\\p{M}\\p{N}'\\s]"), " ").split(Regex("\\s+")).filter { it.isNotEmpty() }
 }
