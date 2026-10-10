@@ -32,7 +32,12 @@ class QuestionPlanner {
         Field.INCIDENT_TYPE -> Ask(field, "What kind of incident is it?", TYPE_CHOICES.map { (label, type) -> QuickReply(label, field, type.wire) })
         Field.LOCATION -> Ask(field, if (urgent) "Where is it?" else "Where did it happen?", emptyList())
         Field.DATE_TIME -> if (field in clarify) {
-            Ask(field, "Which day was that?", listOf(QuickReply("Today", field, "today"), QuickReply("Yesterday", field, "yesterday")))
+            // A time of day with no date is never assumed: ask, with "Today" preselected (one tap, never applied alone).
+            // A value that already names a day (an ambiguous "kal") is asked as a plain "which day", nothing preselected.
+            val noDate = report.value(field).text?.let { DateTimeDisplay.parse(it)?.date == null } ?: false
+            val today = QuickReply("Today", field, "today", suggested = noDate)
+            val yesterday = QuickReply("Yesterday", field, "yesterday")
+            Ask(field, if (noDate) "Was that today?" else "Which day was that?", listOf(today, yesterday))
         } else {
             Ask(field, "When did it happen?", listOf(QuickReply("Just now", field, "now")))
         }

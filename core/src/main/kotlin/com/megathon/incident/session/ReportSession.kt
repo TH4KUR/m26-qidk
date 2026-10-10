@@ -11,6 +11,8 @@ import com.megathon.incident.llm.LlmEngine
 import com.megathon.incident.llm.ParseResult
 import com.megathon.incident.llm.PayloadValidator
 import com.megathon.incident.llm.ToolCallParser
+import com.megathon.incident.priority.Deescalation
+import com.megathon.incident.priority.KeyAnswer
 import com.megathon.incident.priority.PriorityAdvisor
 import com.megathon.incident.priority.SeveritySuggester
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,12 +44,11 @@ class ReportSession(
     private val zone: ZoneId,
     private val newId: () -> String,
 ) {
-    private data class Snapshot(val report: IncidentReport, val clarify: Set<Field>, val assumed: Set<Field>, val transcriptCount: Int)
+    private data class Snapshot(val report: IncidentReport, val clarify: Set<Field>, val transcriptCount: Int)
 
     private var advisor = newAdvisor()
     private var report = IncidentReport.empty(newId(), clock.millis())
     private var clarify: Set<Field> = emptySet()
-    private var assumed: Set<Field> = emptySet()
     private var state: SessionState = SessionState.Idle
     private val transcripts = mutableListOf<String>()
     private val toolLog = mutableListOf<ToolLogEntry>()
@@ -56,6 +57,7 @@ class ReportSession(
     private val asked = mutableListOf<Set<Field>>()
     private val undoStack = ArrayDeque<Snapshot>()
     private var priority: PriorityAdvice? = null
+    private var deescalation: Deescalation? = null
     private var say: Say? = null
     private var sayCounter = 0
     private var spokenSummary: String? = null
@@ -103,12 +105,12 @@ class ReportSession(
         journal += merged.journal
         val changed = Field.entries.filter { before.value(it).text != report.value(it).text }.toSet()
         clarify = (clarify - changed) + merged.clarify
-        assumed = (assumed - changed) + merged.assumed
 
         suggestSeverity()
-        val out = advisor.onChunk(said, signals)
+        val out = advisor.onChunk(said, signals, hint = validation.hint)
         priority = out.advice
-        advance(prefix = out.spoken)
+        deescalation = out.deescalation
+        advance(prefix = out.spoken, keyQuestion = out.keyQuestion)
     }
 
     // ---- taps and edits -----------------------------------------------------------------------------------------
@@ -148,7 +150,6 @@ class ReportSession(
         journal += JournalEntry(Field.INCIDENT_TYPE, null, null, "last change undone", clock.millis()).copy(field = lastChangedField(snap))
         report = snap.report
         clarify = snap.clarify
-        assumed = snap.assumed
         while (transcripts.size > snap.transcriptCount) transcripts.removeAt(transcripts.lastIndex)
         if (state is SessionState.Asking) advance(prefix = null) else publish()
     }
@@ -159,9 +160,20 @@ class ReportSession(
         publish()
     }
 
+    /** The reporter's own decision, from the level control or the "lower to LOW?" chip. Clears any pending offer. */
     fun overridePriority(level: Priority, reason: String) {
         priority = advisor.override(level, reason)
+        advisor.dismissDeescalation()
+        deescalation = null
         publish()
+    }
+
+    /** The reporter tapped Yes / No / Not sure on the key question. Unsure counts as danger (the advisor decides). */
+    fun answerKeyQuestion(answer: KeyAnswer) {
+        if ((state as? SessionState.Asking)?.question?.key != true) return
+        val out = advisor.answerKeyQuestion(answer)
+        priority = out.advice
+        advance(prefix = out.spoken)
     }
 
     // ---- finishing ----------------------------------------------------------------------------------------------
@@ -184,19 +196,21 @@ class ReportSession(
     fun reset() {
         advisor = newAdvisor()
         report = IncidentReport.empty(newId(), clock.millis())
-        clarify = emptySet(); assumed = emptySet()
+        clarify = emptySet()
         transcripts.clear(); toolLog.clear(); journal.clear(); stages.clear(); asked.clear(); undoStack.clear()
-        priority = null; say = null; spokenSummary = null
+        priority = null; deescalation = null; say = null; spokenSummary = null
         state = SessionState.Idle
         publish()
     }
 
     // ---- internals ----------------------------------------------------------------------------------------------
 
-    private fun advance(prefix: String?) {
-        val q = planner.next(report, clarify, advisor.lane(), asked)
+    /** [keyQuestion], when the advisor has one, is asked first and on its own: one spoken question, then the planner's. */
+    private fun advance(prefix: String?, keyQuestion: String? = null) {
+        val q = if (keyQuestion != null) Question(emptyList(), keyQuestion, key = true)
+        else planner.next(report, clarify, advisor.lane(), asked)
         if (q != null) {
-            asked += q.asks.map { it.field }.toSet()
+            if (!q.key) asked += q.asks.map { it.field }.toSet()
             log(
                 "ask_user",
                 JsonObject(
@@ -224,7 +238,6 @@ class ReportSession(
         val before = report.value(field)
         report = report.with(field, value)
         clarify = clarify - field
-        assumed = assumed - field
         if (before.text != value.text) journal += JournalEntry(field, before.text, value.text, reason, clock.millis())
         log(
             "update_report",
@@ -249,7 +262,7 @@ class ReportSession(
         Field.entries.firstOrNull { report.value(it) != snap.report.value(it) } ?: Field.INCIDENT_TYPE
 
     private fun remember() {
-        undoStack.addLast(Snapshot(report, clarify, assumed, transcripts.size))
+        undoStack.addLast(Snapshot(report, clarify, transcripts.size))
         if (undoStack.size > 20) undoStack.removeFirst()
     }
 
@@ -301,6 +314,8 @@ class ReportSession(
         canUndo = undoStack.isNotEmpty(),
         say = say,
         spokenSummary = spokenSummary,
+        canSubmitNow = state !is SessionState.Submitted && advisor.lane().offerSubmitNow,
+        deescalation = deescalation,
     )
 
     private fun fieldViews(): List<FieldView> {
@@ -318,14 +333,7 @@ class ReportSession(
                     ValueStatus.MISSING -> if (mandatory) UiStatus.NEEDED else UiStatus.EMPTY
                     ValueStatus.UNKNOWN -> { value = "Don't know"; UiStatus.UNKNOWN }
                     ValueStatus.EXPLICIT_NONE -> { value = "None"; UiStatus.NONE }
-                    ValueStatus.REPORTED -> {
-                        evidence = v.evidence
-                        if (f in assumed) {
-                            val day = v.text?.let { DateTimeDisplay.parse(it)?.date }
-                            hint = "Assumed ${if (day == today.minusDays(1)) "yesterday" else "today"}. Tap to change."
-                        }
-                        UiStatus.HEARD
-                    }
+                    ValueStatus.REPORTED -> { evidence = v.evidence; UiStatus.HEARD }
                     ValueStatus.SUGGESTED -> {
                         if (!assistant) hint = v.evidence?.let { "Suggested because: $it" }
                         UiStatus.SUGGESTED

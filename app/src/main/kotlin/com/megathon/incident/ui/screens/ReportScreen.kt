@@ -25,6 +25,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.megathon.incident.domain.IncidentType
 import com.megathon.incident.domain.Field
+import com.megathon.incident.domain.Priority
 import com.megathon.incident.session.FieldView
 import com.megathon.incident.session.Labels
 import com.megathon.incident.session.QuestionPlanner
@@ -97,14 +98,23 @@ fun isWide(): Boolean {
 
 private fun androidx.compose.foundation.lazy.LazyListScope.conversation(ui: AppUi, vm: AppViewModel, inlineQuestion: Boolean = false) {
     ui.message?.let { m -> item(key = "message") { MessageCard(m, vm::dismissMessage) } }
-    ui.session.priority?.let { p -> item(key = "priority") { PriorityBanner(p, onOverride = { vm.overridePriority(it, "set by the reporter") }) } }
+    ui.session.priority?.let { p ->
+        item(key = "priority") {
+            PriorityBanner(
+                p,
+                onOverride = { vm.overridePriority(it, "set by the reporter") },
+                deescalation = ui.session.deescalation,
+                onLower = { vm.overridePriority(Priority.LOW, "cancelled alarm") },
+            )
+        }
+    }
     item(key = "transcript") {
         val highlight = ui.session.fields.firstOrNull { it.field == ui.selected }?.evidence
         TranscriptCard(ui.session.transcripts, highlight, ui.heardNow, reading = ui.processing)
     }
     val q = ui.session.state as? SessionState.Asking
     if (inlineQuestion && q != null && !ui.processing && !ui.listening) {
-        item(key = "question") { QuestionDock(q.question, ui.speaking, vm::reply, vm::onMicTapped, vm::stopSpeaking, vm::goCheck, inline = true) }
+        item(key = "question") { QuestionDock(q.question, ui.speaking, vm::reply, vm::onMicTapped, vm::stopSpeaking, vm::goCheck, inline = true, onKeyAnswer = vm::answerKeyQuestion) }
     }
 }
 
@@ -168,9 +178,13 @@ private fun ReportBottomBar(ui: AppUi, vm: AppViewModel) {
     Column(Modifier.fillMaxWidth().background(if (docked) c.accentContainer else c.canvas).navigationBarsPadding()) {
         if (!docked) Hairline()
         ui.undoLabel?.let { UndoBar(it, vm::undo) }
+        if (ui.session.canSubmitNow && !ui.listening && !ui.processing) {
+            // Urgent lane: sending is never made to wait for the other fields; what is missing is listed in the report.
+            PrimaryButton("Submit now", vm::send, Modifier.fillMaxWidth().padding(horizontal = Size.gutter, vertical = Space.s2))
+        }
         if (asking != null && !ui.listening && !ui.processing && !isWide()) {
             // The question sits in the thumb zone and the report stays visible above it.
-            QuestionDock(asking.question, ui.speaking, vm::reply, vm::onMicTapped, vm::stopSpeaking, vm::goCheck)
+            QuestionDock(asking.question, ui.speaking, vm::reply, vm::onMicTapped, vm::stopSpeaking, vm::goCheck, onKeyAnswer = vm::answerKeyQuestion)
         } else Column(Modifier.padding(horizontal = Size.gutter, vertical = Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
             when {
                 ui.listening -> ListeningBar(ui, vm)

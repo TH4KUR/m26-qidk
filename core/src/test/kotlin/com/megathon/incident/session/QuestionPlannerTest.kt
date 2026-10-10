@@ -53,6 +53,25 @@ class QuestionPlannerTest {
         assertEquals(listOf("Today", "Yesterday"), q.asks.single().replies.map { it.label })
     }
 
+    @Test fun aTimeWithoutADateAsksWasThatTodayWithTodayPreselected() {
+        val r = full().with(Field.SEVERITY, FieldValue("minor", ValueStatus.USER_CONFIRMED))
+            .with(Field.DATE_TIME, heard(Field.DATE_TIME, "date missing ≈10:00 (around 10 AM)"))
+        val q = planner.next(r, setOf(Field.DATE_TIME), low, emptyList())!!
+        assertEquals("Was that today?", q.spoken)
+        val replies = q.asks.single().replies
+        assertEquals(listOf("Today", "Yesterday"), replies.map { it.label })
+        assertEquals(listOf(true, false), replies.map { it.suggested })
+        assertEquals(listOf("today", "yesterday"), replies.map { it.value })
+    }
+
+    @Test fun anAmbiguousDayThatNamesADateStillAsksWhichDayWithoutPreselecting() {
+        val r = full().with(Field.SEVERITY, FieldValue("minor", ValueStatus.USER_CONFIRMED))
+            .with(Field.DATE_TIME, heard(Field.DATE_TIME, "2026-10-10 morning (kal subah)"))
+        val q = planner.next(r, setOf(Field.DATE_TIME), low, emptyList())!!
+        assertEquals("Which day was that?", q.spoken)
+        assertTrue(q.asks.single().replies.none { it.suggested })
+    }
+
     @Test fun theSameQuestionTwiceInARowMovesOnToReview() {
         val asked = listOf(setOf(Field.SEVERITY))
         assertNull(planner.next(full(), emptySet(), low, asked))

@@ -50,6 +50,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.megathon.incident.domain.Priority
 import com.megathon.incident.domain.PriorityAdvice
+import com.megathon.incident.priority.Deescalation
+import com.megathon.incident.priority.KeyAnswer
 import com.megathon.incident.session.Question
 import com.megathon.incident.session.QuickReply
 import com.megathon.incident.ui.theme.LocalReduceMotion
@@ -124,6 +126,7 @@ fun QuestionDock(
     onSkip: () -> Unit,
     modifier: Modifier = Modifier,
     inline: Boolean = false,
+    onKeyAnswer: (KeyAnswer) -> Unit = {},
 ) {
     val c = Theme.colors
     val shape = if (inline) RoundedCornerShape(20.dp) else RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
@@ -136,6 +139,17 @@ fun QuestionDock(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("One quick question", style = MaterialTheme.typography.labelMedium, color = c.onAccentContainer, modifier = Modifier.weight(1f).semantics { heading() })
             if (speaking) TextAction("Stop speaking", onStopSpeaking, color = c.onAccentContainer)
+        }
+        if (question.key) {
+            // The advisor's one dispatch-style question: no field behind it, answered Yes / No / Not sure.
+            Column(verticalArrangement = Arrangement.spacedBy(Space.s2), modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
+                Text(question.spoken, style = MaterialTheme.typography.headlineSmall, color = c.onAccentContainer)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.s2), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+                    OutlinedChoiceChip("Yes", onClick = { onKeyAnswer(KeyAnswer.YES) })
+                    OutlinedChoiceChip("No", onClick = { onKeyAnswer(KeyAnswer.NO) })
+                    OutlinedChoiceChip("Not sure", onClick = { onKeyAnswer(KeyAnswer.UNSURE) })
+                }
+            }
         }
         question.asks.forEach { ask ->
             Column(verticalArrangement = Arrangement.spacedBy(Space.s2), modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
@@ -158,7 +172,13 @@ fun QuestionDock(
 
 /** Only shown when priority rises above routine. Urgent leads with the emergency line. Can be lowered by the reporter. */
 @Composable
-fun PriorityBanner(advice: PriorityAdvice, onOverride: (Priority) -> Unit, modifier: Modifier = Modifier) {
+fun PriorityBanner(
+    advice: PriorityAdvice,
+    onOverride: (Priority) -> Unit,
+    modifier: Modifier = Modifier,
+    deescalation: Deescalation? = null,
+    onLower: () -> Unit = {},
+) {
     val c = Theme.colors
     if (advice.level < Priority.MEDIUM && !advice.overriddenByUser) return
     val urgent = advice.level >= Priority.HIGH
@@ -180,6 +200,11 @@ fun PriorityBanner(advice: PriorityAdvice, onOverride: (Priority) -> Unit, modif
             }
             if (advice.level == Priority.URGENT) {
                 Text("If anyone is in danger, call 112.", style = MaterialTheme.typography.headlineSmall, color = onC)
+            }
+            if (deescalation != null) {
+                // Offered, never applied by itself: one tap lowers the level, anything else leaves it as it is.
+                Text(deescalation.reason.replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.bodyMedium, color = onC)
+                OutlinedChoiceChip("Lower to LOW?", onClick = onLower)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextAction(if (open) "Hide why" else "Why?", { open = !open }, color = onC)

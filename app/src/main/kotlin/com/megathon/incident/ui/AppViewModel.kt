@@ -18,6 +18,7 @@ import com.megathon.incident.engine.Engines
 import com.megathon.incident.engine.LlmKind
 import com.megathon.incident.engine.SimulatedEngineInReleaseException
 import com.megathon.incident.engine.SpeechKind
+import com.megathon.incident.priority.KeyAnswer
 import com.megathon.incident.session.Pipeline
 import com.megathon.incident.session.QuickReply
 import com.megathon.incident.session.ReportSession
@@ -344,6 +345,12 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
 
     fun undo() { session.undo(); local.update { it.copy(undoLabel = null) } }
     fun overridePriority(level: Priority, reason: String) = session.overridePriority(level, reason)
+
+    fun answerKeyQuestion(answer: KeyAnswer) {
+        speaker.stop()
+        session.answerKeyQuestion(answer)
+        local.update { it.copy(speaking = false) }
+    }
 
     // ---- navigation ----------------------------------------------------------------------------------------------
 
