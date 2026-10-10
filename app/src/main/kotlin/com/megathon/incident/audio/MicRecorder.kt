@@ -19,7 +19,7 @@ import kotlin.math.sqrt
  * Records 16 kHz mono PCM16 from the microphone while the reporter has asked it to (consent: only ever started by a tap).
  * [onLevel] reports 0..1 about ten times a second so the screen can show that the device is hearing.
  */
-class MicRecorder(private val context: Context) {
+class MicRecorder(private val context: Context, private val maxSamples: Int = MAX_SAMPLES) {
     private var record: AudioRecord? = null
     private var job: Job? = null
     private var samples = ShortArray(SAMPLE_RATE * 10)
@@ -53,7 +53,7 @@ class MicRecorder(private val context: Context) {
                 if (n <= 0) break
                 append(chunk, n)
                 onLevel(level(chunk, n))
-                if (count >= MAX_SAMPLES) { onLimit(); break }
+                if (count >= maxSamples) { onLimit(); break }
             }
         }
         return true
@@ -80,7 +80,7 @@ class MicRecorder(private val context: Context) {
     }
 
     private fun append(chunk: ShortArray, n: Int) {
-        if (count + n > samples.size) samples = samples.copyOf(minOf(samples.size * 2, MAX_SAMPLES + chunk.size))
+        if (count + n > samples.size) samples = samples.copyOf(minOf(samples.size * 2, maxSamples + chunk.size))
         System.arraycopy(chunk, 0, samples, count, minOf(n, samples.size - count))
         count = minOf(count + n, samples.size)
     }

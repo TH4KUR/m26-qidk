@@ -1,5 +1,6 @@
 package com.megathon.incident
 
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -8,6 +9,7 @@ import androidx.activity.viewModels
 import com.megathon.incident.engine.Engines
 import com.megathon.incident.ui.AppRoot
 import com.megathon.incident.ui.AppViewModel
+import com.megathon.incident.ui.screens.RecordScreen
 import com.megathon.incident.ui.theme.IncidentTheme
 
 class MainActivity : ComponentActivity() {
@@ -17,6 +19,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Debug builds: `--es record <clipName>` opens a tap-to-record screen that writes filesDir/recordings/<clipName>.wav
+        // (16 kHz mono PCM16) for the speech data collection. The normal report flow is not started.
+        val recordClip = if (Engines.isDebuggable(this)) intent.getStringExtra("record") else null
+        if (recordClip != null) {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            setContent { IncidentTheme { RecordScreen(recordClip) } }
+            return
+        }
         // Debug builds: `--es wav <path in the app's files dir>` runs that WAV through the real speech path.
         intent.getStringExtra("wav")?.let { vm.debugTranscribeFile(it) }
         // Debug builds: `--es eval <gold file> [--es prompt <file>] --es run <name> [--es only g01,g02]` (dev split only).
