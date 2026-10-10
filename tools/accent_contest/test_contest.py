@@ -60,12 +60,20 @@ class ContestTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "whisper-tiny.en").mkdir()
+            (root / "whisper-tiny.en" / "model.safetensors").touch()
             self.assertEqual(
                 resolve_model("openai/whisper-tiny.en", root),
                 str(root / "whisper-tiny.en"),
             )
             with self.assertRaisesRegex(ValueError, "model directory missing"):
                 resolve_model("openai/whisper-base.en", root)
+
+    def test_incomplete_local_model_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "whisper-tiny.en").mkdir()
+            with self.assertRaisesRegex(ValueError, "model weights missing"):
+                resolve_model("openai/whisper-tiny.en", root)
 
 
 if __name__ == "__main__":

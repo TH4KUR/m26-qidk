@@ -126,6 +126,8 @@ def resolve_model(model: str, models_dir: Path | None) -> str:
     local_path = models_dir / model.split("/")[-1]
     if not local_path.is_dir():
         raise ValueError(f"model directory missing: {local_path}")
+    if not (local_path / "model.safetensors").is_file():
+        raise ValueError(f"model weights missing: {local_path}")
     return str(local_path)
 
 
