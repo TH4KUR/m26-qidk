@@ -1,5 +1,6 @@
 package com.megathon.incident.session
 
+import com.megathon.incident.domain.ExtractionPayload
 import com.megathon.incident.domain.Field
 import com.megathon.incident.domain.FieldValue
 import com.megathon.incident.domain.IncidentReport
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import java.time.Instant
 import java.time.Clock
 import java.time.LocalDate
 import java.time.ZoneId
@@ -69,14 +71,16 @@ class ReportSession(
 
     /**
      * One thing the reporter said. [stt] is how it was heard (engine, where it ran, how long). [signals] are the sound and
-     * voice tags heard in the same audio; they go to the advisor, whose rules alone decide what they mean.
+     * voice tags heard in the same audio; they go to the advisor, whose rules alone decide what they mean. [capturedAt] is the
+     * device-clock instant the reporter stopped speaking (defaults to the session clock now).
      */
-    suspend fun onUtterance(text: String, stt: StageRecord? = null, signals: List<Signal> = emptyList()) {
+    suspend fun onUtterance(text: String, stt: StageRecord? = null, signals: List<Signal> = emptyList(), capturedAt: Instant? = null) {
         if (text.isBlank()) {
             fail("I didn't catch that. Try again, a little closer to the microphone.")
             return
         }
         val said = text.trim()
+        val at = capturedAt ?: clock.instant() // when the reporter stopped speaking: "right now" and "10 minutes ago" are relative to this
         remember() // one voice turn is one undoable step
         transcripts += said
         stt?.let(::record)
@@ -99,8 +103,8 @@ class ReportSession(
         log("update_report", result.text.trim())
 
         val before = report
-        val validation = validator.validate(parsed.payload, transcripts.joinToString(" "), clock.instant())
-        val merged = ReportMerge.apply(report, validation, MergeContext(said, clock.instant(), zone, clock.millis()))
+        val validation = validator.validate(withNowPhrase(parsed.payload, said), transcripts.joinToString(" "), at)
+        val merged = ReportMerge.apply(report, validation, MergeContext(said, at, zone, clock.millis()))
         report = merged.report
         journal += merged.journal
         val changed = Field.entries.filter { before.value(it).text != report.value(it).text }.toSet()
@@ -111,6 +115,17 @@ class ReportSession(
         priority = out.advice
         deescalation = out.deescalation
         advance(prefix = out.spoken, keyQuestion = out.keyQuestion)
+    }
+
+    /**
+     * A small model often skips "right now" / "just now" as a time. It is the worker's own phrase and C's resolver reads it
+     * as the capture time, so when the model left the time out and the report has none yet, take the phrase from the words.
+     * Never replaces a time the model gave or one already in the report.
+     */
+    private fun withNowPhrase(payload: ExtractionPayload, said: String): ExtractionPayload {
+        if (!payload.date_time_text.isNullOrBlank() || report.isFilled(Field.DATE_TIME)) return payload
+        val phrase = NOW_PHRASE.find(said)?.value ?: return payload
+        return payload.copy(date_time_text = phrase, evidence = payload.evidence + ("date_time_text" to phrase))
     }
 
     // ---- taps and edits -----------------------------------------------------------------------------------------
@@ -343,5 +358,9 @@ class ReportSession(
             }
             FieldView(f, Labels.fieldLabel(f), mandatory, value, status, evidence, hint, assistant)
         }
+    }
+
+    private companion object {
+        val NOW_PHRASE = Regex("""\b(right now|just now|just happened|this very moment)\b""", RegexOption.IGNORE_CASE)
     }
 }

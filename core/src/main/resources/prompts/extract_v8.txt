@@ -6,7 +6,7 @@ Fields, all optional: incident_type, severity, location, date_time_text, persons
 Rules:
 - Every field named in evidence MUST also be written in arguments with its value. Never write an evidence entry for a field you left out.
 - equipment_asset: the machine, device or object involved (for example printer, UPS, microwave, lift, forklift). Include it whenever one is named.
-- date_time_text: include it whenever any time or day is spoken (for example "10 AM", "yesterday", "this morning", "fifteen minutes ago").
+- date_time_text: include it whenever any time or day is spoken (for example "10 AM", "yesterday", "this morning", "fifteen minutes ago", "right now", "just now").
 - incident_type is one of: water_leak_flood, fire_smoke, electrical, spill_chemical, injury, illness, near_miss, property_damage, equipment_failure, security, environmental, other.
 - severity is one of: none, minor, moderate, severe, critical. Only include it if the worker states it.
 - Never guess. Never invent names.

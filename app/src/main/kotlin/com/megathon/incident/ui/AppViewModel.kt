@@ -196,12 +196,12 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         viewModelScope.launch {
             timer?.cancel()
             val pcm = recorder.stop()
-            process(pcm)
+            process(pcm, java.time.Instant.now()) // the device clock at the moment the reporter stopped speaking
         }
     }
 
     /** Hear -> read -> merge for one utterance of 16 kHz mono PCM. Shared by the microphone and the debug WAV hook. */
-    private suspend fun process(pcm: ShortArray) {
+    private suspend fun process(pcm: ShortArray, capturedAt: java.time.Instant = java.time.Instant.now()) {
         mutex.withLock {
             local.update { it.copy(listening = false, processing = true, heardNow = null, message = null) }
             val engine = speech ?: return@withLock
@@ -220,7 +220,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             local.update { it.copy(heardNow = heard.text.ifBlank { null }) }
             val tags = if (heard.text.isBlank()) null else readVoiceTags(pcm)
             tags?.let { session.recordStage(StageRecord("Tags", "SenseVoice (sherpa-onnx, QNN)", it.compute, it.elapsedMs)) }
-            session.onUtterance(heard.text, StageRecord("Hear", engine.name, heard.compute, heard.elapsedMs), tags?.signals.orEmpty())
+            session.onUtterance(heard.text, StageRecord("Hear", engine.name, heard.compute, heard.elapsedMs), tags?.signals.orEmpty(), capturedAt)
             finishTurn(before, journalBefore, null)
         }
     }

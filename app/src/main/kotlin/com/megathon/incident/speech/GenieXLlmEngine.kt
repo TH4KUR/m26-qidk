@@ -42,6 +42,8 @@ class GenieXLlmEngine(
     override val name = "Qwen3-4B-Instruct-2507 (GenieX, QAIRT)"
 
     private val loadLock = Mutex()
+    /** One generation at a time: two overlapping calls on the same model corrupted its state and crashed the app (kit, 02:57). */
+    private val generateLock = Mutex()
     private var wrapper: LlmWrapper? = null
     private var runtimeId: String = ""
     private var sdkReady = false
@@ -75,7 +77,9 @@ class GenieXLlmEngine(
         (System.nanoTime() - started) / 1_000_000
     }
 
-    override suspend fun complete(request: LlmRequest): LlmResult {
+    override suspend fun complete(request: LlmRequest): LlmResult = generateLock.withLock { generate(request) }
+
+    private suspend fun generate(request: LlmRequest): LlmResult {
         warmUp()
         val llm = checkNotNull(wrapper)
         val started = System.nanoTime()
