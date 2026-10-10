@@ -6,7 +6,9 @@ import com.megathon.incident.domain.FieldValue
 import com.megathon.incident.domain.IncidentReport
 import com.megathon.incident.domain.Priority
 import com.megathon.incident.domain.PriorityAdvice
+import com.megathon.incident.domain.ReportState
 import com.megathon.incident.domain.Signal
+import com.megathon.incident.domain.Suggestion
 import com.megathon.incident.domain.ValueStatus
 import com.megathon.incident.llm.LlmEngine
 import com.megathon.incident.llm.ParseResult
@@ -16,6 +18,7 @@ import com.megathon.incident.priority.Deescalation
 import com.megathon.incident.priority.KeyAnswer
 import com.megathon.incident.priority.PriorityAdvisor
 import com.megathon.incident.priority.SeveritySuggester
+import com.megathon.incident.suggest.SuggestionEngine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -45,8 +48,15 @@ class ReportSession(
     private val clock: Clock,
     private val zone: ZoneId,
     private val newId: () -> String,
+    /** D's chip engine (spec D16); null means no chips. It only proposes; the reporter's tap is the only thing that changes a field. */
+    private val suggestions: SuggestionEngine? = null,
 ) {
-    private data class Snapshot(val report: IncidentReport, val clarify: Set<Field>, val transcriptCount: Int)
+    private data class Snapshot(
+        val report: IncidentReport,
+        val clarify: Set<Field>,
+        val transcriptCount: Int,
+        val chipDecisions: List<com.megathon.incident.domain.JournalEntry>,
+    )
 
     private var advisor = newAdvisor()
     private var report = IncidentReport.empty(newId(), clock.millis())
@@ -55,6 +65,8 @@ class ReportSession(
     private val transcripts = mutableListOf<String>()
     private val toolLog = mutableListOf<ToolLogEntry>()
     private val journal = mutableListOf<JournalEntry>()
+    /** Accepted and rejected chips, in D's journal type: this is how a dismissed chip stays dismissed. */
+    private var chipDecisions: List<com.megathon.incident.domain.JournalEntry> = emptyList()
     private val stages = mutableListOf<StageRecord>()
     private val asked = mutableListOf<Set<Field>>()
     private val undoStack = ArrayDeque<Snapshot>()
@@ -160,11 +172,38 @@ class ReportSession(
         if (state is SessionState.Asking) advance(prefix = null) else publish()
     }
 
+    /**
+     * The reporter tapped Accept on a chip from the suggestion engine: the field becomes the proposal (USER_CONFIRMED), what was
+     * heard stays in the journal, and Undo brings it back. A chip made for a value that has since changed does nothing.
+     */
+    fun acceptSuggestion(chip: Suggestion) {
+        val engine = suggestions ?: return
+        val now = chipState()
+        val after = engine.accept(now, chip)
+        if (after == now) return
+        remember()
+        chipDecisions = after.journal
+        setByReporter(chip.field, after.report.value(chip.field), "suggestion accepted: ${chip.reason}")
+        if (state is SessionState.Asking) advance(prefix = null) else publish()
+    }
+
+    /** The reporter dismissed a chip: the field is untouched and the same chip is not offered again. */
+    fun rejectSuggestion(chip: Suggestion) {
+        val engine = suggestions ?: return
+        val now = chipState()
+        val after = engine.reject(now, chip)
+        if (after == now) return
+        remember()
+        chipDecisions = after.journal
+        publish()
+    }
+
     fun undo() {
         val snap = undoStack.removeLastOrNull() ?: return
         journal += JournalEntry(Field.INCIDENT_TYPE, null, null, "last change undone", clock.millis()).copy(field = lastChangedField(snap))
         report = snap.report
         clarify = snap.clarify
+        chipDecisions = snap.chipDecisions
         while (transcripts.size > snap.transcriptCount) transcripts.removeAt(transcripts.lastIndex)
         if (state is SessionState.Asking) advance(prefix = null) else publish()
     }
@@ -212,7 +251,7 @@ class ReportSession(
         advisor = newAdvisor()
         report = IncidentReport.empty(newId(), clock.millis())
         clarify = emptySet()
-        transcripts.clear(); toolLog.clear(); journal.clear(); stages.clear(); asked.clear(); undoStack.clear()
+        chipDecisions = emptyList(); transcripts.clear(); toolLog.clear(); journal.clear(); stages.clear(); asked.clear(); undoStack.clear()
         priority = null; deescalation = null; say = null; spokenSummary = null
         state = SessionState.Idle
         publish()
@@ -277,7 +316,7 @@ class ReportSession(
         Field.entries.firstOrNull { report.value(it) != snap.report.value(it) } ?: Field.INCIDENT_TYPE
 
     private fun remember() {
-        undoStack.addLast(Snapshot(report, clarify, transcripts.size))
+        undoStack.addLast(Snapshot(report, clarify, transcripts.size, chipDecisions))
         if (undoStack.size > 20) undoStack.removeFirst()
     }
 
@@ -317,6 +356,24 @@ class ReportSession(
         _ui.value = build()
     }
 
+    private fun chipState() = ReportState(report, chipDecisions)
+
+    /**
+     * Recomputed from the report each time (chips are never stored). Severity is left to its own suggestion
+     * ([acceptSuggestion] by field) while it is still only suggested, so the reporter is not shown it twice.
+     * A failing engine costs the chips, never the session.
+     */
+    private fun chips(): List<Suggestion> {
+        val engine = suggestions ?: return emptyList()
+        if (state is SessionState.Submitted) return emptyList()
+        val found = try {
+            engine.suggest(chipState(), transcripts.joinToString(" "))
+        } catch (e: Exception) {
+            emptyList()
+        }
+        return found.filterNot { it.field == Field.SEVERITY && report.value(Field.SEVERITY).status == ValueStatus.SUGGESTED }
+    }
+
     private fun build() = SessionUi(
         state = state,
         report = report,
@@ -331,6 +388,7 @@ class ReportSession(
         spokenSummary = spokenSummary,
         canSubmitNow = state !is SessionState.Submitted && advisor.lane().offerSubmitNow,
         deescalation = deescalation,
+        suggestions = chips(),
     )
 
     private fun fieldViews(): List<FieldView> {

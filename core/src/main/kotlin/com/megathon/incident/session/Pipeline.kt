@@ -9,6 +9,7 @@ import com.megathon.incident.priority.PriorityRules
 import com.megathon.incident.priority.SeveritySuggester
 import com.megathon.incident.priority.UrgencyFeatureExtractor
 import com.megathon.incident.priority.UrgencyStrategies
+import com.megathon.incident.suggest.SuggestionEngine
 import com.megathon.incident.tam.TamCueLists
 import com.megathon.incident.tam.TamDetector
 import java.time.Clock
@@ -23,6 +24,7 @@ object Pipeline {
         clock: Clock = Clock.systemDefaultZone(),
         zone: ZoneId = ZoneId.of("Asia/Kolkata"),
         prompts: PromptBuilder = PromptBuilder.default(),
+        suggestions: SuggestionEngine? = null,
     ): ReportSession {
         val tam = TamDetector(TamCueLists.loadDefault())
         val extractor = UrgencyFeatureExtractor(HazardLexicon.loadDefault(), tam)
@@ -39,6 +41,7 @@ object Pipeline {
             clock = clock,
             zone = zone,
             newId = { "report-${clock.millis()}-${counter.incrementAndGet()}" },
+            suggestions = suggestions,
         )
     }
 }
