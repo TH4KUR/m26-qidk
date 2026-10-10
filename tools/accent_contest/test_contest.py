@@ -4,7 +4,7 @@ import unittest
 import wave
 from pathlib import Path
 
-from contest import Clip, aggregate_wer, load_manifest, normalize, render_table, run_contest
+from contest import Clip, aggregate_wer, load_manifest, normalize, render_table, resolve_model, run_contest
 
 
 class ContestTest(unittest.TestCase):
@@ -55,6 +55,17 @@ class ContestTest(unittest.TestCase):
         self.assertLess(table.index("better"), table.index("worse"))
         self.assertIn("1/10", table)
         self.assertIn("10.00%", table)
+
+    def test_local_model_directory_keeps_repository_name_in_results(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "whisper-tiny.en").mkdir()
+            self.assertEqual(
+                resolve_model("openai/whisper-tiny.en", root),
+                str(root / "whisper-tiny.en"),
+            )
+            with self.assertRaisesRegex(ValueError, "model directory missing"):
+                resolve_model("openai/whisper-base.en", root)
 
 
 if __name__ == "__main__":

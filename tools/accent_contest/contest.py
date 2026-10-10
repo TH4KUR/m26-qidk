@@ -120,15 +120,27 @@ def render_table(rows: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def resolve_model(model: str, models_dir: Path | None) -> str:
+    if models_dir is None:
+        return model
+    local_path = models_dir / model.split("/")[-1]
+    if not local_path.is_dir():
+        raise ValueError(f"model directory missing: {local_path}")
+    return str(local_path)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, required=True, help="JSONL rows: clip_id, wav, reference")
     parser.add_argument("--output", type=Path, required=True, help="write Markdown table here")
     parser.add_argument("--predictions", type=Path, help="optional JSONL output with per-clip predictions")
     parser.add_argument("--model", action="append", dest="models", help="override the default four model IDs; repeatable")
+    parser.add_argument("--models-dir", type=Path, help="directory containing locally downloaded model folders")
     args = parser.parse_args()
     clips = load_manifest(args.manifest)
     models = args.models or list(DEFAULT_MODELS)
+    for model in models:
+        resolve_model(model, args.models_dir)
 
     import torch
     from transformers import pipeline
@@ -142,7 +154,7 @@ def main() -> None:
                 torch.cuda.empty_cache()
             pipelines[model] = pipeline(
                 "automatic-speech-recognition",
-                model=model,
+                model=resolve_model(model, args.models_dir),
                 device=0 if torch.cuda.is_available() else -1,
                 chunk_length_s=30,
             )
