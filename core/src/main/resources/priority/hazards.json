@@ -1,5 +1,5 @@
 {
-  "defaultImpact": 2,
+  "defaultImpact": 3,
   "hazards": [
     {
       "label": "fire",
@@ -322,7 +322,8 @@
         "pipe has burst",
         "baadh",
         "बाढ़"
-      ]
+      ],
+      "presentIsOngoing": true
     },
     {
       "label": "spill",
@@ -379,7 +380,8 @@
         "loitering",
         "lurking",
         "संदिग्ध"
-      ]
+      ],
+      "peopleIntrinsic": true
     },
     {
       "label": "broken_glass",
@@ -573,8 +575,6 @@
     "people",
     "person",
     "persons",
-    "someone",
-    "somebody",
     "everyone",
     "everybody",
     "children",

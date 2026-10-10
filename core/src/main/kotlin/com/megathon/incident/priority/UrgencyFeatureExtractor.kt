@@ -47,7 +47,7 @@ class UrgencyFeatureExtractor(
 ) {
     private val cfg = lexicon.file
 
-    private data class Piece(val text: String, val tam: Tam)
+    private data class Piece(val text: String, val tam: Tam, val explicitOngoing: Boolean)
 
     /** A hazard family hit, or a compound built from one. */
     private data class Found(
@@ -55,7 +55,7 @@ class UrgencyFeatureExtractor(
         val presentIsOngoing: Boolean, val forceOngoing: Boolean, val peopleIntrinsic: Boolean,
     )
 
-    private data class ScannedPiece(val tam: Tam, val negated: Boolean, val found: List<Found>)
+    private data class ScannedPiece(val tam: Tam, val explicitOngoing: Boolean, val negated: Boolean, val found: List<Found>)
 
     fun extract(input: UrgencyInput): UrgencyFeatures {
         // ---- pass 1: scan every piece --------------------------------------------------------
@@ -87,7 +87,7 @@ class UrgencyFeatureExtractor(
                 val base = raw.map { Found(it.def.label, it.def.impact, it.phrase, it.def.presentIsOngoing, false, it.def.peopleIntrinsic) }
                 base + compoundHits(t, raw.map { it.def.label })
             }
-            ScannedPiece(p.tam, negated, found)
+            ScannedPiece(p.tam, p.explicitOngoing, negated, found)
         }
 
         // ---- pass 2: immediacy per hazard, now that "resolved" is known ----------------------
@@ -97,7 +97,7 @@ class UrgencyFeatureExtractor(
         for (s in scanned) {
             if (!s.negated && s.tam.aspect == Aspect.ONGOING) ongoingAspectSeen = true
             for (f in s.found) {
-                val m = hazardImmediacy(f, s.tam, resolved)
+                val m = hazardImmediacy(f, s.tam, s.explicitOngoing, resolved)
                 if (m == 4) ongoing = true
                 hits += HazardHit(f.label, f.impact, f.phrase, m)
             }
@@ -177,10 +177,11 @@ class UrgencyFeatureExtractor(
         )
     }
 
-    private fun hazardImmediacy(h: Found, tam: Tam, resolved: Boolean): Int {
+    private fun hazardImmediacy(h: Found, tam: Tam, explicitOngoing: Boolean, resolved: Boolean): Int {
         if (h.forceOngoing) return 4
         val base = when {
-            tam.aspect == Aspect.ONGOING -> 4
+            // "is leaking" alone is a present state for a fault; only "still", "since", "spreading" escalate it.
+            tam.aspect == Aspect.ONGOING -> if (h.impact <= 2 && !explicitOngoing) 2 else 4
             tam.modality == Modality.PLANNED || tam.tense == Tense.FUTURE -> if (h.impact <= 1) 2 else 3
             tam.tense == Tense.PAST -> if (resolved || h.impact <= 2) 2 else 3
             h.presentIsOngoing -> 4
@@ -213,8 +214,11 @@ class UrgencyFeatureExtractor(
     private fun pieces(transcript: String): List<Piece> =
         tam.analyze(transcript).flatMap { clause ->
             val parts = clause.text.split(COMMA).map { it.trim() }.filter { it.any { c -> c.isLetterOrDigit() } }
-            if (parts.size <= 1) listOf(Piece(clause.text, clause.tam))
-            else parts.map { part -> Piece(part, tam.analyze(part).firstOrNull()?.tam ?: clause.tam) }
+            if (parts.size <= 1) listOf(Piece(clause.text, clause.tam, clause.explicitOngoing))
+            else parts.map { part ->
+                val sub = tam.analyze(part).firstOrNull()
+                Piece(part, sub?.tam ?: clause.tam, sub?.explicitOngoing ?: clause.explicitOngoing)
+            }
         }
 
     private companion object {

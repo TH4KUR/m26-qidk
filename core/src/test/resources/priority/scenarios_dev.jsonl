@@ -1,0 +1,53 @@
+{"id":"d01","text":"There is a pothole on the road near the main gate","target":2,"lang":"en"}
+{"id":"d02","text":"A pothole near the main gate, not urgent, it can be fixed in a day or two","target":1,"lang":"en"}
+{"id":"d03","text":"The corridor light on the second floor keeps flickering","target":2,"lang":"en"}
+{"id":"d04","text":"The projector in the seminar hall is not working","target":3,"lang":"en"}
+{"id":"d05","text":"The tap in the washroom is leaking","target":4,"lang":"en"}
+{"id":"d06","text":"The door lock of the store room is jammed","target":4,"lang":"en"}
+{"id":"d07","text":"There is a bad smell coming from the drain behind the canteen","target":3,"lang":"en"}
+{"id":"d08","text":"The notice board near the library is dirty and the paint is peeling","target":1,"lang":"en"}
+{"id":"d09","text":"There is a water leak near Conference Room 2","target":4,"lang":"en"}
+{"id":"d10","text":"There was a water leak near Conference Room 2 around 10 AM. Maintenance has already isolated the area.","target":3,"lang":"en"}
+{"id":"d11","text":"The fire drill is scheduled for 3 pm tomorrow","target":1,"lang":"en"}
+{"id":"d12","text":"Nobody is hurt, just a small water leak near the stairs","target":4,"lang":"en"}
+{"id":"d13","text":"The printer on the third floor is jammed again","target":3,"lang":"en"}
+{"id":"d14","text":"Kitchen ke sink ka nal leak ho raha hai, koi jaldi nahi","target":2,"lang":"hinglish"}
+{"id":"d15","text":"कैंटीन की ट्यूबलाइट खराब है","target":3,"lang":"hi"}
+{"id":"d16","text":"Water is still leaking from the ceiling in the corridor","target":8,"lang":"en"}
+{"id":"d17","text":"The water is spreading towards the server room","target":12,"lang":"en"}
+{"id":"d18","text":"There was a spill of oil in the corridor and someone could slip","target":9,"lang":"en"}
+{"id":"d19","text":"Someone slipped on the stairs and hurt their leg","target":9,"lang":"en"}
+{"id":"d20","text":"There is a suspicious person near the parking lot","target":9,"lang":"en"}
+{"id":"d22","text":"There is a power cut in the lab since morning","target":6,"lang":"en"}
+{"id":"d23","text":"The fire alarm is going off in the building","target":15,"lang":"en"}
+{"id":"d24","text":"A student fainted in the seminar hall","target":12,"lang":"en"}
+{"id":"d25","text":"Two people are fighting in the canteen","target":12,"lang":"en"}
+{"id":"d26","text":"I smelled gas earlier but it is gone now","target":9,"lang":"en"}
+{"id":"d27","text":"There was a small fire in the pantry but it is out now","target":10,"lang":"en"}
+{"id":"d28","text":"A wire is hanging from the ceiling near the staircase","target":12,"lang":"en"}
+{"id":"d29","text":"Someone broke into the office last night and the laptops are stolen","target":12,"lang":"en"}
+{"id":"d30","text":"The water pipe has burst in the basement","target":10,"lang":"en"}
+{"id":"d31","text":"There is a gas leak in the chemistry lab","target":16,"lang":"en"}
+{"id":"d32","text":"There is a lot of smoke in the corridor and people are coughing","target":18,"lang":"en"}
+{"id":"d33","text":"Smoke is coming from the printer","target":15,"lang":"en"}
+{"id":"d34","text":"Acid spilled in the chemistry lab and the fumes are spreading","target":16,"lang":"en"}
+{"id":"d35","text":"A person is unconscious in the corridor","target":20,"lang":"en"}
+{"id":"d36","text":"He collapsed near the lift and is not breathing","target":20,"lang":"en"}
+{"id":"d37","text":"My house is on fire","target":20,"lang":"en"}
+{"id":"d38","text":"There is a fire in the kitchen and the flames are spreading","target":20,"lang":"en"}
+{"id":"d39","text":"There is a robber with a gun in our street right now","target":20,"lang":"en"}
+{"id":"d40","text":"A thief has entered the house","target":18,"lang":"en"}
+{"id":"d41","text":"There is a live wire hanging near the staircase","target":15,"lang":"en"}
+{"id":"d42","text":"Short circuit in the electrical panel and sparks are coming out","target":13,"lang":"en"}
+{"id":"d43","text":"The lift is stuck with people inside","target":13,"lang":"en"}
+{"id":"d44","text":"Water is leaking near the electrical panel and it is still leaking","target":12,"lang":"en"}
+{"id":"d45","text":"An explosion happened in the lab","target":20,"lang":"en"}
+{"id":"d46","text":"मेरे घर में आग लगी है","target":20,"lang":"hi"}
+{"id":"d47","text":"ghar mein aag lag gayi hai, log andar phase hain","target":20,"lang":"hinglish"}
+{"id":"d48","text":"kitchen mein paani leak ho raha hai abhi bhi","target":8,"lang":"hinglish"}
+{"id":"d49","text":"chor ghar mein ghus gaya hai","target":18,"lang":"hinglish"}
+{"id":"d50","text":"कोई घायल नहीं हुआ, बस थोड़ा पानी लीक हो रहा है","target":4,"lang":"hi"}
+{"id":"d51","text":"gas ki smell aa rahi hai lab mein","target":16,"lang":"hinglish"}
+{"id":"d52","text":"ek aadmi behosh ho gaya hai","target":20,"lang":"hinglish"}
+{"id":"d53","text":"There is a smell of burning from the switchboard","target":14,"lang":"en"}
+{"id":"d54","text":"Someone is bleeding badly after falling from the stairs","target":17,"lang":"en"}

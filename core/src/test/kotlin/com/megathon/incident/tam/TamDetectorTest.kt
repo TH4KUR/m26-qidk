@@ -139,6 +139,32 @@ class TamDetectorTest {
 
     @Test fun hinglishMixIsOngoing() = assertEquals(Aspect.ONGOING, tam("water still leak ho raha hai").aspect)
 
+    // ---- explicit continuation vs plain progressive --------------------------------------------
+
+    @Test fun plainProgressiveIsOngoingButNotExplicit() {
+        val c = one("water is leaking from the ceiling")
+        assertEquals(Aspect.ONGOING, c.tam.aspect)
+        assertFalse(c.explicitOngoing)
+    }
+
+    @Test fun stillIsExplicitContinuation() = assertTrue(one("the pipe is still leaking").explicitOngoing)
+
+    @Test fun sinceMorningIsExplicitContinuation() {
+        val c = one("the lights are off since morning")
+        assertEquals(Aspect.ONGOING, c.tam.aspect)
+        assertTrue(c.explicitOngoing)
+    }
+
+    @Test fun hindiPlainProgressiveIsNotExplicit() {
+        val c = one("paani leak ho raha hai")
+        assertEquals(Aspect.ONGOING, c.tam.aspect)
+        assertFalse(c.explicitOngoing)
+    }
+
+    @Test fun hindiSubahSeIsExplicit() = assertTrue(one("subah se paani aa raha hai").explicitOngoing)
+
+    @Test fun hindiAbhiBhiIsExplicit() = assertTrue(one("abhi bhi paani leak ho raha hai").explicitOngoing)
+
     // ---- housekeeping --------------------------------------------------------------------------
 
     @Test fun emptyTextHasNoClauses() = assertTrue(detector.analyze("   ").isEmpty())

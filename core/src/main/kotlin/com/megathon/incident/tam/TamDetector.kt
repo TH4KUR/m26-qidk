@@ -11,7 +11,14 @@ import java.text.Normalizer
  * [hedged] is kept separately because a clause can be both negated and hedged ("I think nobody was
  * hurt"); [Tam.modality] holds only the highest-precedence reading.
  */
-data class TamClause(val text: String, val tam: Tam, val hedged: Boolean, val cues: List<String>)
+data class TamClause(
+    val text: String,
+    val tam: Tam,
+    val hedged: Boolean,
+    val cues: List<String>,
+    /** ONGOING because of an explicit continuation cue ("still", "since morning"), not just "is leaking". */
+    val explicitOngoing: Boolean = false,
+)
 
 /**
  * Rule-based, CPU-only detector (spec D17). Decides per clause, so "the water has stopped but it is
@@ -57,7 +64,8 @@ class TamDetector(val lists: TamCueLists) {
         val masked = CueMatching.mask(t, hedged + completed)
         val negated = CueMatching.negations(masked, lists.negated)
         val planned = CueMatching.find(t, lists.planned)
-        val ongoing = CueMatching.find(t, lists.ongoing) + progressive(t)
+        val explicitOngoing = CueMatching.find(t, lists.ongoing)
+        val ongoing = explicitOngoing + CueMatching.find(t, lists.progressive) + progressive(t)
         val future = CueMatching.find(t, lists.future)
         val past = CueMatching.find(t, lists.past)
         val present = CueMatching.find(t, lists.present)
@@ -84,7 +92,10 @@ class TamDetector(val lists: TamCueLists) {
         }
         val cues = (hedged + completed + negated + planned + ongoing + future + past + present)
             .map { it.phrase }.distinct()
-        return TamClause(clause, Tam(tense, aspect, modality), hedged = hedged.isNotEmpty(), cues = cues)
+        return TamClause(
+            clause, Tam(tense, aspect, modality), hedged = hedged.isNotEmpty(), cues = cues,
+            explicitOngoing = aspect == Aspect.ONGOING && explicitOngoing.isNotEmpty(),
+        )
     }
 
     /** "is leaking", "are flooding", "has been leaking": present progressive, excluding noun look-alikes. */

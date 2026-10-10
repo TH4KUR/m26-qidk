@@ -8,6 +8,7 @@ internal data class CueFile(
     val language: String = "",
     val note: String = "",
     val ongoing: List<String> = emptyList(),
+    val progressive: List<String> = emptyList(),
     val completed: List<String> = emptyList(),
     val planned: List<String> = emptyList(),
     val hedged: List<String> = emptyList(),
@@ -24,7 +25,10 @@ internal data class CueFile(
  * (`cues_en.json`, `cues_hi.json`).
  */
 data class TamCueLists(
+    /** Explicit continuation: "still", "since morning", "abhi bhi". */
     val ongoing: List<String>,
+    /** Plain progressive markers (Hindi "raha hai"); ongoing, but not an escalation by themselves. */
+    val progressive: List<String>,
     val completed: List<String>,
     val planned: List<String>,
     val hedged: List<String>,
@@ -42,7 +46,7 @@ data class TamCueLists(
             val files = documents.map { json.decodeFromString(CueFile.serializer(), it) }
             fun merged(pick: (CueFile) -> List<String>) = files.flatMap(pick).map { it.lowercase().trim() }.filter { it.isNotEmpty() }.distinct()
             return TamCueLists(
-                ongoing = merged { it.ongoing }, completed = merged { it.completed }, planned = merged { it.planned },
+                ongoing = merged { it.ongoing }, progressive = merged { it.progressive }, completed = merged { it.completed }, planned = merged { it.planned },
                 hedged = merged { it.hedged }, negated = merged { it.negated }, past = merged { it.past },
                 present = merged { it.present }, future = merged { it.future }, clauseBreaks = merged { it.clauseBreaks },
             )

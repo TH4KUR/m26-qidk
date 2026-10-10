@@ -27,9 +27,10 @@ class UrgencyFeatureExtractorTest {
     @Test fun waterLeakNearElectricsIsImpactThree() =
         assertEquals(3, f("water is leaking near the electrical panel").impact)
 
-    @Test fun unmatchedTextGetsTheDefaultImpactAndSaysSo() {
+    @Test fun unmatchedTextIsTreatedAsAPossibleHazardUntilClarified() {
+        // Unknown must never default to trivial: under-triage costs three times more than over-triage.
         val r = f("the notice board needs to be moved")
-        assertEquals(2, r.impact)
+        assertEquals(3, r.impact)
         assertTrue(r.reasons.any { it.text.contains("default") })
     }
 
@@ -165,6 +166,23 @@ class UrgencyFeatureExtractorTest {
 
     @Test fun hangingWireIsAHazard() =
         assertTrue(f("a wire is hanging from the ceiling near the staircase").impact >= 3)
+
+    @Test fun plainProgressiveLeakIsNotEscalating() = assertEquals(2, f("the tap in the washroom is leaking").immediacy)
+
+    @Test fun hindiPlainProgressiveLeakIsNotEscalating() = assertEquals(2, f("paani leak ho raha hai").immediacy)
+
+    @Test fun devanagariPlainProgressiveLeakIsNotEscalating() = assertEquals(2, f("थोड़ा पानी लीक हो रहा है").immediacy)
+
+    @Test fun sinceMorningMeansTheFaultIsContinuing() =
+        assertEquals(4, f("there is a power cut in the lab since morning").immediacy)
+
+    @Test fun aBurstPipeIsFloodingNow() = assertEquals(4, f("the water pipe has burst in the basement").immediacy)
+
+    @Test fun someoneAloneIsNotPeopleAtRisk() =
+        assertEquals(3, f("there was a spill of oil in the corridor and someone could slip").impact)
+
+    @Test fun suspiciousPersonIsNotBoostedForBeingAPerson() =
+        assertEquals(3, f("there is a suspicious person near the parking lot").impact)
 
     @Test fun devanagariLeakWordIsRecognised() = assertTrue("leak" in labels("थोड़ा पानी लीक हो रहा है"))
 }
