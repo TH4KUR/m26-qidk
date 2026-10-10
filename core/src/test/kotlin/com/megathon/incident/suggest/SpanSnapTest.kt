@@ -49,6 +49,13 @@ class SpanSnapTest {
 
     @Test fun aSingleGenericWordInsideAPhraseIsNotAPlace() = assertNull(proposed("north side of the building"))
 
+    /** Found by measuring (run 3, g07): "reading room" is an alias of Library, but "library" is already said. */
+    @Test fun anAliasNextToTheRightNameGivesNoChip() = assertNull(proposed("library reading room on the first floor"))
+
+    /** Found by measuring (run 3/4, g23): a generic equipment word inside a phrase names a type, not one asset. */
+    @Test fun equipmentIsNotSnappedFromInsideALongerPhrase() =
+        assertNull(snapper.snap("hot water heater", EntryKind.ASSET))
+
     @Test fun unknownCodesStayUnknown() {
         assertNull(proposed("a B2"))
         assertNull(proposed("Block B-2"))

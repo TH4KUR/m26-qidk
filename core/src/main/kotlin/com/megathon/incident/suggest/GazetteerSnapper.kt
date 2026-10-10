@@ -48,7 +48,8 @@ class GazetteerSnapper(
         return when (val whole = matchWhole(tokens.subList(first, tokens.size).map { it.word }, kind)) {
             is Whole.Hit -> Snap(whole.entry, whole.reason, render(text, tokens, listOf(Triple(first, tokens.size - 1, whole.entry.name))))
             Whole.Stop -> null
-            Whole.Miss -> matchSpans(text, tokens, first, kind)
+            // Inside a longer phrase an equipment word names a type ("hot water heater"), not one asset.
+            Whole.Miss -> if (kind == EntryKind.PLACE) matchSpans(text, tokens, first, kind) else null
         }
     }
 
@@ -83,9 +84,11 @@ class GazetteerSnapper(
         return when {
             places.isEmpty() -> null
             places.size == 1 -> {
+                val entry = places.single()
+                // The right name already said ("library reading room") needs no chip.
+                if (SiteDirectory.key(entry.name) in SiteDirectory.key(text)) return null
                 val fixes = hits.filterNot { it.canonical }
                 if (fixes.isEmpty()) return null
-                val entry = places.single()
                 Snap(entry, "Heard \"${fixes.first().said}\"; the site has ${entry.name}.", render(text, tokens, fixes.map { Triple(it.from, it.to, entry.name) }))
             }
             else -> {
