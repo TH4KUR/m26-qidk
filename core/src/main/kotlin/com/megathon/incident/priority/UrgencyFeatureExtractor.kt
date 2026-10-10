@@ -65,29 +65,49 @@ class UrgencyFeatureExtractor(
         var peopleAtRisk = false
         var lowUrgency = false
         var distress = EXCLAMATIONS.containsMatchIn(input.transcript)
+        val weakDistress = mutableSetOf<String>()
+        var anyUnresolved = false
 
-        val scanned = pieces(input.transcript).map { p ->
+        val scanned = pieces(input.transcript).mapIndexed { pieceIndex, p ->
             val t = p.text.lowercase()
             val raw = hazardHits(t)
             val resolution = CueMatching.find(t, cfg.resolutionCues)
+            val completedHits = CueMatching.find(t, tam.lists.completed)
             val low = CueMatching.find(t, cfg.lowUrgencyCues)
             // Mask phrases that contain negation words ("not breathing", "not sure", "no longer",
-            // "not urgent") so only a stand-alone negation cancels the hazard.
+            // "not urgent") so only a stand-alone negation can cancel a hazard.
             val masked = CueMatching.mask(
                 t,
                 raw.map { CueHit(it.phrase, it.range) } + resolution + low +
-                    CueMatching.find(t, tam.lists.hedged) + CueMatching.find(t, tam.lists.completed),
+                    CueMatching.find(t, tam.lists.hedged) + completedHits,
             )
-            val negated = CueMatching.negations(masked, tam.lists.negated).isNotEmpty()
+            val negHits = CueMatching.negations(masked, tam.lists.negated)
+            // A negation next to a resolution cue ("has not been fixed", "kaabu mein nahi") says the
+            // problem is NOT over. It does not deny the hazard.
+            val closing = resolution + completedHits.filter { it.phrase in tam.lists.resolution }
+            val unresolvedNegs = negHits.filter { n -> closing.any { CueMatching.gapWords(t, n.range, it.range) <= 2 } }
+            val negated = negHits.size > unresolvedNegs.size
+            val unresolved = !negated && unresolvedNegs.isNotEmpty()
+
+            val people = !negated && CueMatching.find(t, cfg.peopleCues).isNotEmpty()
             if (!negated) {
-                if (resolution.isNotEmpty()) resolved = true
-                if (CueMatching.find(t, cfg.peopleCues).isNotEmpty()) peopleAtRisk = true
+                if (resolution.isNotEmpty() && !unresolved) resolved = true
+                if (people) peopleAtRisk = true
                 if (low.isNotEmpty()) lowUrgency = true
-                if (CueMatching.find(CueMatching.mask(t, low), cfg.distressCues).isNotEmpty()) distress = true
+                val unmasked = CueMatching.mask(t, low)
+                if (CueMatching.find(unmasked, cfg.distressStrongCues).isNotEmpty()) distress = true
+                // Longest first, so "please hurry" and the "hurry" inside it count once.
+                val kept = mutableListOf<CueHit>()
+                for (h in CueMatching.find(unmasked, cfg.distressCues).sortedByDescending { it.phrase.length }) {
+                    if (kept.none { CueMatching.overlaps(it.range, h.range) }) kept += h
+                }
+                kept.forEach { weakDistress += "$pieceIndex:${it.range.first}" }
             }
+            if (unresolved) anyUnresolved = true
+
             val found = if (negated) emptyList() else {
                 val base = raw.map { Found(it.def.label, it.def.impact, it.phrase, it.def.presentIsOngoing, false, it.def.peopleIntrinsic) }
-                base + compoundHits(t, raw.map { it.def.label })
+                base + compoundHits(t, raw.map { it.def.label }, people)
             }
             ScannedPiece(p.tam, p.explicitOngoing, negated, found)
         }
@@ -99,7 +119,7 @@ class UrgencyFeatureExtractor(
         for (s in scanned) {
             if (!s.negated && s.tam.aspect == Aspect.ONGOING) ongoingAspectSeen = true
             for (f in s.found) {
-                val m = hazardImmediacy(f, s.tam, s.explicitOngoing, resolved)
+                val m = if (anyUnresolved && f.impact > 1) 4 else hazardImmediacy(f, s.tam, s.explicitOngoing, resolved)
                 if (m == 4) ongoing = true
                 hits += HazardHit(f.label, f.impact, f.phrase, m)
             }
@@ -110,8 +130,8 @@ class UrgencyFeatureExtractor(
         var immediacy: Int
         if (hits.isEmpty()) {
             impact = cfg.defaultImpact
-            immediacy = if (ongoingAspectSeen) 4 else 2
-            if (ongoingAspectSeen) ongoing = true
+            immediacy = if (ongoingAspectSeen || anyUnresolved) 4 else 2
+            if (ongoingAspectSeen || anyUnresolved) ongoing = true
             reasons += UrgencyReason("no hazard phrase matched; default impact ${cfg.defaultImpact}", Source.RULE)
         } else {
             impact = hits.maxOf { it.impact }
@@ -162,6 +182,9 @@ class UrgencyFeatureExtractor(
             }
         }
 
+        // Strong cues ("help", "bachao") and emotion count alone; weak ones ("hurry") only with a real
+        // hazard or together, so "please hurry up and fix the AC" does not inflate a fault.
+        if (!distress && (weakDistress.size >= 2 || (weakDistress.isNotEmpty() && impact >= 3))) distress = true
         if (distress) {
             val raised = minOf(4, immediacy + 1)
             if (raised > immediacy) {
@@ -210,9 +233,10 @@ class UrgencyFeatureExtractor(
                 ?.let { RawHazard(def, it.phrase, it.range) }
         }
 
-    private fun compoundHits(t: String, presentLabels: List<String>): List<Found> =
+    private fun compoundHits(t: String, presentLabels: List<String>, peoplePresent: Boolean): List<Found> =
         cfg.compounds.mapNotNull { c ->
-            if (c.requires.none { it in presentLabels }) return@mapNotNull null
+            if (c.requires.isNotEmpty() && c.requires.none { it in presentLabels }) return@mapNotNull null
+            if (c.requiresPeople && !peoplePresent) return@mapNotNull null
             CueMatching.find(t, c.andAnyOf).firstOrNull()
                 ?.let { Found(c.label, c.impact, it.phrase, presentIsOngoing = false, forceOngoing = c.forceOngoing, peopleIntrinsic = c.peopleIntrinsic) }
         }

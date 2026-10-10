@@ -57,4 +57,20 @@ internal object CueMatching {
         find(maskedText, negations).filterNot { it.phrase == "no" && isNumberAbbreviation(maskedText, it.range) }
 
     fun overlaps(a: IntRange, b: IntRange): Boolean = a.first <= b.last && b.first <= a.last
+
+    private val WORD = Regex("[\\p{L}\\p{M}\\p{N}]+")
+
+    /**
+     * Number of whole words between two hits (0 when they touch or overlap). Used to decide whether a
+     * negation belongs to a cue: "has not been fixed" (1 word apart) versus "nobody was hurt and it
+     * was fixed" (5 words apart).
+     */
+    fun gapWords(text: String, a: IntRange, b: IntRange): Int {
+        if (overlaps(a, b)) return 0
+        val (first, second) = if (a.first < b.first) a to b else b to a
+        val from = first.last + 1
+        val to = second.first
+        if (from >= to) return 0
+        return WORD.findAll(text.substring(from, to)).count()
+    }
 }

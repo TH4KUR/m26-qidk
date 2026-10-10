@@ -27,6 +27,8 @@ data class CompoundDef(
     val impact: Int,
     val forceOngoing: Boolean = false,
     val peopleIntrinsic: Boolean = false,
+    /** Counts only when a people cue is in the same piece ("aadmi gir gaya", not "phone gir gaya"). */
+    val requiresPeople: Boolean = false,
 )
 
 /** A sound event (YamNet) raising the minimum impact and immediacy. Never lowers anything. */
@@ -41,7 +43,10 @@ data class LexiconFile(
     val peopleCues: List<String> = emptyList(),
     val resolutionCues: List<String> = emptyList(),
     val lowUrgencyCues: List<String> = emptyList(),
+    /** Weak cues ("hurry") count only with a real hazard, or together. */
     val distressCues: List<String> = emptyList(),
+    /** Strong cues ("help", "bachao") count on their own. */
+    val distressStrongCues: List<String> = emptyList(),
     val distressEmotions: List<String> = emptyList(),
     val signals: List<SignalDef> = emptyList(),
 )
@@ -60,7 +65,7 @@ class HazardLexicon(val file: LexiconFile) {
             hazards = hazards.map { it.copy(phrases = it.phrases.nfc(), notWhen = it.notWhen.nfc()) },
             compounds = compounds.map { it.copy(andAnyOf = it.andAnyOf.nfc()) },
             peopleCues = peopleCues.nfc(), resolutionCues = resolutionCues.nfc(), lowUrgencyCues = lowUrgencyCues.nfc(),
-            distressCues = distressCues.nfc(),
+            distressCues = distressCues.nfc(), distressStrongCues = distressStrongCues.nfc(),
             signals = signals.map { it.copy(matches = it.matches.nfc()) },
         )
 

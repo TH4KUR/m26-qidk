@@ -199,5 +199,86 @@ class UrgencyFeatureExtractorTest {
         assertTrue("chemical" in labels(decomposed), labels(decomposed).toString())
     }
 
+    // ---- Q7: "not fixed yet" is an unresolved problem, not a denial --------------------------
+
+    @Test fun anUnfixedLeakStillCountsAndEscalates() {
+        val r = f("the leak has not been fixed")
+        assertTrue("leak" in r.hazards.map { it.label }, r.hazards.toString())
+        assertFalse(r.resolved)
+        assertEquals(4, r.immediacy)
+    }
+
+    @Test fun aFireNotUnderControlIsNotResolved() {
+        val r = f("the fire is not under control")
+        assertEquals(5, r.impact)
+        assertFalse(r.resolved)
+        assertEquals(4, r.immediacy)
+    }
+
+    @Test fun hindiFireNotUnderControlIsNotResolved() {
+        val r = f("आग काबू में नहीं है")
+        assertFalse(r.resolved)
+        assertEquals(5, r.impact)
+    }
+
+    @Test fun aDeniedHazardIsStillDenied() = assertFalse("fire" in labels("there is no fire in the kitchen"))
+
+    // ---- Hindi review fixes ------------------------------------------------------------------
+
+    @Test fun aPillIsNotAWeapon() = assertFalse("weapon" in labels("usne dawai ki goli kha li"))
+
+    @Test fun aPersonFallingIsAnInjury() = assertTrue("person_fell" in labels("ek aadmi gir gaya"))
+
+    @Test fun aPhoneFallingIsNot() = assertFalse("person_fell" in labels("mera phone gir gaya"))
+
+    @Test fun walkingAroundIsNotFainting() = assertFalse("fainted" in labels("market ke chakkar laga raha hu"))
+
+    @Test fun feelingDizzyIsFainting() = assertTrue("fainted" in labels("mujhe chakkar aa raha hai"))
+
+    @Test fun beingUnwellIsNotAnEquipmentFault() = assertFalse("equipment" in labels("meri tabiyat kharab hai"))
+
+    @Test fun heartAttackInHindiIsALifeThreat() {
+        assertTrue("life_threat" in labels("दिल का दौरा पड़ा है"))
+        assertTrue("life_threat" in labels("दिल का हमला हुआ है"))
+    }
+
+    @Test fun aGasStoveIsNotALeak() = assertFalse("gas_leak" in labels("gas stove kharab hai"))
+
+    @Test fun bleedingInHindi() = assertTrue("serious_injury" in labels("khoon beh raha hai"))
+
+    @Test fun anIntruderWhoGotInWithoutTheAuxiliary() {
+        val r = f("chor andar ghus gaya")
+        assertEquals(4, r.impact)
+        assertEquals(4, r.immediacy)
+    }
+
+    @Test fun powerGoneInHindi() = assertTrue("power_outage" in labels("bijli chali gayi"))
+
+    @Test fun waterFillingTheRoom() = assertTrue("flood" in labels("paani bhar gaya hai"))
+
+    @Test fun aCylinderThatBurstIsAnExplosion() = assertTrue("explosion" in labels("cylinder phat gaya"))
+
+    @Test fun flamesInHindi() = assertTrue("fire" in labels("lapten uth rahi hain"))
+
+    @Test fun peopleStuckInHinglish() = assertTrue("trapped" in labels("do log phans gaye hain"))
+
+    // ---- Q8: distress tiers --------------------------------------------------------------------
+
+    @Test fun aPoliteHurryDoesNotInflateAFault() {
+        val plain = f("please fix the AC, it is not working")
+        val hurry = f("please hurry up and fix the AC, it is not working")
+        assertFalse(hurry.distress)
+        assertEquals(plain.immediacy, hurry.immediacy)
+    }
+
+    @Test fun aStrongCueCountsEvenForAFault() {
+        val r = f("the AC is not working, help!!")
+        assertTrue(r.distress)
+    }
+
+    @Test fun twoWeakCuesCountTogether() = assertTrue(f("the AC is not working, please hurry, come quickly").distress)
+
+    @Test fun aWeakCueCountsWhenThereIsARealHazard() = assertTrue(f("there is a spill in the corridor, please hurry").distress)
+
     @Test fun devanagariLeakWordIsRecognised() = assertTrue("leak" in labels("थोड़ा पानी लीक हो रहा है"))
 }

@@ -54,7 +54,8 @@
     "reported",
     "no longer",
     "anymore",
-    "any more"
+    "any more",
+    "under control"
   ],
   "planned": [
     "will",
@@ -166,5 +167,30 @@
     "though",
     "and then"
   ],
-  "progressive": []
+  "progressive": [],
+  "resolution": [
+    "isolated",
+    "stopped",
+    "fixed",
+    "cleared",
+    "contained",
+    "extinguished",
+    "put out",
+    "resolved",
+    "turned off",
+    "turned it off",
+    "turned them off",
+    "switched off",
+    "switched it off",
+    "switched them off",
+    "shut off",
+    "shut it off",
+    "shut down",
+    "shut it down",
+    "put it out",
+    "repaired",
+    "replaced",
+    "removed",
+    "under control"
+  ]
 }
