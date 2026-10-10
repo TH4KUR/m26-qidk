@@ -13,7 +13,7 @@
 **Tech Stack:**
 - Kotlin 2.x, Jetpack Compose, coroutines/Flow, kotlinx.serialization, JUnit4 + kotlin.test
 - GenieX Android SDK (`com.qualcomm.qti:geniex-android`)
-- WhisperKit Android (`com.argmaxinc:whisperkit:0.3.3`, `com.qualcomm.qnn:qnn-runtime:2.34.0`, `com.qualcomm.qnn:qnn-litert-delegate:2.34.0`)
+- WhisperKit Android, English baseline engine (`com.argmaxinc:whisperkit:0.3.3`, `com.qualcomm.qti:qnn-runtime:2.44.0`, `com.qualcomm.qti:qnn-litert-delegate:2.44.0`; the old `com.qualcomm.qnn` group returns 404). Multilingual and emotion engine: sherpa-onnx with QNN (see Addendum A)
 - Android `TextToSpeech`
 - Laptop prompt iteration: llama.cpp `llama-server` (Windows release build)
 
@@ -373,7 +373,7 @@ class ScriptedLlm(private vararg val outs: String) : LlmEngine { var calls = 0; 
 - [ ] **Step 4: Run it and confirm it passes** (kit connected, model pre-downloaded). Expected: 2 PASS. Record tokens/s from the log in `docs/setup-log.md`.
 - [ ] **Step 5: Commit.** `git commit -am "feat: GenieX NPU LLM engine"`
 
-### Task 9: Audio capture and WhisperKit STT (owner P2)
+### Task 9: Audio capture and WhisperKit STT (owner B; implement behind the `SpeechEngine` interface from Addendum A, task A3)
 
 **Files:**
 - Create: `app/src/main/java/com/megathon/incident/asr/AudioRecorder.kt`, `.../asr/SpeechToText.kt`, `.../asr/WhisperKitStt.kt`
@@ -494,7 +494,7 @@ class ScriptedLlm(private vararg val outs: String) : LlmEngine { var calls = 0; 
 - **Plan B STT** (gated): the QIDK ASR-LLM-TTS Whisper flow (`asr_Readme.md` Case 2). AI Hub Whisper-Small for "Snapdragon 8 Elite Mobile", Voice AI ASR 2.5 `whisper-sdk.jar`, QAIRT 2.45 libs, V79 skel pushed to the app files dir. Implement as `VoiceAiStt : SpeechToText`.
 - **Plan C LLM:** build llama.cpp with Hexagon (Docker toolchain), ship `libllama_server.so` + `libggml-htp-v79.so`, and launch from a foreground service via `ProcessBuilder` with `ADSP_LIBRARY_PATH`/`DSP_LIBRARY_PATH` (skill `qidk-npu-android` §2). Call it with `response_format: {"type":"json_schema",…}`. Implement as `LlamaServerLlmEngine : LlmEngine`. Nothing else changes.
 
-## Timeline and ownership (24 h)
+## Timeline and ownership (24 h) — SUPERSEDED by Addendum A (5 people, revised scope). Kept for reference only.
 
 | Hours | P1 Runtime | P2 Speech | P3 App | P4 Brain/Eval |
 |---|---|---|---|---|
@@ -527,3 +527,64 @@ class ScriptedLlm(private vararg val outs: String) : LlmEngine { var calls = 0; 
 | [numind/NuExtract-2.0-2B-GGUF](https://huggingface.co/numind/NuExtract-2.0-2B-GGUF) | Candidate extractor (`Q4_0`) | MIT |
 | [unsloth/Qwen3-1.7B-GGUF](https://huggingface.co/unsloth/Qwen3-1.7B-GGUF), Qwen3-4B-Instruct (AI Hub qairt) | Candidate LLMs | Apache-2.0 |
 | [Simar123456/spectra-osha-sir](https://huggingface.co/datasets/Simar123456/spectra-osha-sir) | Gold-set source (Task 0b) | public-domain text (tags conflict) |
+
+---
+
+## Addendum A — Revised scope and five-person split (2026-10-10 evening)
+
+This addendum supersedes the **Timeline and ownership** table above and extends the plan. Decisions are in the spec: **D9** (two speech engines), **D11**, **D16** (report first, suggest after), **D17** (signals), **D18** (priority advisor), **D19** (language lane), **D20** (build VM and GPU test server), **D21** (`:core` module). Per-person briefs and open team decisions are in `docs/team-split.md`. Hour figures are estimates, not measurements.
+
+### A.0 Owner mapping for the existing tasks
+
+| Old label | Now | Notes |
+|---|---|---|
+| P1 Runtime (S1, Task 8) | **A** | Kit bring-up, GenieX adapter |
+| P2 Speech (S2, Tasks 9, 10) | **B** | Behind `SpeechEngine`; adds sherpa-onnx, SenseVoice, YamNet |
+| P3 App (S4, Tasks 1, 7, 11) | **A** (scaffold, UI) and **D** (Task 7 storage, in `:core`) | |
+| P4 Brain/Eval (S3, Tasks 2–5, 12, 0b) | **C** (Tasks 2–4), **D** (Task 5), **E** (S3, Tasks 0b, 12) | |
+| Task 6 (prompts, extractor, session) | **A + C** | A owns the adapter, C owns prompt contract tests |
+
+### A.1 Corrections to earlier tasks
+- **Gradle coordinates:** `com.qualcomm.qti:qnn-runtime:2.44.0` and `com.qualcomm.qti:qnn-litert-delegate:2.44.0` (the `com.qualcomm.qnn` group is a 404). WhisperKit profile `QUALCOMM_TINY_EN`.
+- **Task 0, Step 1:** the laptop's `/` is 99% full. Free at least 25 GB before installing Android Studio, the SDK and the NDK. Gradle wants JDK 17 (the laptop has 21).
+- **Kit clock** is wrong (2026-01-12). Set it before any timestamped demo. **Mic path** is unproven: record a 3 s clip in the first hour.
+- **`SeverityRules` (Task 3):** its output is a `SUGGESTED` value (D18), not a fill. Severity stays mandatory and is asked, per D6.
+- **Task 9:** implement `interface SpeechEngine { suspend fun transcribe(pcm: ShortArray, language: String): Transcript }` with `WhisperKitEngine` first.
+
+### A.2 New tasks
+
+| # | Task | Owner | Est. | Definition of done |
+|---|---|---|---|---|
+| **A1** | Laptop and kit bring-up: free disk, Android Studio, JDK 17, set kit clock, mic test, run the GenieX reference app (S1) | A | 3 h | Qwen3-1.7B streams tokens on the kit |
+| **A2** | Build VM + **sherpa-onnx QNN build spike**: build for `arm64-v8a`, take `sherpa-onnx-qnn-SM8750-binary-whisper-small`, run on the kit with `language=hi` | **A** | 6 h to go/no-go | Transcript on the NPU, matches CPU reference on a golden WAV |
+| **A2b** | **Coexistence test:** one APK with the sherpa-onnx native libs and the GenieX AAR, both loading (no `pickFirst` on QNN libraries) | **A** (B assists) | 2 h | Both initialise in one process, 20 loops |
+| **A3** | `SpeechEngine` interface, `WhisperKitEngine` baseline, **Whisper accent contest** (stock `tiny.en`/`base.en` vs `theshivam7` tiny/small) on laptop or GPU server | B | 4 h | Ranked WER table on our own recordings |
+| **A4** | **Signals:** SenseVoice (emotion/events) through sherpa-onnx (CPU AAR first, then A's QNN libraries); YamNet through ONNX Runtime QNN or CPU; output `Signal` objects | B | 6 h | `Signal` list for the recorded clips, compute labelled |
+| **A5** | `:core` **TAM cue detector** (English + Hindi cue lists), **PriorityAdvisor** with `priority_rules.json`, unit tests | C | 4 h | Tests for ongoing/completed, planned vs done, hedged, negated; priority only ever raised |
+| **A6** | `:core` **SuggestionEngine:** site gazetteer snapper (`site.json`), uncertainty cues, role post-rule (witness vs involved), accept/reject events | D | 5 h | "room to" → Conference Room 2 chip, original kept, Submit never blocked |
+| **A7** | Parser, validator, merger, grounding (Tasks 2–5) in `:core` | C (2–4), D (5) | per old tasks | As in Tasks 2–5 |
+| **A8** | Test data: all five record about 8 incident clips each (clean and stressed, accents, noise); gold labels; scorer; **Judge Bench** data; **LLM candidate contest** (S3) on the GPU server | E | 8 h | `eval/` files, scorecard with raw/+grounding/+gazetteer |
+| **A9** | UI: field list with source chips, suggestion chips, signals and priority panel, **proof strip** (per-stage compute, bytes sent, NPU self-test), staggered evidence reveal | A | 8 h | Slide example end to end on the kit |
+| **A10** | Hands-free loop: energy end-of-speech detector, mic muted during TTS, acknowledgments from templates | B | 4 h | Hands-free run; tap-to-talk fallback present |
+
+### A.3 Revised timeline (5 people)
+
+| Hours | A (kit, app) | B (speech) | C (`:core` rules) | D (`:core` suggestions, storage) | E (data, eval) |
+|---|---|---|---|---|---|
+| 0–1.5 | A1 | A3 start, WhisperKit baseline | A7 (Tasks 2–3) | `site.json`, A6 skeleton | A8 recording + gold |
+| 1.5–6 | Task 1 scaffold, **A2 sherpa spike (VM)**, Task 8 GenieX | A3 contest, engine 2b prep, A4 on the CPU AAR | A7 (Task 4), A5 | A6, Task 5 | A8 scorer, S3 contest |
+| **6** | **Go/no-go on sherpa-onnx** (A decides and tells B; fallback = AI Hub Whisper, engine 2b) | | | | |
+| 6–9 | **A2b coexistence**, Task 11 UI, A9 | A4 on A's QNN libraries, hands-free loop start | A5 | A6, Task 7 | Judge Bench harness |
+| **9–10** | **Integration checkpoint: slide example end to end on the kit. If not working, freeze scope to Tasks 1–11 minus voice correction and signals.** | | | | |
+| 10–14 | A9 polish | A4, A10 | priority rules tuning | suggestion tuning | Task 12 on device with A |
+| 14–16 | Sleep shifts / buffer | | | | |
+| 16–19 | Stretch (Hindi/Telugu lane gate D19) | Stretch | History/export | Safety advice table | Final numbers |
+| 19–21 | **Feature freeze → Task 13** | all | | | |
+| 21–24 | Rehearse x3, backup video, buffer | | | | |
+
+### A.4 Gates and fallbacks
+- **Hour 6, sherpa-onnx:** if the QNN build does not run Whisper on the kit, use engine 2b (AI Hub Whisper binaries) or stay on WhisperKit English. SenseVoice then runs on the CPU through sherpa-onnx's normal build and the proof strip says CPU.
+- **Hour 9, coexistence:** if the sherpa libraries and GenieX cannot share one process, run them in two Android processes, or drop sherpa and keep WhisperKit English + CPU SenseVoice.
+- **Qualcomm Package Manager login:** if nobody has a working login by hour 3, Plan B (D10) is dead; do not plan around it.
+- **Hindi/Telugu lane (D19):** decided at hour 16 from measured field accuracy; otherwise cut.
+- **Emotion and sound signals:** shown only as sourced chips and priority reasons; never change severity or lower priority.

@@ -36,3 +36,5 @@ I checked the judge's fact-check against the repo files rather than trusting it:
 - **Confirmed:** the "41 tok/s / 380 ms" figures are in no grounding file; the spec's §5 lists streaming ASR as out of scope; D7 requires evidence from the cumulative transcript; the kit clock is wrong (2026-01-12).
 - **Judge was wrong:** it called WhisperKit defaulting to `CPU_AND_NPU` unsupported. The NPU notes verify it from `WhisperKit.kt`, so the "hybrid" label stays.
 - **Still [I]:** `TrafficStats` as a network counter, the grammar sampler running on the CPU, the 0.88 snap threshold, and every hour estimate until someone builds it.
+
+**Revised 2026-10-10 evening:** `Hackathon differentiators.md` now includes report-first correction (D16), signals and the priority advisor (D17, D18: tense/aspect/modality, SenseVoice, YamNet), and the sherpa-onnx speech route. Rankings above reflect the original three-candidate arena; the revised list in the report is the current one.

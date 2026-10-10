@@ -34,7 +34,7 @@ Official docs say QIDK = SM8550P [V]. But IIIT-H users report newer kits:
 - `LlmWrapper.applyChatTemplate(messages, tools: String?, enableThinking, addGenerationPrompt)` takes a tool-schema JSON.
 - Reference app: `qualcomm/ai-hub-apps` branch `release/geniex_chat_android`.
 
-**WhisperKit Android NPU STT (ungated):** `com.argmaxinc:whisperkit:0.3.3` + `com.qualcomm.qnn:qnn-runtime:2.34.0` + `com.qualcomm.qnn:qnn-litert-delegate:2.34.0`. Verified on an SM8750 QIDK by sm8750-edge-ai-lab.
+**WhisperKit Android NPU STT (ungated, English only, archived):** `com.argmaxinc:whisperkit:0.3.3` + `com.qualcomm.qti:qnn-runtime:2.44.0` + `com.qualcomm.qti:qnn-litert-delegate:2.44.0`, profile `QUALCOMM_TINY_EN` / `QUALCOMM_BASE_EN`. **The `com.qualcomm.qnn` group does not exist on Maven Central (404); the group is `com.qualcomm.qti`.** Verified on an SM8750 QIDK by sm8750-edge-ai-lab. It has no language or task API, so it cannot do Hindi or Telugu.
 
 **Implementation plan:** `docs/superpowers/plans/2026-10-10-incident-assistant-qidk.md`. The kit is mains-powered only, with no battery (qidk#80) [V].
 
@@ -59,6 +59,18 @@ Official docs say QIDK = SM8550P [V]. But IIIT-H users report newer kits:
 **Host gaps [V]**
 - Missing: Android SDK, NDK, Android Studio, QAIRT. Present: adb 35, JDK 21 (plan says 17), Docker, cmake, ninja, `hf` CLI.
 - **Laptop `/` is 99% full (1.7 GB free).** Free about 25 GB before installing anything.
+
+## 1c. Speech and emotion stack (decided 2026-10-10; spec D9, D17, D18)
+Full evidence: `reports/Indic ASR and TTS on Snapdragon.md` and `research_notes/Indic ASR and TTS on Snapdragon/`.
+- **Engine 1 (English baseline):** WhisperKit, above. **Engine 2 (multilingual + emotion):** `sherpa-onnx` built from source with the QNN backend. No prebuilt QNN AAR or Android tarball exists (v1.13.8), and the prebuilt QNN APKs are SenseVoice/zh/ja only. Host: Linux x86_64, Android NDK, QAIRT Community SDK 2.40.0.251030 (downloads without login). Copy `libQnnHtp.so`, `libQnnHtpPrepare.so`, `libQnnSystem.so`, `libQnnHtpV79Stub.so`, `libQnnHtpV79Skel.so` into `jniLibs/arm64-v8a` and set `ADSP_LIBRARY_PATH` to the Skel directory [V in docs, app-side setenv INF].
+- **Prebuilt models for SM8750:** `sherpa-onnx-qnn-SM8750-binary-whisper-{tiny 104 MB, base 176 MB, small 507 MB, medium 1.48 GB}` (release `asr-models-qnn-binary-2`) and SenseVoice `...-10/13/15/18/20-seconds-sense-voice-zh-en-ja-ko-yue-...-int8` (about 155 MB). `model.bin` is SoC- and SDK-specific with a fast first run; `libmodel.so` is portable but slow on first run. Force the language with `language=hi|te|en`, `task=transcribe`; do not rely on auto-detect.
+- **QNN needs static shapes:** audio is padded or truncated to the model's duration (5–30 s variants). AI Hub caps decoding at 200 tokens, so segment to 5–10 s.
+- **Engine 2b fallback:** Qualcomm AI Hub public multilingual Whisper binaries (login-free), with our own decode loop that seeds `[SOT, <|hi|>, <|transcribe|>, <|notimestamps|>]`. Whisper-Small float: about 65 ms encoder per 30 s window, 8.3 ms per decoder token on 8 Elite (Qualcomm's numbers, not measured on this kit).
+- **Stock Whisper accuracy:** Small scores 98% WER on Telugu and 38% on Hindi (FLEURS), so Hindi/Telugu needs fine-tuned weights (`vasista22/whisper-telugu-*`, `collabora/whisper-*-hindi`). Whether the exporter accepts a fine-tuned checkpoint is **untested**. Indian-accented English: `theshivam7/whisper-{tiny,small,medium}-aesrc-indian-english` (gated=auto, accept once on Hugging Face; its card reports stock tiny 17.0% -> 9.8%, small 6.9% -> 5.4% WER on read speech).
+- **SenseVoice (emotion/events):** emotions `happy|sad|angry|neutral` only (no confidence, no Hindi); events `Cry`, `Cough`, `Breath`, `Laughter`, `Sneeze`, `BGM`, `Applause`. sherpa-onnx returns `lang`, `emotion` and `event` as separate fields. Use as a suggestion source only, never to lower priority.
+- **YamNet** (`qualcomm/YamNet`, MIT, 3.7M parameters, 14 MB): 521 AudioSet classes including fire alarm, smoke detector, siren, screaming, explosion, glass, water, hiss. Qualcomm lists about 0.16 ms on 8 Elite (their number; integration route INF).
+- **Risks:** (1) sherpa-onnx native libs vs GenieX's bundled QNN libs in one APK: test early, never `pickFirst` on QNN libraries; (2) silent wrong NPU output: compare a golden WAV against a CPU reference; (3) AI Hub changed in Sept 2026: `qnn_context_binary` target removed (use compile + link), the "Snapdragon 8 Elite" device dropped (target "Samsung Galaxy S25 (Family)").
+- **Dev machines:** a cloud build VM and the GPU machines are for building and testing only (spec D20); every model in the app runs on the kit. Do not put the confidential quick-start guide or credentials on them.
 
 ## 2. The proven pattern: native NPU server launched from the APK (no root)
 Last year's Megathon winner (github.com/saitejaMaryala/Megathon-2k25, a fork of xororz/local-dream, **CC BY-NC 4.0 — attribute it, non-commercial use only**) ran QNN on the HTP like this [V]:
