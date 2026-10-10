@@ -1,6 +1,6 @@
 # B, 2026-10-11: which English Whisper size, and does a quiet mic or a noise floor cost accuracy?
 
-**When:** 2026-10-11 about 00:00 to 00:35 IST. **Who:** B (speech), run by an AI assistant on B's laptop (RTX 3050 6 GB, fp32 PyTorch). No human listened to any clip.
+**When:** 2026-10-11 about 00:00 to 00:20 IST. **Who:** B (speech), run by an AI assistant on B's laptop (RTX 3050 6 GB, fp32 PyTorch). No human listened to any clip.
 **Goal:** (1) rank the three English-only checkpoints WhisperKit can run (`tiny.en`, `base.en`, `small.en`; WhisperKit exposes `QUALCOMM_TINY_EN`, `QUALCOMM_BASE_EN`, `QUALCOMM_SMALL_EN`) on the same clips; (2) test whether the kit's quiet microphone (measured by A on 2026-10-10: room floor about -45 dBFS, speech about 10 dB above it) hurts accuracy, and whether peak-normalising each utterance helps.
 
 ## Data and setup
