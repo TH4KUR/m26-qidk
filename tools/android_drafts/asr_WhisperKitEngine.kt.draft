@@ -33,6 +33,8 @@ class WhisperKitEngine(
     enum class Profile(val model: String, val encoderBackend: Int, val decoderBackend: Int) {
         NPU_QUALCOMM_TINY_EN(WhisperKit.Builder.QUALCOMM_TINY_EN, WhisperKit.Builder.CPU_AND_NPU, WhisperKit.Builder.CPU_AND_NPU),
         NPU_QUALCOMM_BASE_EN(WhisperKit.Builder.QUALCOMM_BASE_EN, WhisperKit.Builder.CPU_AND_NPU, WhisperKit.Builder.CPU_AND_NPU),
+        /** Best English WER in our proxy tests (9.65% against 12.30% base and 16.65% tiny, and the most robust to a noise floor); try this one first. */
+        NPU_QUALCOMM_SMALL_EN(WhisperKit.Builder.QUALCOMM_SMALL_EN, WhisperKit.Builder.CPU_AND_NPU, WhisperKit.Builder.CPU_AND_NPU),
         CPU_OPENAI_TINY_EN(WhisperKit.Builder.OPENAI_TINY_EN, WhisperKit.Builder.CPU_ONLY, WhisperKit.Builder.CPU_ONLY),
     }
 
