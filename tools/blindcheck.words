@@ -9,3 +9,19 @@ eashaan
 karma
 skz
 [A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.(com|org|net|edu|ac|in|io|dev|co|me|ai|info)\b
+# Real campus place names (added 00:40). These must not appear in anything that is mirrored to the
+# submission repo or shown in the demo video. Use the fictional site list for those; the real list
+# stays on the dev branches and goes onto the kit over USB for the live demo only.
+himalaya
+vindhya
+nivas
+bakul
+kadamb
+nilgiri|neelgiri
+palaa?sh
+parijaa?t
+yuktahar
+a?arogya
+kohli
+felicity
+tarangini
