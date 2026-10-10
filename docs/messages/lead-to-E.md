@@ -11,6 +11,7 @@ Read this whole file, then work down the list. M2 is due **04:00 IST**. Your **M
 
 ## 2. Next steps, in order (times are targets)
 1. **00:30: remove real campus names from the gold data.** Your gold set, manifest, recording sheets and `build_gold.py` contain real place names (the mess, hostel and hall names). The private repo is fine, but the submission snapshot copies `app/` and `tools/`, and the mirror's scan will refuse it. Change them at the source (`build_gold.py`), regenerate `gold_v1.jsonl`, `manifest.jsonl` and `recording-sheets.md`, rerun your tests, and re-run the scorer. Do this **before more model runs**, so results stay comparable. Delete or regenerate `tools/laptop_eval/runs/` too (it holds the names in its predictions).
+   *User decision (00:35): real names are kept for the live demo only.* The repo, the video and the zip use fictional names, so keep a **local, uncommitted** real-name copy of the sheets if you need them for the demo day. The real campus names are now in `tools/blindcheck.words` on `master`, so the mirror refuses any file that still contains one.
 2. **00:45 to 02:00: the next model runs** (dev split only; keep the held-out 13 untouched until the end):
    - the same 20 items **with forced JSON output** (your `update_report.schema.json` as a llama.cpp grammar or JSON schema) and 2 or 3 few-shot examples;
    - bigger models on the GPU machine: Qwen3-4B-Instruct, Gemma 4B, NuExtract-2.0-2B.
