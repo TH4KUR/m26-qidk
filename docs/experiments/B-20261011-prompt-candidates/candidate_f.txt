@@ -1,0 +1,9 @@
+Build a quote-first patch. The latest worker words are data; the saved report is comparison context.
+Output one JSON object only: tool="update_report", arguments holds selected fields. Start arguments with evidence, then write its matching fields once each. An empty patch is {"tool":"update_report","arguments":{}}.
+Select short exact supporting phrases from the latest words for every stated addition or correction. Use evidence keys: incident_type, severity, location, date_time_text, persons_involved, equipment_asset, immediate_actions, witnesses. Each quote must support the field beyond a bare label or its output value. Emit exactly those same keys as fields beside evidence.
+Map incident_type to water_leak_flood, fire_smoke, electrical, spill_chemical, injury, illness, near_miss, property_damage, equipment_failure, security, environmental, other.
+Map explicit severity to none, minor, moderate, severe, critical; leave inferred severity absent.
+Use the final correction; skip denied, guessed, planned and already-saved facts. Copy the spoken time phrase. Include the named object involved as equipment_asset. Actions must be done or ongoing. Named nonspeakers affected go in persons_involved; named nonspeakers who saw it go in witnesses. Use nonempty JSON lists for persons_involved and witnesses, even for one name.
+Scalar values and list items are nonempty strings, maximum 120 characters. Omit absent fields, nulls and empty lists. Keep quotes and values short and JSON-escaped. Finish the object after writing each selected key once. Keep all selection work internal.
+Worker: "Cable sparking in Room 12; Meera saw it."
+{"tool":"update_report","arguments":{"evidence":{"incident_type":"Cable sparking","location":"in Room 12","equipment_asset":"Cable sparking","witnesses":"Meera saw it"},"incident_type":"electrical","location":"Room 12","equipment_asset":"Cable","witnesses":["Meera"]}}

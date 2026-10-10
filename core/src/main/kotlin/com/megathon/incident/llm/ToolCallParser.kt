@@ -34,7 +34,7 @@ object ToolCallParser {
         val scan = JsonObjectScanner.scan(cleaned)
 
         // Two writes to the same field in one call are ambiguous; never silently keep the last.
-        if (scan.complete.any { DuplicateKeys.found(removeTrailingCommas(it)) }) {
+        if (scan.complete.any { DuplicateKeys.found(removeTrailingCommas(it), ignore = setOf("evidence")) }) {
             return ParseResult.Failure(FailureCode.DUPLICATE_KEY, "a key is written twice in one object", raw)
         }
 
@@ -65,7 +65,7 @@ object ToolCallParser {
         }
         val args = found.arguments as? JsonObject
             ?: return ParseResult.Failure(FailureCode.INVALID_ARGUMENTS, "arguments is not an object", raw)
-        return runCatching { json.decodeFromJsonElement(ExtractionPayload.serializer(), sanitizeHints(nullifyLiterals(args) as JsonObject)) }
+        return runCatching { json.decodeFromJsonElement(ExtractionPayload.serializer(), sanitizeShapes(sanitizeHints(nullifyLiterals(args) as JsonObject))) }
             .fold(
                 onSuccess = { ParseResult.Ok(it, found.kind) },
                 onFailure = { ParseResult.Failure(FailureCode.INVALID_ARGUMENTS, it.message ?: "decode error", raw) },
@@ -89,6 +89,31 @@ object ToolCallParser {
                 else -> out.remove("ongoing")
             }
         }
+        return JsonObject(out)
+    }
+
+    /**
+     * Shape slips that carry a usable value: the model writes the people lists as one string, writes evidence as a list or
+     * writes extra non-text entries into it. Coerce instead of rejecting the whole call.
+     */
+    private fun sanitizeShapes(args: JsonObject): JsonObject {
+        val out = args.toMutableMap()
+        for (k in listOf("persons_involved", "witnesses")) {
+            val v = out[k]
+            if (v is JsonPrimitive && v.isString) out[k] = JsonArray(v.content.split(Regex(",|&|\\band\\b")).map { it.trim() }.filter { it.isNotEmpty() }.map { JsonPrimitive(it) })
+            else if (v is JsonArray) out[k] = JsonArray(v.filterIsInstance<JsonPrimitive>().filter { it.isString })
+            else if (v != null && v !is JsonArray) out.remove(k)
+        }
+        val ev = out["evidence"]
+        if (ev is JsonObject) {
+            out["evidence"] = JsonObject(ev.mapNotNull { (k, v) ->
+                when (v) {
+                    is JsonPrimitive -> if (v.isString) k to v else null
+                    is JsonArray -> v.filterIsInstance<JsonPrimitive>().filter { it.isString }.joinToString(", ") { it.content }.takeIf { it.isNotBlank() }?.let { k to JsonPrimitive(it) }
+                    else -> null
+                }
+            }.toMap())
+        } else if (ev != null) out.remove("evidence")
         return JsonObject(out)
     }
 
@@ -184,7 +209,7 @@ internal object JsonObjectScanner {
 
 /** Finds a key that appears twice in the same JSON object (keys inside string values are ignored). */
 internal object DuplicateKeys {
-    fun found(json: String): Boolean {
+    fun found(json: String, ignore: Set<String> = emptySet()): Boolean {
         // One entry per open container: a key set for objects, null for arrays.
         val stack = ArrayDeque<MutableSet<String>?>()
         var i = 0
@@ -203,7 +228,7 @@ internal object DuplicateKeys {
                     while (k < json.length && json[k].isWhitespace()) k++
                     val isKey = k < json.length && json[k] == ':'
                     val keys = stack.lastOrNull()
-                    if (isKey && keys != null && !keys.add(sb.toString())) return true
+                    if (isKey && keys != null && !keys.add(sb.toString()) && sb.toString() !in ignore) return true
                     i = j
                 }
             }

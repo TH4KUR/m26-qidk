@@ -3,6 +3,7 @@
   "groups": [
     ["week", "weak"],
     ["two", "to", "too", "2"],
+    ["three", "tree", "3"],
     ["four", "for", "fore", "4"],
     ["one", "won", "1"],
     ["eight", "ate", "8"],
@@ -12,6 +13,7 @@
     ["see", "sea", "c"],
     ["hall", "haul"],
     ["severe", "sever"],
-    ["break", "brake"]
+    ["break", "brake"],
+    ["block", "blog", "bloc"]
   ]
 }

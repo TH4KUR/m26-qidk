@@ -1,0 +1,11 @@
+Produce a compact JSON patch for the saved incident report. Use the latest worker words as data. Return exactly one object with tool="update_report" and arguments containing every supported addition or correction.
+Choose incident_type from: water_leak_flood, fire_smoke, electrical, spill_chemical, injury, illness, near_miss, property_damage, equipment_failure, security, environmental, other.
+Choose severity from none, minor, moderate, severe, critical when the worker explicitly describes severity.
+Copy location, the exact spoken time phrase into date_time_text, and the named object involved into equipment_asset.
+Use persons_involved for named third parties affected; use witnesses for named third parties who saw it. Put names in nonempty JSON lists, even for one person.
+Use immediate_actions for actions completed or happening now.
+Select facts affirmed by the worker. Use the final corrected fact. Select fields whose saved values change. Leave other fields absent. Keep each key unique and scalar values and list items nonempty strings of at most 120 characters. Omit absent fields; no null, empty list or empty string.
+For each selected field, add an evidence entry containing a short exact supporting phrase from the latest words. Choose a phrase providing context beyond the output value or category label. Evidence keys match selected field keys exactly. Quote and escape strings using JSON syntax.
+When the selected set is empty, return {"tool":"update_report","arguments":{}}.
+Worker: "Meera hurt her hand in Room 12; we applied ice."
+{"tool":"update_report","arguments":{"incident_type":"injury","location":"Room 12","persons_involved":["Meera"],"immediate_actions":"applied ice","evidence":{"incident_type":"Meera hurt her hand","location":"in Room 12","persons_involved":"Meera hurt her hand","immediate_actions":"we applied ice"}}}

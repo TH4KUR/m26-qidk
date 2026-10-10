@@ -1,6 +1,9 @@
 package com.megathon.incident.priority
 
 import com.megathon.incident.domain.Field
+import com.megathon.incident.domain.IncidentReport
+import com.megathon.incident.domain.IncidentType
+import com.megathon.incident.domain.Severity
 import com.megathon.incident.domain.LlmHint
 import com.megathon.incident.domain.Priority
 import com.megathon.incident.domain.PriorityAdvice
@@ -73,6 +76,10 @@ class PriorityAdvisor(
 
     private var floorScore = 0
     private var floorReason: UrgencyReason? = null
+
+    /** What the reporter stated in the report (a severity, an incident type). Separate from the key-question floor. */
+    private var statedFloorScore = 0
+    private var statedFloorReason: UrgencyReason? = null
     private var keyQuestionAsked = false
 
     private var pendingDeescalation: Deescalation? = null
@@ -120,6 +127,29 @@ class PriorityAdvisor(
         return output(features, keyQuestion)
     }
 
+    /**
+     * What the reporter has stated in the report raises the advice and never lowers it: a severity they said ("critical" is
+     * URGENT, "severe" HIGH, "moderate" MEDIUM) and an incident type that is a hazard in itself (fire, electrical, injury,
+     * chemical, security, illness: at least MEDIUM, never URGENT alone). Only filled values count (heard or confirmed);
+     * a suggestion is not the reporter's word. Call after each merge; calling again with the same report changes nothing.
+     */
+    fun onReport(report: IncidentReport): AdvisorOutput {
+        val sev = report.value(Field.SEVERITY)
+        if (report.isFilled(Field.SEVERITY)) {
+            when (Severity.fromWire(sev.text)) {
+                Severity.CRITICAL -> setStatedFloor(15, "reporter called it critical")
+                Severity.SEVERE -> setStatedFloor(10, "reporter called it severe")
+                Severity.MODERATE -> setStatedFloor(5, "reporter called it moderate")
+                else -> Unit
+            }
+        }
+        val type = report.value(Field.INCIDENT_TYPE)
+        if (report.isFilled(Field.INCIDENT_TYPE) && IncidentType.fromWire(type.text) in HAZARD_TYPES) {
+            setStatedFloor(6, "incident type ${type.text} is a hazard in itself")
+        }
+        return output(rescore(), keyQuestion = null)
+    }
+
     /** The reporter's answer to [KEY_QUESTION]. YES raises to URGENT, UNSURE to HIGH, NO changes nothing. */
     fun answerKeyQuestion(answer: KeyAnswer): AdvisorOutput {
         keyQuestionAsked = true
@@ -160,15 +190,23 @@ class PriorityAdvisor(
         val hint = if (hintImpact != null || hintOngoing) LlmHint(hintImpact, hintOngoing.takeIf { it }) else null
         val features = extractor.extract(UrgencyInput(transcript.toString(), signals.toList(), hint))
         var assessment = strategy.assess(features)
-        if (floorScore > assessment.score) {
+        val (floor, why) = if (statedFloorScore > floorScore) statedFloorScore to statedFloorReason else floorScore to floorReason
+        if (floor > assessment.score) {
             assessment = assessment.copy(
-                score = floorScore,
-                level = priorityForScore(floorScore),
-                reasons = assessment.reasons + listOfNotNull(floorReason),
+                score = floor,
+                level = priorityForScore(floor),
+                reasons = assessment.reasons + listOfNotNull(why),
             )
         }
         if (best == null || assessment.score > best!!.score) best = assessment
         return features
+    }
+
+    private fun setStatedFloor(score: Int, why: String) {
+        if (score > statedFloorScore) {
+            statedFloorScore = score
+            statedFloorReason = UrgencyReason(why, Source.TEXT_CUE)
+        }
     }
 
     private fun setFloor(score: Int, why: String) {
@@ -208,5 +246,11 @@ class PriorityAdvisor(
     companion object {
         const val EMERGENCY_LINE = "If anyone is in danger, call 112 now."
         const val KEY_QUESTION = "Is anyone hurt or in danger right now?"
+
+        /** Types that are a hazard in themselves; a stated one lifts the advice to MEDIUM (see [onReport]). */
+        private val HAZARD_TYPES = setOf(
+            IncidentType.FIRE_SMOKE, IncidentType.ELECTRICAL, IncidentType.INJURY,
+            IncidentType.SPILL_CHEMICAL, IncidentType.SECURITY, IncidentType.ILLNESS,
+        )
     }
 }
