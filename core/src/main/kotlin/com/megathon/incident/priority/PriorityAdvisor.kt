@@ -1,18 +1,31 @@
 package com.megathon.incident.priority
 
 import com.megathon.incident.domain.Field
+import com.megathon.incident.domain.LlmHint
 import com.megathon.incident.domain.Priority
 import com.megathon.incident.domain.PriorityAdvice
 import com.megathon.incident.domain.Signal
+import com.megathon.incident.domain.Source
 import com.megathon.incident.domain.TriageLane
 import com.megathon.incident.domain.UrgencyAssessment
+import com.megathon.incident.domain.UrgencyReason
+import com.megathon.incident.domain.priorityForScore
 
-/** What the advisor tells the app after one more chunk of speech. */
+/** A one-tap offer to lower the level after the reporter cancelled an alarm. Never applied by itself. */
+data class Deescalation(val offerLevel: Priority, val reason: String)
+
+enum class KeyAnswer { YES, NO, UNSURE }
+
+/** What the advisor tells the app after one more chunk of speech (or one answered question). */
 data class AdvisorOutput(
     val advice: PriorityAdvice,
     val score: Int,
     /** The emergency line to speak now; non-null only the first time it becomes warranted. */
     val spoken: String?,
+    /** Set when the reporter cancelled an earlier alarm: show a "lower to LOW?" chip. */
+    val deescalation: Deescalation? = null,
+    /** Set once, when nothing in the report was recognised: ask this before anything else. */
+    val keyQuestion: String? = null,
 )
 
 data class OverrideEntry(val from: Priority, val to: Priority, val reason: String)
@@ -38,8 +51,13 @@ object TriageLanes {
  *  - Re-scores the *whole* transcript after every chunk, then keeps the highest score seen: **the
  *    automatic score only ever rises**. A calm follow-up, "nobody hurt" or a resolution never lowers it.
  *  - Only the user can lower the effective level, and that is journaled. A later, higher automatic
- *    level (new evidence) clears a stale override.
+ *    level (new evidence) clears a stale override. A cancellation such as "false alarm" is *offered*
+ *    as a chip; the user taps to apply it.
  *  - The emergency line is spoken once, when URGENT is first reached or a danger sound is heard.
+ *  - A report the rules do not recognise gets one dispatch-style key question ("hurt or in danger
+ *    right now?"); an unsure answer is treated as danger, as emergency dispatch protocols do.
+ *  - The on-device model's [LlmHint] can raise the result, never lower it, and cannot reach URGENT
+ *    alone (it is capped one step above the rules).
  */
 class PriorityAdvisor(
     private val extractor: UrgencyFeatureExtractor,
@@ -49,6 +67,15 @@ class PriorityAdvisor(
     private val signals = mutableListOf<Signal>()
     private var best: UrgencyAssessment? = null
     private var emergencySpoken = false
+
+    private var hintImpact: Int? = null
+    private var hintOngoing = false
+
+    private var floorScore = 0
+    private var floorReason: UrgencyReason? = null
+    private var keyQuestionAsked = false
+
+    private var pendingDeescalation: Deescalation? = null
 
     private var overrideLevel: Priority? = null
     private var overrideReason: String = ""
@@ -62,16 +89,16 @@ class PriorityAdvisor(
 
     private val autoLevel: Priority get() = best?.level ?: Priority.LOW
 
-    fun onChunk(text: String, newSignals: List<Signal> = emptyList()): AdvisorOutput {
+    fun onChunk(text: String, newSignals: List<Signal> = emptyList(), hint: LlmHint? = null): AdvisorOutput {
         if (text.isNotBlank()) {
             if (transcript.isNotEmpty()) transcript.append(' ')
             transcript.append(text.trim())
         }
         signals += newSignals
+        hint?.impact?.let { hintImpact = maxOf(hintImpact ?: 0, it) }
+        if (hint?.ongoing == true) hintOngoing = true
 
-        val features = extractor.extract(UrgencyInput(transcript.toString(), signals.toList()))
-        val assessment = strategy.assess(features)
-        if (best == null || assessment.score > best!!.score) best = assessment
+        val features = rescore()
 
         // New evidence above the level at which the user overrode retires the override.
         val ov = overrideLevel
@@ -80,13 +107,28 @@ class PriorityAdvisor(
             overrideLevel = null
         }
 
-        val dangerHeard = features.dangerSignals.isNotEmpty()
-        val spoken = if (!emergencySpoken && (autoLevel == Priority.URGENT || dangerHeard)) {
-            emergencySpoken = true
-            EMERGENCY_LINE
+        pendingDeescalation = offerDeescalation(text)
+
+        val keyQuestion = if (
+            !keyQuestionAsked && text.isNotBlank() && features.hazards.isEmpty() &&
+            signals.isEmpty() && autoLevel < Priority.HIGH
+        ) {
+            keyQuestionAsked = true
+            KEY_QUESTION
         } else null
 
-        return AdvisorOutput(advice(), currentScore, spoken)
+        return output(features, keyQuestion)
+    }
+
+    /** The reporter's answer to [KEY_QUESTION]. YES raises to URGENT, UNSURE to HIGH, NO changes nothing. */
+    fun answerKeyQuestion(answer: KeyAnswer): AdvisorOutput {
+        keyQuestionAsked = true
+        when (answer) {
+            KeyAnswer.YES -> setFloor(16, "reporter answered yes to \"$KEY_QUESTION\"")
+            KeyAnswer.UNSURE -> setFloor(12, "reporter was unsure whether anyone is in danger; treated as danger")
+            KeyAnswer.NO -> Unit
+        }
+        return output(rescore(), keyQuestion = null)
     }
 
     /** The user decides the level. Returns the new advice; the change is journaled. */
@@ -99,7 +141,59 @@ class PriorityAdvisor(
         return advice()
     }
 
+    /** Applies the pending cancellation offer, if any. */
+    fun acceptDeescalation(): PriorityAdvice {
+        val offer = pendingDeescalation ?: return advice()
+        pendingDeescalation = null
+        return override(offer.offerLevel, "reporter correction: ${offer.reason}")
+    }
+
+    fun dismissDeescalation() {
+        pendingDeescalation = null
+    }
+
     fun lane(): TriageLane = TriageLanes.forLevel(overrideLevel ?: autoLevel)
+
+    // ---- internals -----------------------------------------------------------------------------
+
+    private fun rescore(): UrgencyFeatures {
+        val hint = if (hintImpact != null || hintOngoing) LlmHint(hintImpact, hintOngoing.takeIf { it }) else null
+        val features = extractor.extract(UrgencyInput(transcript.toString(), signals.toList(), hint))
+        var assessment = strategy.assess(features)
+        if (floorScore > assessment.score) {
+            assessment = assessment.copy(
+                score = floorScore,
+                level = priorityForScore(floorScore),
+                reasons = assessment.reasons + listOfNotNull(floorReason),
+            )
+        }
+        if (best == null || assessment.score > best!!.score) best = assessment
+        return features
+    }
+
+    private fun setFloor(score: Int, why: String) {
+        if (score > floorScore) {
+            floorScore = score
+            floorReason = UrgencyReason(why, Source.USER)
+        }
+    }
+
+    private fun offerDeescalation(chunk: String): Deescalation? {
+        if (chunk.isBlank() || overrideLevel != null || autoLevel < Priority.MEDIUM) return null
+        val cue = extractor.cancelCue(chunk) ?: return null
+        // "sorry, but there is also a gas leak" is a new report, not a cancellation.
+        if (extractor.extract(UrgencyInput(chunk)).hazards.isNotEmpty()) return null
+        return Deescalation(Priority.LOW, "reporter said \"$cue\"")
+    }
+
+    private fun output(features: UrgencyFeatures, keyQuestion: String?): AdvisorOutput {
+        val dangerHeard = features.dangerSignals.isNotEmpty()
+        val spoken = if (!emergencySpoken && (autoLevel == Priority.URGENT || dangerHeard)) {
+            emergencySpoken = true
+            EMERGENCY_LINE
+        } else null
+        return AdvisorOutput(advice(), currentScore, spoken, pendingDeescalation, keyQuestion)
+    }
 
     private fun advice(): PriorityAdvice {
         val reasons = (best?.reasons ?: emptyList()).map { "${it.text} [${it.source}]" }
@@ -113,5 +207,6 @@ class PriorityAdvisor(
 
     companion object {
         const val EMERGENCY_LINE = "If anyone is in danger, call 112 now."
+        const val KEY_QUESTION = "Is anyone hurt or in danger right now?"
     }
 }

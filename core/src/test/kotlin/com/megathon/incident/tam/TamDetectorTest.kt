@@ -94,11 +94,45 @@ class TamDetectorTest {
 
     @Test fun plainStatementIsAsserted() = assertEquals(Modality.ASSERTED, tam("Ravi saw it").modality)
 
-    @Test fun negatedCompletionDoesNotCountAsCompleted() {
-        val t = tam("the leak has not been fixed")
+    @Test fun aNegatedCompletionMeansTheProblemIsStillThere() {
+        val c = one("the leak has not been fixed")
+        assertEquals(Modality.NEGATED, c.tam.modality)
+        assertEquals(Aspect.ONGOING, c.tam.aspect)
+        assertTrue(c.explicitOngoing)
+    }
+
+    @Test fun hasNotStoppedIsOngoing() = assertEquals(Aspect.ONGOING, tam("the leak has not stopped").aspect)
+
+    @Test fun notYetFixedIsOngoing() = assertEquals(Aspect.ONGOING, tam("it is not fixed yet").aspect)
+
+    @Test fun hindiBujhiNahiIsOngoing() = assertEquals(Aspect.ONGOING, tam("aag bujhi nahi hai").aspect)
+
+    @Test fun hindiKaabuMeinNahiIsOngoing() = assertEquals(Aspect.ONGOING, tam("आग काबू में नहीं है").aspect)
+
+    @Test fun aNegatedActionWithoutACompletionCueStaysNegatedWithNoAspect() {
+        val t = tam("we did not isolate the area")
         assertEquals(Modality.NEGATED, t.modality)
         assertEquals(Aspect.NONE, t.aspect)
     }
+
+    @Test fun anUnrelatedNegationBeforeAFixIsNotAnUnresolvedReading() {
+        // "nobody was hurt and it was fixed": the fix is real.
+        assertEquals(Aspect.COMPLETED, tam("nobody was hurt and it was fixed").aspect)
+    }
+
+    @Test fun nhiIsANegationSpelling() = assertEquals(Modality.NEGATED, tam("koi ghayal nhi hua").modality)
+
+    @Test fun lagRahaHaiIsAHedge() = assertEquals(Modality.HEDGED, tam("mujhe gas leak lag raha hai").modality)
+
+    @Test fun hogaIsAGuessNotAPlan() = assertEquals(Modality.HEDGED, tam("andar koi hoga").modality)
+
+    @Test fun phirSeIsNotAClauseBreak() = assertEquals(1, detector.analyze("paani phir se leak ho raha hai").size)
+
+    @Test fun abhiTakIsExplicitContinuation() = assertTrue(one("abhi tak paani aa raha hai").explicitOngoing)
+
+    @Test fun bujhGayiIsCompleted() = assertEquals(Aspect.COMPLETED, tam("aag bujh gayi").aspect)
+
+    @Test fun feminineProgressiveIsOngoing() = assertEquals(Aspect.ONGOING, tam("aag phail rahi hai").aspect)
 
     @Test fun roomNumberAbbreviationIsNotANegation() = assertEquals(Modality.ASSERTED, tam("Room no. 2 is flooded").modality)
 

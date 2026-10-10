@@ -1,6 +1,7 @@
 package com.megathon.incident.priority
 
 import com.megathon.incident.domain.Field
+import com.megathon.incident.domain.LlmHint
 import com.megathon.incident.domain.Priority
 import com.megathon.incident.domain.Signal
 import com.megathon.incident.domain.Source
@@ -170,5 +171,144 @@ class PriorityAdvisorTest {
         a.onChunk("someone is unconscious in the corridor")
         assertNotNull(a.lane())
         assertEquals(Priority.URGENT, a.lane().level)
+    }
+
+    // ---- Q3: an explicit cancellation is offered as a one-tap chip, never applied -------------------
+
+    @Test fun aCancellationIsOfferedButNeverApplied() {
+        val a = advisor()
+        a.onChunk("there is a fire in the kitchen")
+        val out = a.onChunk("sorry it was a false alarm, there is no fire")
+        assertNotNull(out.deescalation)
+        assertEquals(Priority.LOW, out.deescalation!!.offerLevel)
+        assertEquals(Priority.URGENT, out.advice.level, "the offer must not change the level by itself")
+    }
+
+    @Test fun acceptingTheOfferLowersTheEffectiveLevelAndIsJournaled() {
+        val a = advisor()
+        a.onChunk("there is a fire in the kitchen")
+        a.onChunk("sorry it was a false alarm, there is no fire")
+        val advice = a.acceptDeescalation()
+        assertEquals(Priority.LOW, advice.level)
+        assertTrue(advice.overriddenByUser)
+        assertEquals(1, a.journal.size)
+        assertTrue(a.journal.single().reason.contains("false alarm"))
+    }
+
+    @Test fun aCalmFollowUpWithoutACancellationIsNotAnOffer() {
+        val a = advisor()
+        a.onChunk("there is a fire in the kitchen")
+        assertNull(a.onChunk("everything looks fine now").deescalation)
+    }
+
+    @Test fun aCancellationThatMentionsANewHazardIsNotAnOffer() {
+        val a = advisor()
+        a.onChunk("there is a fire in the kitchen")
+        assertNull(a.onChunk("sorry, but there is also a gas leak in the lab").deescalation)
+    }
+
+    @Test fun nothingIsOfferedWhenTheLevelIsAlreadyLow() {
+        val a = advisor()
+        a.onChunk("there is a pothole near the gate")
+        assertNull(a.onChunk("sorry, my mistake").deescalation)
+    }
+
+    @Test fun hindiCancellationIsRecognised() {
+        val a = advisor()
+        a.onChunk("ghar mein aag lag gayi hai")
+        assertNotNull(a.onChunk("galti se alarm baj gaya, koi aag nahi hai").deescalation)
+    }
+
+    @Test fun dismissingTheOfferLeavesTheLevelAlone() {
+        val a = advisor()
+        a.onChunk("there is a fire in the kitchen")
+        a.onChunk("sorry it was a false alarm")
+        a.dismissDeescalation()
+        assertEquals(Priority.URGENT, a.acceptDeescalation().level, "nothing pending, so nothing is lowered")
+    }
+
+    // ---- Q5: one dispatch-style key question for a report the rules do not recognise ---------------
+
+    @Test fun anUnrecognisedReportAsksTheKeyQuestionOnce() {
+        val a = advisor()
+        val first = a.onChunk("there is something strange in the basement")
+        assertEquals(PriorityAdvisor.KEY_QUESTION, first.keyQuestion)
+        assertNull(a.onChunk("it is near the stairs").keyQuestion, "asked once only")
+    }
+
+    @Test fun aRecognisedHazardDoesNotAskIt() =
+        assertNull(advisor().onChunk("there is a water leak near the stairs").keyQuestion)
+
+    @Test fun yesGoesToUrgentAndSpeaksTheEmergencyLine() {
+        val a = advisor()
+        a.onChunk("there is something strange in the basement")
+        val out = a.answerKeyQuestion(KeyAnswer.YES)
+        assertEquals(Priority.URGENT, out.advice.level)
+        assertEquals(PriorityAdvisor.EMERGENCY_LINE, out.spoken)
+    }
+
+    @Test fun unsureGoesToHighBecauseUnsureIsTreatedAsDanger() {
+        val a = advisor()
+        a.onChunk("there is something strange in the basement")
+        assertEquals(Priority.HIGH, a.answerKeyQuestion(KeyAnswer.UNSURE).advice.level)
+    }
+
+    @Test fun noNeverLowersAnything() {
+        val a = advisor()
+        val before = a.onChunk("there is something strange in the basement").advice.level
+        assertTrue(a.answerKeyQuestion(KeyAnswer.NO).advice.level >= before)
+    }
+
+    @Test fun theAnswerIsInTheReasons() {
+        val a = advisor()
+        a.onChunk("there is something strange in the basement")
+        val reasons = a.answerKeyQuestion(KeyAnswer.YES).advice.reasons
+        assertTrue(reasons.any { it.contains("USER") }, reasons.toString())
+    }
+
+    // ---- Q6: the model hint raises, never reaches URGENT alone --------------------------------------
+
+    @Test fun aHintRaisesTheAdviceButNeverToUrgentAlone() {
+        val a = advisor()
+        val out = a.onChunk("there is something strange in the basement", hint = LlmHint(impact = 5, ongoing = true))
+        assertTrue(out.advice.level >= Priority.HIGH, "was ${out.advice.level}")
+        assertTrue(out.advice.level < Priority.URGENT)
+        assertNull(out.spoken, "a model hint alone must not trigger the emergency line")
+    }
+
+    @Test fun aLaterWeakerHintNeverLowersTheLevel() {
+        val a = advisor()
+        val high = a.onChunk("there is something strange in the basement", hint = LlmHint(impact = 4, ongoing = true)).advice.level
+        val after = a.onChunk("it is near the stairs", hint = LlmHint(impact = 1, ongoing = false)).advice.level
+        assertTrue(after >= high)
+    }
+
+    // ---- hard rule (D18): a signal never lowers the level --------------------------------------------
+
+    @Test fun addingASignalToAnyChunkNeverLowersTheLevel() {
+        val chunks = listOf("there is a leak near the stairs", "nobody is hurt", "someone is unconscious", "it is fixed now", "help!!", "")
+        val signals = listOf(
+            Signal("event", "fire alarm", Source.YAMNET, 1), Signal("event", "laughter", Source.YAMNET, 1),
+            Signal("emotion", "neutral", Source.SENSEVOICE, 1), Signal("event", "screaming", Source.YAMNET, 1),
+        )
+        repeat(100) { seed ->
+            val rnd = Random(seed)
+            val plain = advisor()
+            val withSignals = advisor()
+            repeat(6) {
+                val chunk = chunks[rnd.nextInt(chunks.size)]
+                val sig = if (rnd.nextBoolean()) listOf(signals[rnd.nextInt(signals.size)]) else emptyList()
+                val a = plain.onChunk(chunk).advice.level
+                val b = withSignals.onChunk(chunk, sig).advice.level
+                assertTrue(b >= a, "seed $seed: $chunk with $sig gave $b below $a")
+            }
+        }
+    }
+
+    @Test fun aMissingSignalNeverLowersTheLevel() {
+        val a = advisor()
+        val withAlarm = a.onChunk("", listOf(Signal("event", "fire alarm", Source.YAMNET, 1))).advice.level
+        val later = a.onChunk("the corridor is quiet").advice.level
+        assertTrue(later >= withAlarm)
     }
 }

@@ -4,13 +4,19 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
+import java.text.Normalizer
+import java.time.DayOfWeek
 import java.time.temporal.ChronoUnit
+import java.time.temporal.TemporalAdjusters
 
 enum class PartOfDay { MORNING, AFTERNOON, EVENING, NIGHT }
 
 /**
  * A time expression resolved as far as the words allow. Precision is preserved: a missing date stays
  * null, a part of day never becomes an invented clock time, and "kal" stays ambiguous.
+ *
+ * A week ("last week", "this week") is a range, never a date: [date] stays null and [from]..[to]
+ * (inclusive; ISO weeks start on Monday) carries what was said, so the planner can ask "which day?".
  */
 data class TemporalValue(
     val date: LocalDate?,
@@ -19,6 +25,8 @@ data class TemporalValue(
     val approximate: Boolean,
     val ambiguous: Boolean,
     val sourceText: String,
+    val from: LocalDate? = null,
+    val to: LocalDate? = null,
 ) {
     /** The date + clock-time policy (design §4) is not yet satisfied: the app must ask. */
     val needsClarification: Boolean get() = date == null || time == null || ambiguous
@@ -31,7 +39,7 @@ data class TemporalValue(
 class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
 
     fun resolve(text: String, capturedAt: Instant): TemporalValue? {
-        val t = EnumNormalizer.normalize(text) ?: return null
+        val t = spokenHoursAsDigits(EnumNormalizer.normalize(text) ?: return null)
         val now = capturedAt.atZone(zone)
 
         relativeOffset(t)?.let { minutes ->
@@ -62,6 +70,19 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
         }
         val clock = clockTime(t)
 
+        // A week is a range, not a day; an explicit day word wins over it.
+        val week = if (day == null) weekRange(t, today) else null
+        if (week != null) {
+            val time = clock?.let { c ->
+                val (hour, ambiguousClock) = to24h(c, partOfDay)
+                if (ambiguousClock) null else LocalTime.of(hour, c.minute)
+            }
+            return TemporalValue(
+                date = week.date, time = time, partOfDay = partOfDay, approximate = true,
+                ambiguous = false, sourceText = text, from = week.from, to = week.to,
+            )
+        }
+
         // A part of day on its own ("the night guard") is not a time.
         if (clock == null && day == null) return null
 
@@ -80,6 +101,10 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
         return TemporalValue(date, time, partOfDay, approximate = isApproximate(t), ambiguous = ambiguous, sourceText = text)
     }
 
+    /** Whisper writes "ten am" and "nau baje"; the clock patterns expect digits. */
+    private fun spokenHoursAsDigits(t: String): String =
+        HOUR_WORDS.replace(t) { m -> (HOUR_NUMBER[m.groupValues[1]] ?: m.groupValues[1]).toString() + " " + m.groupValues[2] }
+
     private enum class Day { YESTERDAY, TODAY, KAL }
 
     private data class Clock(val hour: Int, val minute: Int, val meridiem: Meridiem?, val explicit24h: Boolean)
@@ -91,6 +116,23 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
         if (has(t, "abhi bhi") || has(t, "अभी भी")) return false
         return has(t, "just now") || has(t, "right now") || has(t, "now") || has(t, "abhi") ||
             has(t, "अभी") || has(t, "just happened")
+    }
+
+    private class Week(val date: LocalDate?, val from: LocalDate?, val to: LocalDate?)
+
+    /** "N weeks ago" is one approximate date; "last/this week" is a Monday-start range with no date. */
+    private fun weekRange(t: String, today: LocalDate): Week? {
+        WEEKS_AGO.find(t)?.let { m ->
+            val token = m.groupValues[1]
+            val n = token.toLongOrNull() ?: NUMBER_WORDS[token] ?: return null
+            return Week(today.minusWeeks(n), null, null)
+        }
+        val monday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        return when {
+            LAST_WEEK.any { has(t, it) } -> Week(null, monday.minusWeeks(1), monday.minusDays(1))
+            THIS_WEEK.any { has(t, it) } -> Week(null, monday, today)
+            else -> null
+        }
     }
 
     private fun isApproximate(t: String) = APPROX.any { has(t, it) }
@@ -149,6 +191,15 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
     }
 
     private companion object {
+        val HOUR_NUMBER = mapOf(
+            "one" to 1, "two" to 2, "three" to 3, "four" to 4, "five" to 5, "six" to 6, "seven" to 7, "eight" to 8,
+            "nine" to 9, "ten" to 10, "eleven" to 11, "twelve" to 12,
+            "ek" to 1, "do" to 2, "teen" to 3, "char" to 4, "paanch" to 5, "chhe" to 6, "saat" to 7, "aath" to 8,
+            "nau" to 9, "das" to 10, "gyarah" to 11, "barah" to 12,
+        )
+        val HOUR_WORDS = Regex(
+            "(?<![\\p{L}])(" + HOUR_NUMBER.keys.joinToString("|") + ")\\s*(a\\.?m\\.?|p\\.?m\\.?|o'clock|oclock|baje|बजे)",
+        )
         val APPROX = listOf("around", "about", "approximately", "approx", "roughly", "lagbhag", "kareeb", "करीब", "लगभग", "तकरीबन")
 
         val HOUR_UNITS = setOf("hour", "hours", "hr", "hrs", "ghante", "ghanta", "ghantey", "ghanto", "घंटे", "घंटा")
@@ -158,9 +209,24 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
             "six" to 6L, "seven" to 7L, "eight" to 8L, "nine" to 9L, "ten" to 10L, "twelve" to 12L,
             "ek" to 1L, "do" to 2L, "teen" to 3L, "char" to 4L, "paanch" to 5L, "chhe" to 6L, "chhah" to 6L,
             "saat" to 7L, "aath" to 8L, "nau" to 9L, "das" to 10L,
+            "एक" to 1L, "दो" to 2L, "तीन" to 3L, "चार" to 4L,
         )
 
         const val NB = "(?<![\\p{L}\\p{N}])"
+
+        private fun nfc(s: String) = Normalizer.normalize(s, Normalizer.Form.NFC)
+
+        val LAST_WEEK = listOf(
+            "last week", "previous week", "pichhle hafte", "pichle hafte", "pichhle hafta", "pichle hafta",
+            "पिछले हफ्ते", "पिछले हफ़्ते", "पिछले हफ्ता", "पिछले सप्ताह",
+        ).map(::nfc)
+        val THIS_WEEK = listOf(
+            "this week", "is hafte", "is hafta", "इस हफ्ते", "इस हफ़्ते", "इस हफ्ता", "इस सप्ताह",
+        ).map(::nfc)
+        val WEEKS_AGO = Regex(
+            nfc(NB + "(\\d{1,2}|a|an|one|two|three|four|ek|do|teen|char|एक|दो|तीन|चार)\\s*" +
+                "(?:weeks?|hafte|hafta|हफ्ते|हफ़्ते|हफ्ता|सप्ताह)\\s*(?:ago|pehle|pahle|पहले)"),
+        )
 
         val OFFSET = Regex(
             NB + "(\\d{1,3}|half an|an|a|one|two|three|four|five|six|seven|eight|nine|ten|twelve|" +

@@ -2,6 +2,9 @@ package com.megathon.incident.domain
 
 import java.text.Normalizer
 
+/** What the transcript says ([heard]) against what the model proposed ([meant]), both as lower-case words. */
+data class NearMiss(val heard: String, val meant: String)
+
 /**
  * Decides whether an LLM-proposed value is supported by what the speaker actually said (spec D7).
  * Quote presence establishes provenance, not entailment: negation flips the result because digits,
@@ -30,6 +33,77 @@ object GroundingValidator {
         if (!containsSequence(haystack, evidenceTokens)) return false
         if (enumValue) return true
         return overlap(contentTokens(value), evidenceTokens.toSet()) >= OVERLAP_WITH_EVIDENCE
+    }
+
+    /**
+     * Same checks as [isGrounded], but a transcript word may differ from the proposed word by sound
+     * ([sameSound], D's shared homophone table) or, when [allowSpelling], by one letter in a word of
+     * four or more letters. Returns what was heard and what was proposed, or null when the value is
+     * not a near-miss (including when it is already grounded exactly).
+     *
+     * A near-miss is never "grounded": the caller must store it as a suggestion (a chip), never as
+     * heard, and the 0.5 / 0.8 overlap thresholds are not lowered. Devanagari tokens are matched by
+     * sound table only; a one-letter difference in a Hindi word is a different word.
+     */
+    fun nearMiss(
+        value: String?,
+        evidence: String?,
+        transcript: String,
+        enumValue: Boolean = false,
+        allowSpelling: Boolean = true,
+        sameSound: (String, String) -> Boolean,
+    ): NearMiss? {
+        if (value.isNullOrBlank()) return null
+        val haystack = tokens(transcript)
+        val evidenceTokens = evidence?.takeIf { it.isNotBlank() }?.let { tokens(it) }?.takeIf { it.isNotEmpty() }
+        fun near(heard: String, meant: String) = nearToken(heard, meant, allowSpelling, sameSound)
+
+        if (evidenceTokens == null) {
+            if (enumValue) return null
+            val content = contentTokens(value)
+            if (content.isEmpty()) return null
+            val pool = haystack.toSet()
+            val differing = mutableListOf<Pair<String, String>>()
+            var matched = 0
+            for (v in content) {
+                if (v in pool) { matched++; continue }
+                val h = haystack.firstOrNull { near(it, v) } ?: continue
+                matched++
+                differing += h to v
+            }
+            if (differing.isEmpty() || matched.toDouble() / content.size < OVERLAP_WITH_TRANSCRIPT) return null
+            return NearMiss(differing.joinToString(" ") { it.first }, differing.joinToString(" ") { it.second })
+        }
+
+        if (containsSequence(haystack, evidenceTokens)) return null // exact: not a near-miss
+        if (!enumValue && overlap(contentTokens(value), evidenceTokens.toSet()) < OVERLAP_WITH_EVIDENCE) return null
+        if (evidenceTokens.size > haystack.size) return null
+        for (start in 0..haystack.size - evidenceTokens.size) {
+            val window = haystack.subList(start, start + evidenceTokens.size)
+            if (evidenceTokens.indices.all { k -> window[k] == evidenceTokens[k] || near(window[k], evidenceTokens[k]) }) {
+                return NearMiss(window.joinToString(" "), evidenceTokens.joinToString(" "))
+            }
+        }
+        return null
+    }
+
+    private fun nearToken(heard: String, meant: String, allowSpelling: Boolean, sameSound: (String, String) -> Boolean): Boolean {
+        if (heard == meant) return false
+        if (sameSound(heard, meant)) return true
+        return allowSpelling && heard.length >= 4 && meant.length >= 4 &&
+            heard.all { it.isLetter() } && meant.all { it.isLetter() } && withinOneEdit(heard, meant)
+    }
+
+    /** True when [a] and [b] differ by at most one insertion, deletion or substitution. */
+    private fun withinOneEdit(a: String, b: String): Boolean {
+        if (kotlin.math.abs(a.length - b.length) > 1) return false
+        var i = 0
+        while (i < a.length && i < b.length && a[i] == b[i]) i++
+        return when {
+            a.length == b.length -> a.substring(i + 1) == b.substring(i + 1)
+            a.length < b.length -> a.substring(i) == b.substring(i + 1)
+            else -> a.substring(i + 1) == b.substring(i)
+        }
     }
 
     /** True when [phrase] occurs in [text] as a whole-token, in-order sequence (case, punctuation ignored). */

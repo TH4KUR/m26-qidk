@@ -10,7 +10,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
-enum class FailureCode { NO_ENVELOPE, MULTIPLE_ENVELOPES, TRUNCATED, UNKNOWN_TOOL, INVALID_ARGUMENTS }
+enum class FailureCode { NO_ENVELOPE, MULTIPLE_ENVELOPES, TRUNCATED, UNKNOWN_TOOL, INVALID_ARGUMENTS, DUPLICATE_KEY }
 
 sealed interface ParseResult {
     data class Ok(val payload: ExtractionPayload, val envelope: Envelope) : ParseResult
@@ -32,6 +32,11 @@ object ToolCallParser {
     fun parse(raw: String): ParseResult {
         val cleaned = stripNoise(raw)
         val scan = JsonObjectScanner.scan(cleaned)
+
+        // Two writes to the same field in one call are ambiguous; never silently keep the last.
+        if (scan.complete.any { DuplicateKeys.found(removeTrailingCommas(it)) }) {
+            return ParseResult.Failure(FailureCode.DUPLICATE_KEY, "a key is written twice in one object", raw)
+        }
 
         val envelopes = scan.complete.mapNotNull { text ->
             val obj = runCatching { json.parseToJsonElement(removeTrailingCommas(text)) as? JsonObject }.getOrNull()
@@ -60,11 +65,31 @@ object ToolCallParser {
         }
         val args = found.arguments as? JsonObject
             ?: return ParseResult.Failure(FailureCode.INVALID_ARGUMENTS, "arguments is not an object", raw)
-        return runCatching { json.decodeFromJsonElement(ExtractionPayload.serializer(), nullifyLiterals(args)) }
+        return runCatching { json.decodeFromJsonElement(ExtractionPayload.serializer(), sanitizeHints(nullifyLiterals(args) as JsonObject)) }
             .fold(
                 onSuccess = { ParseResult.Ok(it, found.kind) },
                 onFailure = { ParseResult.Failure(FailureCode.INVALID_ARGUMENTS, it.message ?: "decode error", raw) },
             )
+    }
+
+    /**
+     * The urgency hints are optional extras. A small model that writes "high" or "maybe" must not
+     * cost us the whole report, so unparseable hints are dropped and numeric strings are accepted.
+     */
+    private fun sanitizeHints(args: JsonObject): JsonObject {
+        val out = args.toMutableMap()
+        out["impact_hint"]?.let { v ->
+            val n = (v as? JsonPrimitive)?.content?.trim()?.toIntOrNull()
+            if (n == null) out.remove("impact_hint") else out["impact_hint"] = JsonPrimitive(n)
+        }
+        out["ongoing"]?.let { v ->
+            when ((v as? JsonPrimitive)?.content?.trim()?.lowercase()) {
+                "true" -> out["ongoing"] = JsonPrimitive(true)
+                "false" -> out["ongoing"] = JsonPrimitive(false)
+                else -> out.remove("ongoing")
+            }
+        }
+        return JsonObject(out)
     }
 
     /** Small models write `"null"` or `""` for absent values; treat those as JSON null / drop them from lists. */
@@ -154,5 +179,36 @@ internal object JsonObjectScanner {
             }
         }
         return Scan(found, truncatedTail = depth > 0)
+    }
+}
+
+/** Finds a key that appears twice in the same JSON object (keys inside string values are ignored). */
+internal object DuplicateKeys {
+    fun found(json: String): Boolean {
+        // One entry per open container: a key set for objects, null for arrays.
+        val stack = ArrayDeque<MutableSet<String>?>()
+        var i = 0
+        while (i < json.length) {
+            when (json[i]) {
+                '{' -> stack.addLast(mutableSetOf())
+                '[' -> stack.addLast(null)
+                '}', ']' -> if (stack.isNotEmpty()) stack.removeLast()
+                '"' -> {
+                    val sb = StringBuilder()
+                    var j = i + 1
+                    while (j < json.length && json[j] != '"') {
+                        if (json[j] == '\\' && j + 1 < json.length) { sb.append(json[j + 1]); j += 2 } else { sb.append(json[j]); j++ }
+                    }
+                    var k = j + 1
+                    while (k < json.length && json[k].isWhitespace()) k++
+                    val isKey = k < json.length && json[k] == ':'
+                    val keys = stack.lastOrNull()
+                    if (isKey && keys != null && !keys.add(sb.toString())) return true
+                    i = j
+                }
+            }
+            i++
+        }
+        return false
     }
 }

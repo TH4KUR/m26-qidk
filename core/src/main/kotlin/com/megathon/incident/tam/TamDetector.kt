@@ -64,11 +64,22 @@ class TamDetector(val lists: TamCueLists) {
         val masked = CueMatching.mask(t, hedged + completed)
         val negated = CueMatching.negations(masked, lists.negated)
         val planned = CueMatching.find(t, lists.planned)
-        val explicitOngoing = CueMatching.find(t, lists.ongoing)
-        val ongoing = explicitOngoing + CueMatching.find(t, lists.progressive) + progressive(t)
+        val explicitHits = CueMatching.find(t, lists.ongoing)
+        val progressiveHits = (CueMatching.find(t, lists.progressive) + progressive(t))
+            // "lag raha hai" is a hedge, not a progressive.
+            .filterNot { p -> hedged.any { CueMatching.overlaps(it.range, p.range) } }
         val future = CueMatching.find(t, lists.future)
         val past = CueMatching.find(t, lists.past)
         val present = CueMatching.find(t, lists.present)
+
+        // A negation belongs to a cue when it sits within two words of it. "has not been fixed" means
+        // the problem is still there; "nobody was hurt and it was fixed" does not.
+        fun negatedNearby(c: CueHit) = negated.any { CueMatching.gapWords(t, it.range, c.range) <= 2 }
+        val liveExplicit = explicitHits.filterNot(::negatedNearby)
+        val liveProgressive = progressiveHits.filterNot(::negatedNearby)
+        val liveCompleted = completed.filterNot(::negatedNearby)
+        val unresolved = completed.filter { it.phrase in lists.resolution && negatedNearby(it) }
+        val ongoing = liveExplicit + liveProgressive
 
         val modality = when {
             negated.isNotEmpty() -> Modality.NEGATED
@@ -77,10 +88,10 @@ class TamDetector(val lists: TamCueLists) {
             else -> Modality.ASSERTED
         }
         val aspect = when {
-            modality == Modality.NEGATED -> Aspect.NONE
             ongoing.isNotEmpty() -> Aspect.ONGOING
+            unresolved.isNotEmpty() -> Aspect.ONGOING
             modality == Modality.PLANNED -> Aspect.NONE
-            completed.isNotEmpty() -> Aspect.COMPLETED
+            liveCompleted.isNotEmpty() -> Aspect.COMPLETED
             else -> Aspect.NONE
         }
         val tense = when {
@@ -94,7 +105,7 @@ class TamDetector(val lists: TamCueLists) {
             .map { it.phrase }.distinct()
         return TamClause(
             clause, Tam(tense, aspect, modality), hedged = hedged.isNotEmpty(), cues = cues,
-            explicitOngoing = aspect == Aspect.ONGOING && explicitOngoing.isNotEmpty(),
+            explicitOngoing = aspect == Aspect.ONGOING && (liveExplicit.isNotEmpty() || unresolved.isNotEmpty()),
         )
     }
 

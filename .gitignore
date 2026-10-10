@@ -37,3 +37,4 @@ captures/
 
 # Speech bundle staged by app/scripts/speech_bundle.sh (native libraries, not committed)
 app/src/speech/
+.env

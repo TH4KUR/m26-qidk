@@ -1,11 +1,8 @@
 package com.megathon.incident.testing
 
 import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.Executors
-import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
-import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
+import kotlinx.coroutines.delay
 
 /**
  * Deterministic speech engine for previews, tests, and the early integration build.
@@ -30,7 +27,7 @@ class FakeSpeechEngine(
         requestedLanguages += language
 
         if (delayMs > 0) {
-            nonBlockingDelay(delayMs)
+            delay(delayMs)
         }
         failure?.let { throw it }
 
@@ -46,22 +43,5 @@ class FakeSpeechEngine(
             elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt),
             compute = Compute.SIMULATED,
         )
-    }
-
-    private suspend fun nonBlockingDelay(delayMs: Long) {
-        suspendCoroutine { continuation ->
-            DELAY_EXECUTOR.schedule(
-                { continuation.resume(Unit) },
-                delayMs,
-                TimeUnit.MILLISECONDS,
-            )
-        }
-    }
-
-    private companion object {
-        val DELAY_EXECUTOR: ScheduledExecutorService =
-            Executors.newSingleThreadScheduledExecutor { runnable ->
-                Thread(runnable, "fake-speech-delay").apply { isDaemon = true }
-            }
     }
 }

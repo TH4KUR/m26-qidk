@@ -45,7 +45,7 @@ enum class ValueStatus { MISSING, UNKNOWN, EXPLICIT_NONE, REPORTED, SUGGESTED, U
 
 /** Where a signal, suggestion or reason came from; shown on every chip (spec §4b). */
 @Serializable
-enum class Source { TEXT_CUE, SENSEVOICE, YAMNET, GAZETTEER, RULE }
+enum class Source { TEXT_CUE, SENSEVOICE, YAMNET, GAZETTEER, RULE, LLM, USER }
 
 @Serializable
 data class FieldValue(
@@ -96,6 +96,10 @@ data class ExtractionPayload(
     val immediate_actions: String? = null,
     val witnesses: List<String> = emptyList(),
     val evidence: Map<String, String> = emptyMap(),
+    /** Optional urgency hint, 1..5. Never written to a field; it can only raise the priority advice. */
+    val impact_hint: Int? = null,
+    /** Optional: the model thinks the problem is still continuing. Same raise-only rule. */
+    val ongoing: Boolean? = null,
 )
 
 @Serializable
@@ -110,3 +114,53 @@ enum class Priority { LOW, MEDIUM, HIGH, URGENT }
 
 @Serializable
 data class PriorityAdvice(val level: Priority, val reasons: List<String>, val overriddenByUser: Boolean = false)
+
+/** What happened to a field. The original value is always kept in [JournalEntry.before]. */
+@Serializable
+enum class JournalKind { HEARD, CORRECTED, SUGGESTION_ACCEPTED, SUGGESTION_REJECTED, USER_EDITED }
+
+/**
+ * One append-only change to a field (spec D16: "the original stays in the journal").
+ * Type owned by C; the logic that appends entries and the storage that persists them are D's.
+ */
+@Serializable
+data class JournalEntry(
+    val atEpochMs: Long,
+    val field: Field,
+    val kind: JournalKind,
+    val before: FieldValue,
+    val after: FieldValue,
+    /** Set for SUGGESTION_ACCEPTED / SUGGESTION_REJECTED so the same chip is not offered again. */
+    val suggestion: Suggestion? = null,
+)
+
+/** The report plus its change journal. Pending chips are not stored: `suggest()` is recomputed. */
+@Serializable
+data class ReportState(val report: IncidentReport, val journal: List<JournalEntry> = emptyList()) {
+    fun record(entry: JournalEntry): ReportState = copy(journal = journal + entry)
+
+    /** True when this exact chip was already accepted or rejected, so it must not reappear. */
+    fun hasDecided(s: Suggestion): Boolean = journal.any {
+        (it.kind == JournalKind.SUGGESTION_ACCEPTED || it.kind == JournalKind.SUGGESTION_REJECTED) &&
+            it.suggestion?.let { x -> x.field == s.field && x.original == s.original && x.proposed == s.proposed } == true
+    }
+
+    companion object {
+        fun empty(id: String, nowEpochMs: Long) = ReportState(IncidentReport.empty(id, nowEpochMs))
+    }
+}
+
+/**
+ * The on-device language model's optional opinion on urgency. It can only raise the rules' result,
+ * by at most one impact step, and cannot reach URGENT on its own (design doc, Q6).
+ */
+@Serializable
+data class LlmHint(val impact: Int? = null, val ongoing: Boolean? = null) {
+    companion object {
+        /** Out-of-range values are dropped rather than clamped: a wild number is not a signal. */
+        fun from(p: ExtractionPayload): LlmHint? {
+            val impact = p.impact_hint?.takeIf { it in 1..5 }
+            return if (impact == null && p.ongoing == null) null else LlmHint(impact, p.ongoing)
+        }
+    }
+}

@@ -6,21 +6,43 @@ import com.megathon.incident.domain.Field
 import com.megathon.incident.domain.FieldValue
 import com.megathon.incident.domain.GroundingValidator
 import com.megathon.incident.domain.IncidentType
+import com.megathon.incident.domain.LlmHint
 import com.megathon.incident.domain.Modality
+import com.megathon.incident.domain.NearMiss
 import com.megathon.incident.domain.PartOfDay
 import com.megathon.incident.domain.Severity
 import com.megathon.incident.domain.TemporalResolver
 import com.megathon.incident.domain.TemporalValue
 import com.megathon.incident.domain.ValueStatus
+import com.megathon.incident.suggest.Homophones
 import com.megathon.incident.tam.TamClause
 import com.megathon.incident.tam.TamDetector
 import java.time.Instant
 
-data class FieldProposal(val field: Field, val value: FieldValue, val note: String? = null)
+/**
+ * One proposed field value.
+ *
+ * @param temporal for DATE_TIME: the structured reading (a week arrives as `date == null`, `from`/`to`),
+ *                 so the follow-up planner never has to parse [FieldValue.text].
+ * @param nearMiss set when the value is not in the transcript but a word in it sounds or looks like it:
+ *                 the status is SUGGESTED and `value.evidence` holds the words that were actually heard.
+ */
+data class FieldProposal(
+    val field: Field,
+    val value: FieldValue,
+    val note: String? = null,
+    val temporal: TemporalValue? = null,
+    val nearMiss: NearMiss? = null,
+)
 
 data class Rejection(val field: Field, val reason: String, val raw: String? = null)
 
-data class ValidationResult(val proposals: List<FieldProposal>, val rejections: List<Rejection>)
+data class ValidationResult(
+    val proposals: List<FieldProposal>,
+    val rejections: List<Rejection>,
+    /** The model's optional urgency hint, for the priority advisor. Never becomes a field. */
+    val hint: LlmHint? = null,
+)
 
 /**
  * Applies the rules of design doc 3-4 to what the LLM proposed, *before* it touches a report:
@@ -32,10 +54,13 @@ data class ValidationResult(val proposals: List<FieldProposal>, val rejections: 
  *  - negated claim           -> rejected ("Ravi did not see it" never leaves Ravi a witness)
  *  - "nobody saw / hurt"     -> EXPLICIT_NONE for witnesses / persons involved
  *  - hedged                  -> SUGGESTED
+ *  - near-miss (sounds alike) -> SUGGESTED with the heard words; never REPORTED, thresholds unchanged
  */
 class PayloadValidator(
     private val tam: TamDetector,
     private val temporal: TemporalResolver,
+    /** Sound-alike test, by default D's shared table (`suggest/homophones.json`). */
+    private val sameSound: (String, String) -> Boolean = Homophones::sameSound,
 ) {
     private val proposals = mutableListOf<FieldProposal>()
     private val rejections = mutableListOf<Rejection>()
@@ -56,7 +81,7 @@ class PayloadValidator(
         dateTime(payload.date_time_text, ev["date_time_text"], transcript, clauses, capturedAt)
 
         universalNegations(clauses)
-        return ValidationResult(proposals.toList(), rejections.toList())
+        return ValidationResult(proposals.toList(), rejections.toList(), LlmHint.from(payload))
     }
 
     // ---- field handlers ------------------------------------------------------------------------
@@ -74,13 +99,15 @@ class PayloadValidator(
             rejections += Rejection(field, "'$text' is not a known ${field.name.lowercase().replace('_', ' ')}", text)
             return
         }
-        val piece = pieceFor(clauses, evidence)
+        val grounded = GroundingValidator.isGrounded(wire, evidence, transcript, enumValue = true)
+        val miss = missFor(wire, evidence, transcript, enumValue = true)
+        val piece = pieceFor(clauses, evidence) ?: miss?.let { pieceFor(clauses, it.heard) }
         if (piece?.tam?.modality == Modality.NEGATED) {
-            rejections += Rejection(field, "negated in the transcript: \"${evidence}\"", text)
+            rejections += Rejection(field, "negated in the transcript: \"${evidence ?: miss?.heard}\"", text)
             return
         }
-        val grounded = GroundingValidator.isGrounded(wire, evidence, transcript, enumValue = true)
         when {
+            miss != null -> proposals += suggestedNearMiss(field, wire, miss)
             !grounded && mustBeStated ->
                 rejections += Rejection(field, "not stated by the reporter (no matching words in the transcript)", text)
             !grounded -> proposals += FieldProposal(field, FieldValue(wire, ValueStatus.SUGGESTED, evidence), "not found in what was said")
@@ -92,13 +119,15 @@ class PayloadValidator(
     private fun verbatim(field: Field, raw: String?, evidence: String?, transcript: String, clauses: List<TamClause>) {
         val text = raw?.trim().orEmpty()
         if (text.isEmpty()) return
-        val piece = pieceFor(clauses, evidence ?: text)
+        val grounded = GroundingValidator.isGrounded(text, evidence, transcript)
+        val miss = missFor(text, evidence, transcript)
+        val piece = pieceFor(clauses, evidence ?: text) ?: miss?.let { pieceFor(clauses, it.heard) }
         if (piece?.tam?.modality == Modality.NEGATED) {
             rejections += Rejection(field, "negated in the transcript: \"${evidence ?: text}\"", text)
             return
         }
-        val grounded = GroundingValidator.isGrounded(text, evidence, transcript)
         when {
+            miss != null -> proposals += suggestedNearMiss(field, text, miss)
             !grounded -> proposals += FieldProposal(field, FieldValue(text, ValueStatus.SUGGESTED, evidence), "not found in what was said")
             piece?.hedged == true -> proposals += FieldProposal(field, FieldValue(text, ValueStatus.SUGGESTED, evidence), "hedged by the reporter")
             else -> proposals += FieldProposal(field, FieldValue(text, ValueStatus.REPORTED, evidence))
@@ -108,7 +137,7 @@ class PayloadValidator(
     private fun action(raw: String?, evidence: String?, transcript: String, clauses: List<TamClause>) {
         val text = raw?.trim().orEmpty()
         if (text.isEmpty()) return
-        val piece = pieceFor(clauses, evidence ?: text)
+        val piece = pieceFor(clauses, evidence ?: text) ?: missFor(text, evidence, transcript)?.let { pieceFor(clauses, it.heard) }
         when (piece?.tam?.modality) {
             Modality.NEGATED ->
                 rejections += Rejection(Field.IMMEDIATE_ACTIONS, "negated: the action was not done (\"${evidence ?: text}\")", text)
@@ -126,41 +155,56 @@ class PayloadValidator(
         if (items.isEmpty()) return
         val piece = pieceFor(clauses, evidence)
         val kept = mutableListOf<String>()
+        val misses = mutableListOf<NearMiss>()
         for (item in items.map { it.trim() }.filter { it.isNotEmpty() }) {
             val itemPiece = pieceFor(clauses, item) ?: piece
+            val grounded = GroundingValidator.isGrounded(item, null, transcript)
+            // Names: sound-alike only. One letter away is usually a different person, not a mishearing.
+            val miss = if (grounded) null else missFor(item, null, transcript, allowSpelling = false)
             when {
                 itemPiece?.tam?.modality == Modality.NEGATED ->
                     rejections += Rejection(field, "negated in the transcript: \"${evidence ?: item}\"", item)
-                !GroundingValidator.isGrounded(item, null, transcript) ->
-                    rejections += Rejection(field, "'$item' was not said", item)
+                miss != null -> { kept += item; misses += miss }
+                !grounded -> rejections += Rejection(field, "'$item' was not said", item)
                 else -> kept += item
             }
         }
         if (kept.isEmpty()) return
-        val status = if (piece?.hedged == true) ValueStatus.SUGGESTED else ValueStatus.REPORTED
-        proposals += FieldProposal(field, FieldValue(kept.joinToString(", "), status, evidence))
+        val status = if (piece?.hedged == true || misses.isNotEmpty()) ValueStatus.SUGGESTED else ValueStatus.REPORTED
+        proposals += FieldProposal(
+            field, FieldValue(kept.joinToString(", "), status, evidence),
+            note = misses.firstOrNull()?.let(::nearMissNote), nearMiss = misses.firstOrNull(),
+        )
     }
 
     private fun dateTime(raw: String?, evidence: String?, transcript: String, clauses: List<TamClause>, capturedAt: Instant) {
         val text = raw?.trim().orEmpty()
         if (text.isEmpty()) return
-        if (!GroundingValidator.isGrounded(text, evidence, transcript)) {
+        val grounded = GroundingValidator.isGrounded(text, evidence, transcript)
+        val miss = missFor(text, evidence, transcript)
+        if (!grounded && miss == null) {
             rejections += Rejection(Field.DATE_TIME, "time was not said: \"$text\"", text)
             return
         }
+        // A near-miss is still resolved (so the planner can ask), but stays a chip: it was not heard as such.
+        val status = if (miss != null) ValueStatus.SUGGESTED else ValueStatus.REPORTED
+        val shownEvidence = miss?.heard ?: evidence
         val resolved = temporal.resolve(text, capturedAt)
         if (resolved == null) {
-            proposals += FieldProposal(
-                Field.DATE_TIME, FieldValue(text, ValueStatus.REPORTED, evidence), "could not resolve this time; ask the reporter",
-            )
+            val note = listOfNotNull(miss?.let(::nearMissNote), "could not resolve this time; ask the reporter").joinToString("; ")
+            proposals += FieldProposal(Field.DATE_TIME, FieldValue(text, status, shownEvidence), note, nearMiss = miss)
             return
         }
-        val note = when {
+        val clarification = when {
             resolved.ambiguous -> "ambiguous (for example 'kal'); ask which day"
+            resolved.from != null && resolved.date == null -> "needs clarification: which day (a week was given, not a date)"
             resolved.needsClarification -> "needs clarification: date or exact time missing"
             else -> null
         }
-        proposals += FieldProposal(Field.DATE_TIME, FieldValue(describe(resolved), ValueStatus.REPORTED, evidence), note)
+        val note = listOfNotNull(miss?.let(::nearMissNote), clarification).joinToString("; ").ifEmpty { null }
+        proposals += FieldProposal(
+            Field.DATE_TIME, FieldValue(describe(resolved), status, shownEvidence), note, temporal = resolved, nearMiss = miss,
+        )
     }
 
     /** "nobody saw it" / "koi ghayal nahi hua": the question is answered with an explicit none. */
@@ -190,8 +234,25 @@ class PayloadValidator(
         return clauses.firstOrNull { GroundingValidator.containsPhrase(it.text, phrase) }
     }
 
+    /** Null when the value is grounded exactly or is not close to anything that was said. */
+    private fun missFor(
+        value: String?, evidence: String?, transcript: String, enumValue: Boolean = false, allowSpelling: Boolean = true,
+    ): NearMiss? {
+        if (GroundingValidator.isGrounded(value, evidence, transcript, enumValue)) return null
+        return GroundingValidator.nearMiss(value, evidence, transcript, enumValue, allowSpelling, sameSound)
+    }
+
+    private fun nearMissNote(m: NearMiss) = "heard \"${m.heard}\", proposed \"${m.meant}\" (close match, not an exact one; confirm)"
+
+    private fun suggestedNearMiss(field: Field, text: String, m: NearMiss) =
+        FieldProposal(field, FieldValue(text, ValueStatus.SUGGESTED, m.heard), nearMissNote(m), nearMiss = m)
+
     private fun describe(v: TemporalValue): String {
-        val date = v.date?.toString() ?: "date missing"
+        val date = when {
+            v.date != null -> v.date.toString()
+            v.from != null && v.to != null -> "week ${v.from}..${v.to}"
+            else -> "date missing"
+        }
         val clock = when {
             v.time != null -> (if (v.approximate) "≈" else "") + v.time.toString()
             v.partOfDay != null -> v.partOfDay.name.lowercase()
