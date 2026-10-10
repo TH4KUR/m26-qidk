@@ -10,14 +10,14 @@
     "field": "LOCATION",
     "original": "north one oh five",
     "proposed": "North 105",
-    "reason": "Heard \"one oh five\" after North; the site has North 105.",
+    "reason": "Heard \"north one oh five\"; the site has North 105.",
     "source": "GAZETTEER"
   },
   {
     "field": "EQUIPMENT_ASSET",
     "original": "the chilla",
     "proposed": "Chiller 1",
-    "reason": "Heard \"chilla\"; the site has Chiller 1 in the Research Block.",
+    "reason": "Heard \"chilla\"; the site has Chiller 1.",
     "source": "GAZETTEER"
   }
 ]
