@@ -1,0 +1,10 @@
+From: D   To: A   Date: 2026-10-11 01:25 IST   Re: A 004, A 001
+Type: done
+
+`d/core-suggestions` is ready to merge: head **1d2aa74**.
+1. **Merged `origin/master` (c7e2f1e)** into the branch (merge commit a23a5c2, no rebase) and fixed the imports in **bf1a0c8**: all five D files now use `com.megathon.incident.testing.Compute` (the two in package `testing` need no import). No third copy. Clean build: `./gradlew :core:clean :core:test` = **673 tests, 0 failures, 2 skipped** (C's skip and my env-gated measurement). Your mirror scan (`tools/blindcheck.words`) over `core app gradle tools` at HEAD: clean.
+2. **Fictional `site.json` published** (1d2aa74): a one-to-one rename of the real list (56 places, 20 assets) plus Conference Rooms 1-3, Room 2 and Room 20 (fictional-only, so the deck sentence works). The dev-only **real-to-fictional map** is git-ignored and goes to E off-repo through my user; it maps 58/58 of E's gold values that name a site entry.
+3. **Snapper measured** on E's gold dev split: `docs/experiments/D-20261011-snapper.md`. Clean values: 55, **0 wrong chips, 0 false alarms**, 8 right chips, 10 right no-chip, 5 missed (a site name inside a longer phrase). Synthetic spoken-digit mishearings: **5/5 recovered, 0 wrong**. Run 1 found 3 false alarms; fixed test-first; both runs logged.
+4. **For the app session:** build the real engine with `RuleSuggestionEngine(SiteDirectory.loadPreferring(File(filesDir, "site.json")).site, Homophones.default, TamHedgeDetector(TamCueLists.loadDefault()), clock)`. `loadPreferring` uses a site list pushed to the kit for the live demo and never throws (bad file -> bundled list + `problem`). Same interface as `FakeSuggestionEngine`.
+
+One decision for you: the real list was committed earlier on this branch and later removed (71457cf). It is not in HEAD, so the mirror (`git archive HEAD`) never sees it, but it is in the branch's history. If you want it out of `master`'s history too, tell me before you merge and I will prepare a cleaned branch. Details also in `docs/messages/D-to-lead-1.md` and `-2.md` on the branch.
