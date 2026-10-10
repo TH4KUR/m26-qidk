@@ -7,7 +7,16 @@ Date: 2026-10-10. Status: proposed; the open decisions in §7 need team agreemen
 - **Five people, all with Claude Code.** Only two laptops are strong enough for Android Studio and the emulator-free build loop: **A** (also holds the kit) and **B**. **C, D and E** have light laptops, so their work is plain Kotlin/JVM in the `:core` module (D21), Python scripts, and documents. `:core` builds and tests with JDK 17 + Gradle only.
 - **One kit**, plugged into A's laptop. Only A installs builds on it. B gets short, booked kit slots (or wireless adb with Wi-Fi on during development; airplane mode only for the demo and any offline test).
 - **A's laptop disk is 99% full (1.7 GB free).** First job: free at least 25 GB (Android Studio about 3 GB, SDK/NDK about 5 GB, Gradle caches, models).
-- **Cloud machines (development only, D20):** a CPU build VM (8 vCPU, 32 GB RAM, **250 GB** disk, Ubuntu 22.04, On-Demand pricing, about ₹17/hour at 100 GB) owned by **A**; the RTX PRO 6000 and H100 machines as a shared test server used mainly by **E** and by **B** for the accent contest. **Nothing on them runs in the demo.** Never put the confidential kit guide or any credential on them. Pause or delete a machine when idle.
+- **Cloud machines (development only, D20):** a CPU build VM (8 vCPU, 32 GB RAM, large disk, **Ubuntu 24.04.4** as provisioned, user `ubuntu` with passwordless sudo, about ₹17/hour at 100 GB) owned by **A**; the RTX PRO 6000 and H100 machines as a shared test server used mainly by **E** and by **B** for the accent contest. **Nothing on them runs in the demo.** Never put the confidential kit guide or any credential on them. Pause or delete a machine when idle.
+
+## 1b. Workflow: develop here, submit there (settled)
+
+- **Development** happens only in this private repo, `m26-qidk`: one branch per person, **only A merges to `master`**. Research, plans, handoffs and evaluation data stay here.
+- **Submission** goes to `IIIT-ECell/megathon26-readyornot`, branch `main` (the only branch the organisers evaluate, at the latest commit of each deadline). It receives **clean snapshots only**, never this repo's history or branches.
+- **How:** A runs `tools/mirror_to_submission.sh <path-to-submission-clone>` (dry run), then with `--apply`, reviews the target, then commits and pushes. The script exports the committed `app/`, `core/`, Gradle files and `tools/`; strips audio, models and binaries; scans contents and file names against `tools/blindcheck.words`; refuses a wrong origin or a git identity that matches a name or college pattern; never touches `README.md`, `LICENSE` or `deliverables/`; and **never commits or pushes**.
+- **PDFs** (`M2.pdf`, `final_report.pdf`) are built by E, checked with `tools/blindcheck.sh`, and copied by A into the submission repo's `deliverables/`. Do not delete earlier deliverables.
+- **Rehearse the mirror once before the M2 deadline** so a scan failure is found early, not at 3:59 AM.
+- **Nobody except A pushes to the submission repo.**
 
 ## 2. The roles
 
@@ -26,7 +35,7 @@ Date: 2026-10-10. Status: proposed; the open decisions in §7 need team agreemen
 - **Hour 1.5–6 (the key spike, A2):** set up the build VM and build sherpa-onnx with QNN; run `sherpa-onnx-qnn-SM8750-binary-whisper-small` on the kit with `language=hi` and compare against a CPU reference on a golden WAV. **Hour 6:** decide go/no-go and tell B. Hand B the built `libsherpa-onnx-jni.so`, the QNN libraries and a working config. Fallback: engine 2b (AI Hub Whisper, which B prepares in parallel).
 - **Hour 6–9:** coexistence test of the sherpa-onnx libraries and the GenieX AAR in one APK, never `pickFirst` on QNN libraries (A2b). In between: GenieX adapter (Task 8), UI (Task 11), proof strip and suggestion chips (A9). **Hour 9:** run the integration checkpoint on the kit.
 - **Hour 10 onward:** polish, merge, sleep shifts, final freeze (hour 19), rehearsals.
-- **Rules:** A is the only person who merges to `master` and the only one who installs on the kit.
+- **Rules:** A is the only person who merges to `master`, the only one who installs on the kit, and the only one who pushes to the submission repo (section 1b).
 
 ### B: speech engines
 - **Hour 0–1.5:** start the downloads for the accent contest (stock `tiny.en`, `base.en`; `theshivam7` Tiny and Small; accept their terms on Hugging Face with your own account first); build the WhisperKit baseline with the **corrected** Gradle line (`com.qualcomm.qti:*:2.44.0`, profile `QUALCOMM_TINY_EN`) behind `SpeechEngine`.
@@ -82,16 +91,16 @@ Each person's handoff file is on their own branch: `docs/handoff/<letter>-<role>
 
 ## 7. Open decisions (the team has not agreed these yet)
 
-1. **Which plan is authoritative.** `PLAN-codex.md` (teammate's) and our plan disagree. Proposed: our spec and plan plus Addendum A are authoritative, and `PLAN-codex.md` is used as a reference for validation rules. See the table below.
+1. **Which plan is authoritative: settled.** Our spec and plan plus Addendum A. The teammate's alternative plan was removed from the repo (it remains in git history); the table below records which of its ideas we adopted.
 2. **Hindi/Telugu:** core feature (codex plan) or experimental lane gated at hour 16 (our D19)? Stock Whisper-Small is unusable for Telugu and weak for Hindi without fine-tuned weights.
 3. **Qualcomm Package Manager login:** does anyone have a working one today? If not by hour 3, the Voice AI SDK route is dead (codex plan depends on it).
 4. **Severity:** our D18 makes the keyword rule a suggestion, not a fill (closer to the codex plan than our earlier D8).
 5. **`:core` module (D21)** instead of one `app` module (D1).
 6. **Fine-tuning** on the H100 (Whisper on Indian English): out of scope unless the team agrees and the organisers allow it; the fine-tune-to-NPU path is untested.
-7. **Push policy:** the local commits are not pushed until the team agrees on 1–5.
+7. **Push policy: settled.** Dev branches are pushed to `m26-qidk`; only A merges to `master`; the submission repo gets snapshots only (section 1b).
 8. **A's load.** With the sherpa-onnx build (A2, A2b) on A, A's estimated work is about 24 h of a 24 h event: A1 3 h, scaffold 1 h, A2 6 h, A2b 2 h, Task 8 4 h, A9 8 h. Suggested relief, not yet applied: move **Task 8 (GenieX adapter)** to B, who is freed from the build and also has a strong laptop, and keep the kit on A. Decide before hour 0.
 
-### Reconciliation with `PLAN-codex.md`
+### Reconciliation with the removed alternative plan
 
 | Codex idea | Status here |
 |---|---|
