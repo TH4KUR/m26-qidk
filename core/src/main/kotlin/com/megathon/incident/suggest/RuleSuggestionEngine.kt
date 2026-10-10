@@ -38,6 +38,7 @@ class RuleSuggestionEngine(
         }
         chips += RoleRules.chips(state, transcript)
         chips += hedgeChips.chips(state, transcript)
+        chips += NearMissChips.chips(state)
         return chips.filterNot { state.hasDecided(it) }
     }
 

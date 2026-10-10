@@ -19,7 +19,7 @@ internal class HedgeChips(private val hedges: HedgeDetector) {
         if (spans.isEmpty()) return emptyList()
         val sentences = SENTENCE.findAll(transcript).map { it.range }.toList()
         val chips = mutableListOf<Suggestion>()
-        for ((field, label) in LABELS) {
+        for ((field, label) in FIELD_LABELS) {
             val value = state.report.value(field)
             if (value.status !in MACHINE_HEARD) continue
             val text = value.text ?: continue
@@ -37,15 +37,17 @@ internal class HedgeChips(private val hedges: HedgeDetector) {
     private companion object {
         val SENTENCE = Regex("[^.!?]+[.!?]*")
         val MACHINE_HEARD = setOf(ValueStatus.REPORTED, ValueStatus.SUGGESTED)
-        val LABELS = listOf(
-            Field.INCIDENT_TYPE to "incident type",
-            Field.SEVERITY to "severity",
-            Field.LOCATION to "location",
-            Field.DATE_TIME to "time",
-            Field.PERSONS_INVOLVED to "people involved",
-            Field.EQUIPMENT_ASSET to "equipment",
-            Field.IMMEDIATE_ACTIONS to "actions taken",
-            Field.WITNESSES to "witnesses",
-        )
     }
 }
+
+/** Report fields a chip can question, with the words the chip uses for them. */
+internal val FIELD_LABELS = listOf(
+    Field.INCIDENT_TYPE to "incident type",
+    Field.SEVERITY to "severity",
+    Field.LOCATION to "location",
+    Field.DATE_TIME to "time",
+    Field.PERSONS_INVOLVED to "people involved",
+    Field.EQUIPMENT_ASSET to "equipment",
+    Field.IMMEDIATE_ACTIONS to "actions taken",
+    Field.WITNESSES to "witnesses",
+)
