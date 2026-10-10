@@ -164,6 +164,9 @@ private fun FieldGroup(group: List<FieldView>, ui: AppUi, vm: AppViewModel) {
                 onChoose = vm::reply,
                 onCancel = vm::cancelEdit,
                 onAccept = { vm.acceptSuggestion(v.field) },
+                chips = ui.session.suggestions.filter { it.field == v.field },
+                onAcceptChip = vm::acceptChip,
+                onDismissChip = vm::dismissChip,
             )
         }
     }

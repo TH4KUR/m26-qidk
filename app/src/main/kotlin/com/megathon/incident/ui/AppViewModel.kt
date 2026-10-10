@@ -25,6 +25,11 @@ import com.megathon.incident.session.ReportSession
 import com.megathon.incident.session.SessionState
 import com.megathon.incident.session.SessionUi
 import com.megathon.incident.session.StageRecord
+import com.megathon.incident.suggest.Homophones
+import com.megathon.incident.suggest.RuleSuggestionEngine
+import com.megathon.incident.suggest.SiteDirectory
+import com.megathon.incident.tam.TamCueLists
+import com.megathon.incident.tam.TamHedgeDetector
 import com.megathon.incident.speech.DemoSpeechEngine
 import com.megathon.incident.speech.GenieXLlmEngine
 import com.megathon.incident.speech.SenseVoiceSignalEngine
@@ -121,7 +126,12 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     private var blocked: String? = null
     private val speech = runCatching { factory.speech(selection.speech) }.onFailure { blocked = explain(it) }.getOrNull()
     private val llm = runCatching { factory.llm(selection.llm) }.onFailure { blocked = blocked ?: explain(it) }.getOrNull()
-    private val session: ReportSession = Pipeline.newSession(llm ?: FakeLlmEngine(), FileReportStore(app))
+    // Chips (spec D16): the bundled fictional site list, or a real one dropped into filesDir/site.json for the demo. Rules on the CPU.
+    private val siteLoad = SiteDirectory.loadPreferring(java.io.File(app.filesDir, "site.json"))
+    private val suggestionEngine = RuleSuggestionEngine(
+        siteLoad.site, Homophones.default, TamHedgeDetector(TamCueLists.loadDefault()), java.time.Clock.systemDefaultZone(),
+    )
+    private val session: ReportSession = Pipeline.newSession(llm ?: FakeLlmEngine(), FileReportStore(app), suggestions = suggestionEngine)
 
     private val local = MutableStateFlow(Local(network = meter.read()))
     private var timer: Job? = null
@@ -361,6 +371,16 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         local.update { it.copy(justFilled = setOf(field)) }
         flashFilled(); undoPrompt("${session.ui.value.fields.first { it.field == field }.label} confirmed")
     }
+
+    /** Accept on a suggestion chip: the field becomes the proposal; Undo brings back what was heard. */
+    fun acceptChip(chip: com.megathon.incident.domain.Suggestion) {
+        session.acceptSuggestion(chip)
+        local.update { it.copy(justFilled = setOf(chip.field)) }
+        flashFilled(); undoPrompt("${session.ui.value.fields.first { it.field == chip.field }.label} set to ${chip.proposed}")
+    }
+
+    /** Dismiss on a suggestion chip: nothing changes and the same chip is not shown again. */
+    fun dismissChip(chip: com.megathon.incident.domain.Suggestion) = session.rejectSuggestion(chip)
 
     fun undo() { session.undo(); local.update { it.copy(undoLabel = null) } }
     fun overridePriority(level: Priority, reason: String) = session.overridePriority(level, reason)
