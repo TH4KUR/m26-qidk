@@ -75,6 +75,8 @@ class ReportSession(
     private var say: Say? = null
     private var sayCounter = 0
     private var spokenSummary: String? = null
+    /** The emergency line raised by a tap or an edit: spoken with the next reply, or at the next publish, never dropped. */
+    private var stagedEmergency: String? = null
 
     private val _ui = MutableStateFlow(build())
     val ui: StateFlow<SessionUi> = _ui.asStateFlow()
@@ -124,9 +126,20 @@ class ReportSession(
 
         suggestSeverity()
         val out = advisor.onChunk(said, signals, hint = validation.hint)
+        val spokenByFloor = applyStatedFloors()
+        advance(prefix = out.spoken ?: spokenByFloor, keyQuestion = out.keyQuestion)
+    }
+
+    /**
+     * What the reporter has stated in the report (a severity, a hazard incident type) floors the advice: raise-only and
+     * idempotent, so it is safe to call after every change. Returns the emergency line when this call is what made it
+     * warranted: the advisor hands it out once, so the caller must speak it or it is lost.
+     */
+    private fun applyStatedFloors(): String? {
+        val out = advisor.onReport(report)
         priority = out.advice
         deescalation = out.deescalation
-        advance(prefix = out.spoken, keyQuestion = out.keyQuestion)
+        return out.spoken
     }
 
     /**
@@ -252,7 +265,7 @@ class ReportSession(
         report = IncidentReport.empty(newId(), clock.millis())
         clarify = emptySet()
         chipDecisions = emptyList(); transcripts.clear(); toolLog.clear(); journal.clear(); stages.clear(); asked.clear(); undoStack.clear()
-        priority = null; deescalation = null; say = null; spokenSummary = null
+        priority = null; deescalation = null; say = null; spokenSummary = null; stagedEmergency = null
         state = SessionState.Idle
         publish()
     }
@@ -261,6 +274,8 @@ class ReportSession(
 
     /** [keyQuestion], when the advisor has one, is asked first and on its own: one spoken question, then the planner's. */
     private fun advance(prefix: String?, keyQuestion: String? = null) {
+        val lead = listOfNotNull(stagedEmergency, prefix).joinToString(" ").ifEmpty { null }
+        stagedEmergency = null
         val q = if (keyQuestion != null) Question(emptyList(), keyQuestion, key = true)
         else planner.next(report, clarify, advisor.lane(), asked)
         if (q != null) {
@@ -275,10 +290,10 @@ class ReportSession(
                 ).toString(),
             )
             state = SessionState.Asking(q)
-            speak(listOfNotNull(prefix, q.spoken).joinToString(" "))
+            speak(listOfNotNull(lead, q.spoken).joinToString(" "))
         } else {
             state = SessionState.Review
-            prefix?.let(::speak)
+            lead?.let(::speak)
         }
         publish()
     }
@@ -299,6 +314,7 @@ class ReportSession(
                 mapOf("by" to JsonPrimitive("reporter"), "field" to JsonPrimitive(field.name.lowercase()), "value" to JsonPrimitive(value.text.orEmpty())),
             ).toString(),
         )
+        stagedEmergency = applyStatedFloors() ?: stagedEmergency
     }
 
     private fun dateAnswer(reply: QuickReply): String {
@@ -352,6 +368,7 @@ class ReportSession(
     private fun today(): LocalDate = clock.instant().atZone(zone).toLocalDate()
 
     private fun publish() {
+        stagedEmergency?.let { stagedEmergency = null; speak(it) } // a tap or edit raised it and no question followed
         refreshDerived()
         _ui.value = build()
     }
