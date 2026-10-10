@@ -34,6 +34,19 @@ object EnumNormalizer {
         Severity.NONE to listOf("none", "no harm", "no damage", "nothing serious", "kuch nahi", "कुछ नहीं"),
     )
 
+    /** The first cue word of [type] that the speaker actually said (whole word), or null. A real quote, never invented. */
+    fun statedTypeCue(type: IncidentType, transcript: String): String? {
+        val t = normalize(transcript) ?: return null
+        return TYPE_RULES.firstOrNull { it.first == type }?.second?.firstOrNull { it != "other" && containsPhrase(t, it) }
+    }
+
+    /** Same for severity, restricted to explicit severity words (not "small", "little", "badly"). */
+    fun statedSeverityCue(sev: Severity, transcript: String): String? {
+        val t = normalize(transcript) ?: return null
+        val vague = setOf("small", "little", "slight", "somewhat", "medium", "badly", "none", "major")
+        return SEVERITY_RULES.firstOrNull { it.first == sev }?.second?.firstOrNull { it !in vague && containsPhrase(t, it) }
+    }
+
     fun incidentType(raw: String?): IncidentType? {
         val text = normalize(raw) ?: return null
         IncidentType.entries.firstOrNull { it.wire == text.replace(' ', '_') }?.let { return it }

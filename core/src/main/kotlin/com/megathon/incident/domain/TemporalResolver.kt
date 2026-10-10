@@ -101,6 +101,28 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
         return TemporalValue(date, time, partOfDay, approximate = isApproximate(t), ambiguous = ambiguous, sourceText = text)
     }
 
+    /**
+     * The first time phrase the speaker said, as the words themselves ("around 10 AM", "about fifteen minutes ago",
+     * "at 8:30 tonight", "last night"), or null. Used only when the model forgot to give one. A bare "now" is not a
+     * time phrase here, and after "no wait" / "I mean" / "sorry" only the corrected wording counts.
+     */
+    fun findTimePhrase(text: String): String? {
+        for (sentence in text.split(Regex("(?<=[.!?;])\\s+"))) {
+            var s = sentence
+            CORRECTION.findAll(s.lowercase()).lastOrNull()?.let { s = s.substring(it.range.last + 1) }
+            val lower = s.lowercase()
+            val spans = FINDERS.flatMap { r -> r.findAll(lower).map { it.range }.toList() }
+            if (spans.isEmpty()) continue
+            val first = spans.minOf { it.first }
+            // Join neighbours that are part of the same expression ("8:30" + "tonight"), not a later sentence part.
+            val joined = spans.filter { it.first - first <= 30 }
+            val start = joined.minOf { it.first }
+            val end = joined.maxOf { it.last }
+            return s.substring(start, end + 1).trim(' ', ',', '.')
+        }
+        return null
+    }
+
     /** Whisper writes "ten am" and "nau baje"; the clock patterns expect digits. */
     private fun spokenHoursAsDigits(t: String): String =
         HOUR_WORDS.replace(t) { m -> (HOUR_NUMBER[m.groupValues[1]] ?: m.groupValues[1]).toString() + " " + m.groupValues[2] }
@@ -160,6 +182,14 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
             val minute = m.groupValues[2].toInt()
             if (hour in 0..23 && minute in 0..59) return Clock(hour, minute, null, explicit24h = hour >= 13 || hour == 0)
         }
+        HALF_PAST.find(t)?.let { m ->
+            val hour = m.groupValues[1].toIntOrNull() ?: HOUR_NUMBER[m.groupValues[1]] ?: return@let
+            if (hour in 1..12) return Clock(hour, 30, null, explicit24h = false)
+        }
+        NUMBER_PART_OF_DAY.find(t)?.let { m ->
+            val hour = m.groupValues[1].toInt()
+            if (hour in 1..12) return Clock(hour, 0, null, explicit24h = false)
+        }
         BAJE.find(t)?.let { m ->
             val hour = m.groupValues[1].toInt()
             if (hour in 0..23) return Clock(hour, 0, null, explicit24h = hour >= 13 || hour == 0)
@@ -206,7 +236,9 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
 
         val NUMBER_WORDS = mapOf(
             "a" to 1L, "an" to 1L, "one" to 1L, "two" to 2L, "three" to 3L, "four" to 4L, "five" to 5L,
-            "six" to 6L, "seven" to 7L, "eight" to 8L, "nine" to 9L, "ten" to 10L, "twelve" to 12L,
+            "six" to 6L, "seven" to 7L, "eight" to 8L, "nine" to 9L, "ten" to 10L, "eleven" to 11L, "twelve" to 12L,
+            "thirteen" to 13L, "fourteen" to 14L, "fifteen" to 15L, "sixteen" to 16L, "seventeen" to 17L, "eighteen" to 18L,
+            "nineteen" to 19L, "twenty" to 20L, "thirty" to 30L, "forty" to 40L, "forty five" to 45L, "forty-five" to 45L, "fifty" to 50L,
             "ek" to 1L, "do" to 2L, "teen" to 3L, "char" to 4L, "paanch" to 5L, "chhe" to 6L, "chhah" to 6L,
             "saat" to 7L, "aath" to 8L, "nau" to 9L, "das" to 10L,
             "एक" to 1L, "दो" to 2L, "तीन" to 3L, "चार" to 4L,
@@ -229,13 +261,30 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
         )
 
         val OFFSET = Regex(
-            NB + "(\\d{1,3}|half an|an|a|one|two|three|four|five|six|seven|eight|nine|ten|twelve|" +
+            NB + "(\\d{1,3}|half an|an|a|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty[ -]five|forty|fifty|" +
                 "ek|do|teen|char|paanch|chhe|chhah|saat|aath|nau|das)\\s*" +
                 "(hours?|hrs?|minutes?|mins?|ghante|ghanta|ghantey|ghanto|मिनट|घंटे|घंटा)\\s*(ago|pehle|pahle|पहले)",
         )
         val MERIDIEM = Regex(NB + "(\\d{1,2})(?::(\\d{2}))?\\s*(a\\.?m\\.?|p\\.?m\\.?)(?![\\p{L}])")
         val COLON = Regex(NB + "(\\d{1,2}):(\\d{2})(?![\\p{N}])")
         val BAJE = Regex(NB + "(\\d{1,2})\\s*(?:baje|बजे|o'clock|oclock)")
+        val CORRECTION = Regex("(?:no wait|no, wait|i mean|sorry|actually|rather)[,\\s]+")
+        private const val PRE = "(?:(?:at|around|about|approximately|approx|roughly|since|by)\\s+)?"
+        private const val DAYWORD = "(?:yesterday|last night|tonight|today|this morning|this afternoon|this evening)"
+        val FINDERS: List<Regex> by lazy {
+            listOf(
+                Regex(PRE + OFFSET.pattern, RegexOption.IGNORE_CASE),
+                Regex(PRE + MERIDIEM.pattern, RegexOption.IGNORE_CASE),
+                Regex(PRE + COLON.pattern),
+                Regex(PRE + BAJE.pattern),
+                Regex(PRE + HALF_PAST.pattern, RegexOption.IGNORE_CASE),
+                Regex(PRE + "(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\\s+(?:a\\.?m\\.?|p\\.?m\\.?|o'clock)"),
+                Regex(PRE + NUMBER_PART_OF_DAY.pattern),
+                Regex(NB + DAYWORD + "(?![\\p{L}])"),
+            )
+        }
+        val HALF_PAST = Regex(NB + "half past (\\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)(?![\\p{L}\\p{N}])")
+        val NUMBER_PART_OF_DAY = Regex(NB + "(\\d{1,2})\\s+(?:this\\s+)?(?:morning|afternoon|evening|tonight|night)")
         val BARE_HOUR = Regex(
             "(?<![\\p{L}\\p{N}])(?:at|around|about|approximately|approx|roughly)\\s+(\\d{1,2})(?![\\p{N}:])" +
                 "(?!\\s*(?:hours?|minutes?|mins?|people|persons|pm|am))",
