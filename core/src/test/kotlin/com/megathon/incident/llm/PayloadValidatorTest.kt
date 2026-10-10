@@ -191,5 +191,94 @@ class PayloadValidatorTest {
     }
 
     @Test fun noHintMeansNoHint() = assertNull(validate(slide, ExtractionPayload()).hint)
-}
 
+    // ---- weeks arrive as structured data ------------------------------------------------------------
+
+    @Test fun lastWeekCarriesTheRangeForTheFollowUpPlanner() {
+        val r = validate(
+            "the pump broke last week",
+            ExtractionPayload(date_time_text = "last week", evidence = mapOf("date_time_text" to "last week")),
+        )
+        val p = r.proposal(Field.DATE_TIME)!!
+        assertEquals(ValueStatus.REPORTED, p.value.status)
+        val t = assertNotNull(p.temporal)
+        assertNull(t.date)
+        assertEquals(java.time.LocalDate.of(2026, 9, 28), t.from)
+        assertEquals(java.time.LocalDate.of(2026, 10, 4), t.to)
+        assertTrue("which day" in p.note!!, p.note)
+        assertTrue("week 2026-09-28..2026-10-04" in p.value.text!!, p.value.text)
+        assertTrue("(last week)" in p.value.text!!, p.value.text)
+    }
+
+    @Test fun aClockTimeProposalAlsoCarriesItsTemporalValue() {
+        val t = assertNotNull(validate(slide, slidePayload).proposal(Field.DATE_TIME)!!.temporal)
+        assertEquals(java.time.LocalTime.of(10, 0), t.time)
+        assertNull(t.from)
+    }
+
+    // ---- near-miss: sound-alike words become chips, never fills ------------------------------------
+
+    @Test fun aSoundAlikeLocationIsASuggestedChipWithTheHeardWords() {
+        val r = validate(
+            "there is water near conference room to",
+            ExtractionPayload(location = "Conference Room 2", evidence = mapOf("location" to "Conference Room 2")),
+        )
+        val p = r.proposal(Field.LOCATION)!!
+        assertEquals(ValueStatus.SUGGESTED, p.value.status)
+        assertEquals("Conference Room 2", p.value.text)
+        assertEquals("conference room to", p.value.evidence)
+        assertEquals("conference room to", p.nearMiss!!.heard)
+        assertEquals("conference room 2", p.nearMiss!!.meant)
+        assertTrue("heard" in p.note!!, p.note)
+        assertTrue(r.rejected(Field.LOCATION).isEmpty())
+    }
+
+    @Test fun aSoundAlikeTimeIsSuggestedAndStillResolved() {
+        val r = validate(
+            "the boiler broke last weak",
+            ExtractionPayload(date_time_text = "last week", evidence = mapOf("date_time_text" to "last week")),
+        )
+        val p = r.proposal(Field.DATE_TIME)!!
+        assertEquals(ValueStatus.SUGGESTED, p.value.status)
+        assertEquals(java.time.LocalDate.of(2026, 9, 28), p.temporal!!.from)
+        assertEquals("last weak", p.nearMiss!!.heard)
+        assertTrue(r.rejected(Field.DATE_TIME).isEmpty())
+    }
+
+    @Test fun aTimeThatWasNeverSaidIsStillRejected() {
+        val r = validate(
+            "the boiler broke",
+            ExtractionPayload(date_time_text = "last week", evidence = mapOf("date_time_text" to "last week")),
+        )
+        assertNull(r.proposal(Field.DATE_TIME))
+        assertEquals(1, r.rejected(Field.DATE_TIME).size)
+    }
+
+    @Test fun aSoundAlikeSeverityIsSuggestedNotRejected() {
+        val r = validate(
+            "the leak is sever",
+            ExtractionPayload(severity = "severe", evidence = mapOf("severity" to "severe")),
+        )
+        assertEquals(ValueStatus.SUGGESTED, r.proposal(Field.SEVERITY)!!.value.status)
+        assertTrue(r.rejected(Field.SEVERITY).isEmpty())
+    }
+
+    @Test fun anUnrelatedInventedValueHasNoNearMiss() {
+        val r = validate(
+            "there is a puddle in the corridor",
+            ExtractionPayload(location = "Server Room", evidence = mapOf("location" to "Server Room")),
+        )
+        val p = r.proposal(Field.LOCATION)!!
+        assertEquals(ValueStatus.SUGGESTED, p.value.status)
+        assertNull(p.nearMiss)
+    }
+
+    @Test fun anInventedNameOneLetterAwayIsStillRejected() {
+        val r = validate(
+            "Rahul saw it happen",
+            ExtractionPayload(witnesses = listOf("Rahil"), evidence = mapOf("witnesses" to "Rahul saw it")),
+        )
+        assertNull(r.proposal(Field.WITNESSES))
+        assertEquals(1, r.rejected(Field.WITNESSES).size)
+    }
+}
