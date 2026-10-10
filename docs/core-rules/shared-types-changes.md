@@ -50,6 +50,10 @@ Rules: names (`persons_involved`, `witnesses`) use the sound-alike table only, n
 
 D's planner: ask "which day?" when `temporal.date == null && temporal.from != null`; build the chip from `nearMiss` (`original = heard`, `proposed = meant`).
 
+## Reason codes (additive, `c/core-rules`)
+
+`FieldProposal.reasonCode` and `Rejection.reasonCode` are `ReasonCode?` (null = a plain "heard"): `HEDGED`, `NEGATED`, `PLANNED`, `UNGROUNDED`, `NEAR_MISS`, `NOT_A_NAME`, `NOT_AN_ACTION`, `NOT_STATED`, `UNKNOWN_VALUE`. `note` / `reason` stay the human text; the code is the stable key for per-field scoring. New values may be added later, none will be renamed.
+
 ## What each consumer should do
 - **D:** build `ReportLogic` on `ValueStatus` and `ReportState`; use `HedgeDetector` (real or fake) for hedge chips; filter chips with `hasDecided`; obey `PriorityAdvisor.lane()` in the follow-up planner. A hedged or ungrounded model value arrives from `PayloadValidator` as a `FieldProposal` with status `SUGGESTED` and a `note`.
 - **A:** keep your fake engine behind `EngineFactory` and refuse it in release builds; pass the model's `ValidationResult.hint` to `PriorityAdvisor.onChunk`; show `deescalation` as a "lower to LOW?" chip and `keyQuestion` as one spoken question before anything else.
