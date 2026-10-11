@@ -30,7 +30,7 @@ class MicRecorder(private val context: Context, private val maxSamples: Int = MA
 
     /** Returns false when the microphone could not be opened (permission missing, or another app holds it). */
     @Suppress("MissingPermission")
-    fun start(scope: CoroutineScope, onLevel: (Float) -> Unit, onLimit: () -> Unit): Boolean {
+    fun start(scope: CoroutineScope, onLevel: (Float) -> Unit, onLimit: () -> Unit, onChunk: ((ShortArray, Int) -> Unit)? = null): Boolean {
         if (!hasPermission() || record != null) return false
         val minBuffer = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         if (minBuffer <= 0) return false
@@ -52,6 +52,7 @@ class MicRecorder(private val context: Context, private val maxSamples: Int = MA
                 val n = rec.read(chunk, 0, chunk.size)
                 if (n <= 0) break
                 append(chunk, n)
+                onChunk?.invoke(chunk, n) // the buffer is reused for the next read: the receiver must copy what it keeps
                 onLevel(level(chunk, n))
                 if (count >= maxSamples) { onLimit(); break }
             }

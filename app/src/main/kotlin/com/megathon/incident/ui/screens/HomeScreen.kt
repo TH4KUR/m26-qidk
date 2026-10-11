@@ -46,6 +46,8 @@ import com.megathon.incident.ui.components.MessageCard
 import com.megathon.incident.ui.components.MicButton
 import com.megathon.incident.ui.components.Pill
 import com.megathon.incident.ui.components.PrivacyLine
+import com.megathon.incident.ui.components.ProvisionalCard
+import com.megathon.incident.ui.Readiness
 import com.megathon.incident.ui.components.TranscriptCard
 import com.megathon.incident.ui.components.formatClock
 import com.megathon.incident.ui.theme.Size
@@ -112,6 +114,8 @@ private fun HomeText(ui: AppUi, centered: Boolean) {
                 })
                 Text("Listening…", style = MaterialTheme.typography.displayMedium, textAlign = align, modifier = Modifier.semantics { heading(); liveRegion = LiveRegionMode.Polite })
                 Text(formatClock(ui.elapsedMs), style = MaterialTheme.typography.headlineSmall.copy(fontFeatureSettings = "tnum"), color = c.ink2)
+                ui.liveText?.let { TranscriptCard(transcripts = emptyList(), highlight = null, heardNow = it, reading = false) }
+                ProvisionalCard(ui.session.provisional)
             }
             ui.processing -> {
                 Text(
@@ -143,7 +147,12 @@ private fun HomeMic(ui: AppUi, vm: AppViewModel) {
             onClick = vm::onMicTapped,
         )
         Text(
-            when { ui.listening -> "Tap when you're done"; ui.processing -> "Reading it…"; else -> "Tap to start" },
+            when {
+                ui.listening -> "Tap when you're done"
+                ui.processing -> "Reading it…"
+                ui.readiness == Readiness.LOADING -> "Tap to start (the on-device model is still loading)"
+                else -> "Tap to start"
+            },
             style = MaterialTheme.typography.labelLarge, color = c.ink2,
         )
     }

@@ -30,7 +30,12 @@ import com.megathon.incident.suggest.RuleSuggestionEngine
 import com.megathon.incident.suggest.SiteDirectory
 import com.megathon.incident.tam.TamCueLists
 import com.megathon.incident.tam.TamHedgeDetector
+import com.megathon.incident.speech.AcceleratorLane
 import com.megathon.incident.speech.DemoSpeechEngine
+import com.megathon.incident.speech.LaneLlmEngine
+import com.megathon.incident.speech.LiveInferenceCoordinator
+import com.megathon.incident.speech.PreviewScheduler
+import com.megathon.incident.speech.Speculative
 import com.megathon.incident.speech.GenieXLlmEngine
 import com.megathon.incident.speech.SenseVoiceSignalEngine
 import com.megathon.incident.speech.SherpaCliSpeechEngine
@@ -52,8 +57,13 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 
 enum class Screen { HOME, REPORT, CHECK, SENT }
+
+/** Whether the on-device models are loaded. Loading moves earlier (at launch); it is not removed. */
+enum class Readiness { NOT_NEEDED, LOADING, READY, FAILED }
 
 /** Everything the screens draw. The report itself lives in [SessionUi]. */
 data class AppUi(
@@ -84,6 +94,9 @@ data class AppUi(
     val voiceTags: SignalReading? = null,
     /** Why there are no voice tags, in words (the bundle is missing, or the last read failed); null when not a failure. */
     val voiceTagsNote: String? = null,
+    /** The transcript so far while recording is still going on (live windows); null otherwise. */
+    val liveText: String? = null,
+    val readiness: Readiness = Readiness.NOT_NEEDED,
 )
 
 private data class Local(
@@ -105,6 +118,8 @@ private data class Local(
     val needsMicPermission: Boolean = false,
     val voiceTags: SignalReading? = null,
     val voiceTagsNote: String? = null,
+    val liveText: String? = null,
+    val readiness: Readiness = Readiness.NOT_NEEDED,
 )
 
 class AppViewModel(app: Application, private val selection: EngineSelection) : AndroidViewModel(app) {
@@ -118,6 +133,8 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     private val speaker = SystemTtsSpeaker(app)
     private val meter = NetworkMeter(app)
     private val mutex = Mutex()
+    /** Speech, the language model and the tag model take turns here: separate processes do not mean separate NPUs. */
+    private val lane = AcceleratorLane()
 
     // Voice tags are optional: a missing SenseVoice bundle is noticed once and then not retried every turn.
     private var tagEngine: SenseVoiceSignalEngine? = null
@@ -131,7 +148,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     private val suggestionEngine = RuleSuggestionEngine(
         siteLoad.site, Homophones.default, TamHedgeDetector(TamCueLists.loadDefault()), java.time.Clock.systemDefaultZone(),
     )
-    private val session: ReportSession = Pipeline.newSession(llm ?: FakeLlmEngine(), FileReportStore(app), suggestions = suggestionEngine)
+    private val session: ReportSession = Pipeline.newSession(LaneLlmEngine(llm ?: FakeLlmEngine(), lane), FileReportStore(app), suggestions = suggestionEngine)
 
     private val local = MutableStateFlow(Local(network = meter.read()))
     private var timer: Job? = null
@@ -146,7 +163,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             simulatedNote = simulatedNote(),
             network = l.network, showProof = l.showProof, ttsOffline = l.ttsOffline, undoLabel = l.undoLabel,
             needsMicPermission = l.needsMicPermission,
-            voiceTags = l.voiceTags, voiceTagsNote = l.voiceTagsNote,
+            voiceTags = l.voiceTags, voiceTagsNote = l.voiceTagsNote, liveText = l.liveText, readiness = l.readiness,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, AppUi(
         screen = Screen.HOME, listening = false, processing = false, elapsedMs = 0, levels = emptyList(), session = session.ui.value,
@@ -155,7 +172,19 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         needsMicPermission = false,
     ))
 
+    /** Debug switch (`--es live off`): transcribe and extract only after Stop, as before, for a reproducible comparison. */
+    private var liveInference = selection.speech != SpeechKind.FAKE
+    private var live: Live? = null
+    private var warm: Job? = null
+
+    private class Live(val id: Long, val coordinator: LiveInferenceCoordinator, val scheduler: PreviewScheduler)
+
+    fun debugSetLiveInference(on: Boolean) {
+        if (Engines.isDebuggable(getApplication())) liveInference = on && selection.speech != SpeechKind.FAKE
+    }
+
     init {
+        warmUpModels()
         // Speak whatever the session wants said (questions, the emergency line, the summary), one at a time.
         viewModelScope.launch {
             session.ui.map { it.say }.filterNotNull().distinctUntilChangedBy { it.id }.collect { say ->
@@ -165,6 +194,30 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
                 speaker.speak(say.text)
                 local.update { it.copy(speaking = false, ttsOffline = speaker.offline) }
                 session.recordStage(StageRecord("Speak", "Android TTS (system voice)", Compute.CPU, (System.nanoTime() - started) / 1_000_000))
+            }
+        }
+    }
+
+    /**
+     * Loads the language model at launch instead of at the first Stop. Idempotent: one load however often it is asked for.
+     * Recording may start while it loads; inference waits its turn on the lane. A failure is shown and the first real
+     * request tries the lazy load again.
+     */
+    private fun warmUpModels() {
+        val genie = llm as? GenieXLlmEngine ?: return
+        if (warm != null) return
+        local.update { it.copy(readiness = Readiness.LOADING) }
+        warm = viewModelScope.launch {
+            val started = System.nanoTime()
+            try {
+                lane.run { genie.warmUp() }
+                android.util.Log.i(TAG, "models ready after ${(System.nanoTime() - started) / 1_000_000} ms (launch-time load)")
+                local.update { it.copy(readiness = Readiness.READY) }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.e(TAG, "model warm-up failed", e)
+                local.update { it.copy(readiness = Readiness.FAILED, message = "The on-device model did not load yet: ${e.message?.take(120) ?: "unknown error"}. It will be tried again when you speak.") }
             }
         }
     }
@@ -186,6 +239,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         if (!recorder.hasPermission()) { local.update { it.copy(needsMicPermission = true) }; return }
         speaker.stop()
         val levels = ArrayDeque<Float>()
+        val started = beginLive()
         val ok = recorder.start(
             viewModelScope,
             onLevel = { lv ->
@@ -193,9 +247,10 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
                 local.update { it.copy(levels = levels.toList()) }
             },
             onLimit = { stopAndProcess() },
+            onChunk = started?.let { l -> { buffer, n -> l.coordinator.offer(buffer, n) } },
         )
-        if (!ok) { say("I couldn't open the microphone. Another app may be using it."); return }
-        local.update { it.copy(listening = true, elapsedMs = 0, levels = emptyList(), message = null, speaking = false) }
+        if (!ok) { started?.let(::abandon); say("I couldn't open the microphone. Another app may be using it."); return }
+        local.update { it.copy(listening = true, elapsedMs = 0, levels = emptyList(), message = null, speaking = false, liveText = null) }
         timer = viewModelScope.launch {
             val t0 = System.currentTimeMillis()
             while (true) { delay(200); local.update { it.copy(elapsedMs = System.currentTimeMillis() - t0) } }
@@ -205,8 +260,70 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     private fun stopAndProcess() {
         viewModelScope.launch {
             timer?.cancel()
+            val l = live // taken before waiting: a second Stop (the 30 s limit racing a tap) must not commit the same recording twice
+            live = null
             val pcm = recorder.stop()
-            process(pcm, java.time.Instant.now()) // the device clock at the moment the reporter stopped speaking
+            val capturedAt = java.time.Instant.now() // the device clock at the moment the reporter stopped speaking
+            if (l != null) processLive(l, capturedAt) else process(pcm, capturedAt)
+        }
+    }
+
+    /** Starts incremental transcription and provisional extraction for a new recording; null in batch mode. */
+    private fun beginLive(): Live? {
+        val engine = speech ?: return null
+        if (!liveInference) return null
+        lane.startSpeculation()
+        val id = session.beginRecording()
+        // Extraction runs on the session's own (main) dispatcher: the session is not thread-safe, only the model call waits.
+        val scheduler = PreviewScheduler(viewModelScope) { text -> withContext(Speculative) { session.previewRecording(id, text) } }
+        val coordinator = LiveInferenceCoordinator(engine, "en", lane = lane.lock, onSnapshot = snapshot@{ s ->
+            if (!local.value.listening) return@snapshot // a decode that ended after Stop: the final transcript replaces it
+            val text = listOf(s.stable, s.tail).filter { it.isNotBlank() }.joinToString(" ")
+            local.update { it.copy(liveText = text) }
+            scheduler.offer(text)
+        })
+        viewModelScope.launch(Dispatchers.Default) { coordinator.run() }
+        return Live(id, coordinator, scheduler).also { live = it }
+    }
+
+    private fun abandon(l: Live) {
+        l.scheduler.stop()
+        l.coordinator.cancel()
+        session.cancelRecording(l.id)
+        live = null
+    }
+
+    /**
+     * Stop after a live recording: pending previews are dropped, the tail is decoded, and ONE authoritative turn is committed
+     * (re-using the provisional extraction only if its transcript and baseline match exactly). Questions and speech start here.
+     */
+    private suspend fun processLive(l: Live, capturedAt: java.time.Instant) {
+        l.scheduler.stop()
+        lane.stopSpeculation()
+        mutex.withLock {
+            local.update { it.copy(listening = false, processing = true, heardNow = null, message = null) }
+            val engine = speech ?: return@withLock
+            val before = session.ui.value.fields
+            val journalBefore = session.ui.value.journal.size
+            val heard = try {
+                l.coordinator.finish()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.e(TAG, "speech engine failed", e)
+                session.cancelRecording(l.id)
+                finishTurn(before, journalBefore, "I couldn't hear that: ${e.message?.take(160) ?: "the speech engine failed"}")
+                return@withLock
+            }
+            android.util.Log.i(TAG, "heard live [${heard.compute}] ${heard.decodeCalls} decodes, ${heard.decodeMs} ms engine time, whole-recording fallback=${heard.fullPass}: ${heard.text}")
+            heard.compute?.let { c -> runCatching { factory.checkResult(c) }.onFailure { blocked = explain(it) } }
+            local.update { it.copy(heardNow = heard.text.ifBlank { null }, liveText = null) }
+            val tags = if (heard.text.isBlank()) null else readVoiceTags(heard.pcm)
+            tags?.let { session.recordStage(StageRecord("Tags", "SenseVoice (sherpa-onnx, QNN)", it.compute, it.elapsedMs)) }
+            val stage = heard.compute?.let { StageRecord("Hear", "${engine.name} (live windows)", it, heard.decodeMs) }
+            session.onUtterance(heard.text, stage, tags?.signals.orEmpty(), capturedAt, recording = l.id)
+            if (heard.text.isBlank()) session.cancelRecording(l.id)
+            finishTurn(before, journalBefore, null)
         }
     }
 
@@ -218,7 +335,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             val before = session.ui.value.fields
             val journalBefore = session.ui.value.journal.size
             val heard = try {
-                engine.transcribe(pcm, "en")
+                lane.run { engine.transcribe(pcm, "en") }
             } catch (e: Exception) {
                 // Say why, in words and in the log: a real engine that fails must never be silent.
                 android.util.Log.e(TAG, "speech engine failed", e)
@@ -254,7 +371,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             return null
         }
         return try {
-            engine.read(pcm).also { r ->
+            lane.run { engine.read(pcm) }.also { r ->
                 android.util.Log.i(TAG, "tags [${r.compute}] in ${r.elapsedMs} ms: emotion=${r.reading?.emotion} event=${r.reading?.event} -> ${r.signals.map { it.label }}")
                 local.update { it.copy(voiceTags = r, voiceTagsNote = null) }
             }
@@ -455,6 +572,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     }
 
     override fun onCleared() {
+        live?.let(::abandon)
         recorder.cancel()
         speaker.shutdown()
     }

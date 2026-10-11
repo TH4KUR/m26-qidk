@@ -35,6 +35,8 @@ class MainActivity : ComponentActivity() {
             return
         }
         // Debug builds: `--es wav <path in the app's files dir>` runs that WAV through the real speech path.
+        // Debug builds: `--es live off` transcribes and extracts only after Stop (the batch path), for a reproducible comparison.
+        if (intent.getStringExtra("live") == "off") vm.debugSetLiveInference(false)
         intent.getStringExtra("wav")?.let { vm.debugTranscribeFile(it) }
         // Debug builds: `--es eval <gold file> [--es prompt <file>] --es run <name> [--es only g01,g02]` (dev split only).
         intent.getStringExtra("eval")?.let { gold ->

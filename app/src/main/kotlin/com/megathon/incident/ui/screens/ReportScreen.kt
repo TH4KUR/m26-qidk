@@ -42,6 +42,7 @@ import com.megathon.incident.ui.components.LevelBars
 import com.megathon.incident.ui.components.MessageCard
 import com.megathon.incident.ui.components.MicButton
 import com.megathon.incident.ui.components.MicGlyph
+import com.megathon.incident.ui.components.ProvisionalCard
 import com.megathon.incident.ui.components.Pill
 import com.megathon.incident.ui.components.PriorityBanner
 import com.megathon.incident.ui.components.PrimaryButton
@@ -110,8 +111,9 @@ private fun androidx.compose.foundation.lazy.LazyListScope.conversation(ui: AppU
     }
     item(key = "transcript") {
         val highlight = ui.session.fields.firstOrNull { it.field == ui.selected }?.evidence
-        TranscriptCard(ui.session.transcripts, highlight, ui.heardNow, reading = ui.processing)
+        TranscriptCard(ui.session.transcripts, highlight, ui.heardNow ?: ui.liveText, reading = ui.processing)
     }
+    if (ui.listening) item(key = "provisional") { ProvisionalCard(ui.session.provisional) }
     val q = ui.session.state as? SessionState.Asking
     if (inlineQuestion && q != null && !ui.processing && !ui.listening) {
         item(key = "question") { QuestionDock(q.question, ui.speaking, vm::reply, vm::onMicTapped, vm::stopSpeaking, vm::goCheck, inline = true, onKeyAnswer = vm::answerKeyQuestion) }

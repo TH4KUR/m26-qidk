@@ -100,6 +100,32 @@ fun TranscriptCard(transcripts: List<String>, highlight: String?, heardNow: Stri
     }
 }
 
+/**
+ * What the words so far would fill in, while the reporter is still speaking. Labelled Provisional and kept apart from the
+ * report: nothing here is saved, asked about or spoken until the reporter taps done.
+ */
+@Composable
+fun ProvisionalCard(preview: com.megathon.incident.session.ProvisionalPreview?, modifier: Modifier = Modifier) {
+    val shown = preview?.fields.orEmpty().filter { it.value != null }
+    if (shown.isEmpty()) return
+    val c = Theme.colors
+    Card(modifier) {
+        Column(Modifier.padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                Text("Filling in as you speak", style = MaterialTheme.typography.labelMedium, color = c.ink2, modifier = Modifier.semantics { heading() })
+                Pill("Provisional", c.accentContainer, c.onAccentContainer)
+            }
+            shown.forEach { f ->
+                Column {
+                    Text(f.label, style = MaterialTheme.typography.labelMedium, color = c.ink2)
+                    Text(f.value.orEmpty(), style = MaterialTheme.typography.bodyLarge, color = c.ink)
+                }
+            }
+            Text("Not saved yet. I'll check everything when you tap done.", style = MaterialTheme.typography.bodyMedium, color = c.ink3)
+        }
+    }
+}
+
 private fun highlighted(text: String, phrase: String?, bg: androidx.compose.ui.graphics.Color, fg: androidx.compose.ui.graphics.Color): AnnotatedString {
     if (phrase.isNullOrBlank()) return AnnotatedString(text)
     val at = text.indexOf(phrase, ignoreCase = true)
