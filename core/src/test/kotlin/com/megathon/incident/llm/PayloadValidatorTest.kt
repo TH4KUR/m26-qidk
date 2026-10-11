@@ -157,11 +157,30 @@ class PayloadValidatorTest {
 
     // ---- time ----------------------------------------------------------------------------------
 
-    @Test fun kalIsFlaggedAmbiguousAndKeepsTheOriginalWords() {
-        val r = validate("kal raat paani leak hua", ExtractionPayload(date_time_text = "kal raat", evidence = mapOf("date_time_text" to "kal raat")))
+    @Test fun kalWithNoTenseIsFlaggedAmbiguousAndKeepsTheOriginalWords() {
+        // No verb, so nothing says whether kal is yesterday or tomorrow: the reporter is asked.
+        val r = validate("kal raat paani leak", ExtractionPayload(date_time_text = "kal raat", evidence = mapOf("date_time_text" to "kal raat")))
         val p = r.proposal(Field.DATE_TIME)!!
         assertTrue(p.note!!.contains("ambiguous", ignoreCase = true), p.note)
         assertTrue("kal raat" in p.value.text!!)
+    }
+
+    // POST-HELD-OUT change (the user's word, dev only): the sentence's tense settles "kal" instead of asking.
+    @Test fun aPastTenseSentenceSettlesKalAsYesterday() {
+        val r = validate("kal shaam chhe baje lab mein paani leak hua tha", ExtractionPayload(date_time_text = "kal shaam chhe baje", evidence = mapOf("date_time_text" to "kal shaam chhe baje")))
+        val p = r.proposal(Field.DATE_TIME)!!
+        val v = p.temporal!!
+        assertEquals(java.time.LocalDate.of(2026, 10, 10), v.date)
+        assertEquals(java.time.LocalTime.of(18, 0), v.time)
+        assertTrue(!v.ambiguous, "past tense settles kal")
+        assertTrue("kal shaam chhe baje" in p.value.text!!, "the original words are kept")
+    }
+
+    @Test fun aFutureTenseKalIsNotAnIncidentTimeAndIsAsked() {
+        val r = validate("kal subah plumber aayega", ExtractionPayload(date_time_text = "kal subah", evidence = mapOf("date_time_text" to "kal subah")))
+        val p = r.proposal(Field.DATE_TIME)!!
+        assertTrue(p.temporal == null, "a future clause is not when the incident happened")
+        assertTrue(p.note!!.contains("could not", ignoreCase = true), p.note)
     }
 
     @Test fun anUnresolvableTimeKeepsTheOriginalTextAndSaysItNeedsAsking() {
