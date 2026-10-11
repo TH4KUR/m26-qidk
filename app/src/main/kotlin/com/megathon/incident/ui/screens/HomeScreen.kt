@@ -50,7 +50,9 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.megathon.incident.R
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalConfiguration
 import com.megathon.incident.testing.FakeLlmEngine
@@ -79,7 +81,7 @@ fun HomeScreen(ui: AppUi, vm: AppViewModel) {
     val c = Theme.colors
     Scaffold(
         containerColor = c.canvas,
-        topBar = { AppTopBar("Your voice. A clear report.", onProof = vm::openProof, brand = true, simulatedNote = ui.simulatedNote) },
+        topBar = { AppTopBar(stringResource(R.string.app_tagline), onProof = vm::openProof, brand = true, simulatedNote = ui.simulatedNote) },
     ) { pad ->
         Column(Modifier.fillMaxSize().padding(pad)) {
             if (landscape) {

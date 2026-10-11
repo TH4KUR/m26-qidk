@@ -29,9 +29,11 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.megathon.incident.R
 import com.megathon.incident.device.NetworkProof
 import com.megathon.incident.testing.Compute
 import com.megathon.incident.ui.theme.Size
@@ -48,18 +50,10 @@ fun AppTopBar(title: String, onProof: (() -> Unit)?, onBack: (() -> Unit)? = nul
     Column(Modifier.fillMaxWidth().background(c.canvas).windowInsetsPadding(WindowInsets.statusBars)) {
         Row(Modifier.fillMaxWidth().heightIn(min = 72.dp).padding(start = if (onBack != null) Space.s1 else Size.gutter, end = Space.s2), verticalAlignment = Alignment.CenterVertically) {
             if (onBack != null) IconButton(onBack, Modifier.size(Size.touch)) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = c.ink) }
-            Box(Modifier.size(34.dp).background(c.accentContainer, androidx.compose.foundation.shape.RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-                androidx.compose.foundation.Canvas(Modifier.size(20.dp)) {
-                    val ink = c.accent
-                    repeat(3) { i ->
-                        val x = size.width * (.2f + .3f * i)
-                        val h = size.height * if (i == 1) .9f else .5f
-                        drawLine(ink, androidx.compose.ui.geometry.Offset(x, (size.height-h)/2), androidx.compose.ui.geometry.Offset(x, (size.height+h)/2), 3.dp.toPx(), androidx.compose.ui.graphics.StrokeCap.Round)
-                    }
-                }
-            }
+            BrandMark(34.dp)
             Column(Modifier.weight(1f).padding(start = Space.s3, top = Space.s2, bottom = Space.s2)) {
-                Text("incident", style = MaterialTheme.typography.titleMedium, color = c.ink)
+                val appName = stringResource(R.string.app_name)
+                BrandWordmark(c.ink, height = 20.dp, modifier = Modifier.semantics { contentDescription = appName; heading() })
                 Text(title, style = MaterialTheme.typography.labelSmall, color = c.ink3)
             }
             if (onProof != null) IconButton(onProof, Modifier.size(Size.touch).background(c.surface, CircleShape)) { Icon(Icons.Rounded.Info, "How this ran", tint = c.ink2, modifier = Modifier.size(20.dp)) }
