@@ -44,6 +44,8 @@ import androidx.compose.ui.unit.dp
 import com.megathon.incident.priority.KeyAnswer
 import com.megathon.incident.session.Question
 import com.megathon.incident.session.QuickReply
+import com.megathon.incident.session.UiStatus
+import com.megathon.incident.ui.i18n.tr
 import com.megathon.incident.ui.theme.Size
 import com.megathon.incident.ui.theme.Space
 import com.megathon.incident.ui.theme.Theme
@@ -82,41 +84,41 @@ fun QuestionSheet(
                     Text("!", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = c.onAttention)
                 }
                 Text(
-                    "One quick question",
+                    tr("One quick question", "एक छोटा सवाल"),
                     style = MaterialTheme.typography.labelLarge, color = c.ink2,
                     modifier = Modifier.weight(1f).semantics { heading() },
                 )
-                if (speaking) TextAction("Stop speaking", onStopSpeaking, color = c.ink2)
+                if (speaking) TextAction(tr("Stop speaking", "बोलना रोकें"), onStopSpeaking, color = c.ink2)
             }
             if (question.key) {
                 // The advisor's one dispatch-style question: no field behind it, answered Yes / No / Not sure.
                 Column(verticalArrangement = Arrangement.spacedBy(Space.s3), modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
-                    Text(question.spoken, style = MaterialTheme.typography.headlineSmall, color = c.ink)
+                    Text(coreText(question.spoken), style = MaterialTheme.typography.headlineSmall, color = c.ink)
                     FlowRow(maxItemsInEachRow = 3, horizontalArrangement = Arrangement.spacedBy(Space.s2), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
-                        AnswerButton("Yes", { onKeyAnswer(KeyAnswer.YES) }, Modifier.weight(1f))
-                        AnswerButton("No", { onKeyAnswer(KeyAnswer.NO) }, Modifier.weight(1f))
-                        AnswerButton("Not sure", { onKeyAnswer(KeyAnswer.UNSURE) }, Modifier.weight(1f))
+                        AnswerButton(tr("Yes", "हाँ"), { onKeyAnswer(KeyAnswer.YES) }, Modifier.weight(1f))
+                        AnswerButton(tr("No", "नहीं"), { onKeyAnswer(KeyAnswer.NO) }, Modifier.weight(1f))
+                        AnswerButton(statusLabel(UiStatus.UNKNOWN).orEmpty(), { onKeyAnswer(KeyAnswer.UNSURE) }, Modifier.weight(1f))
                     }
                 }
             }
             question.asks.firstOrNull()?.let { ask ->
                 Column(verticalArrangement = Arrangement.spacedBy(Space.s3), modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
-                    Text(ask.prompt, style = MaterialTheme.typography.headlineSmall, color = c.ink)
+                    Text(coreText(ask.prompt), style = MaterialTheme.typography.headlineSmall, color = c.ink)
                     if (ask.replies.isNotEmpty()) {
                         // Two columns, in the order the question lists them; the odd one out takes the full row.
                         FlowRow(maxItemsInEachRow = 2, horizontalArrangement = Arrangement.spacedBy(Space.s2), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
                             ask.replies.forEach { r ->
-                                AnswerButton(r.label, { onReply(r) }, Modifier.weight(1f), note = if (r.suggested) "Suggested" else null, emphasized = r.suggested)
+                                AnswerButton(replyLabel(r), { onReply(r) }, Modifier.weight(1f), note = if (r.suggested) statusLabel(UiStatus.SUGGESTED) else null, emphasized = r.suggested)
                             }
                         }
                     }
                 }
             }
             SecondaryButton(
-                "Answer by voice", onVoice, Modifier.fillMaxWidth(),
+                tr("Answer by voice", "बोलकर जवाब दें"), onVoice, Modifier.fillMaxWidth(),
                 leading = { MicGlyph(c.ink, size = 20.dp); Spacer(Modifier.width(Space.s2)) },
             )
-            TextAction("Not now", onDismiss, Modifier.align(Alignment.CenterHorizontally), color = c.ink2)
+            TextAction(tr("Not now", "अभी नहीं"), onDismiss, Modifier.align(Alignment.CenterHorizontally), color = c.ink2)
         }
     }
 }
@@ -128,14 +130,16 @@ fun QuestionSheet(
 fun QuestionButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     val c = Theme.colors
     val interaction = remember { MutableInteractionSource() }
+    val description = tr("A question is waiting for your answer", "एक सवाल आपके जवाब का इंतज़ार कर रहा है")
+    val openLabel = tr("Open the question", "सवाल खोलें")
     Box(
         modifier
             .size(Size.primaryButton)
             .pressMotion(interaction)
             .clip(CircleShape)
             .background(c.attentionContainer)
-            .semantics { contentDescription = "A question is waiting for your answer" }
-            .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClickLabel = "Open the question", onClick = onClick),
+            .semantics { contentDescription = description }
+            .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClickLabel = openLabel, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Text("!", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold), color = c.onAttention)

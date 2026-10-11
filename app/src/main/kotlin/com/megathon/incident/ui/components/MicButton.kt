@@ -39,6 +39,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.megathon.incident.ui.i18n.tr
 import com.megathon.incident.ui.theme.LocalReduceMotion
 import com.megathon.incident.ui.theme.Motion
 import com.megathon.incident.ui.theme.Size
@@ -81,15 +82,20 @@ fun MicButton(
     }, tween(if (reduce) 0 else Motion.standard), label = "mic color")
     val onFill = if (busy) c.ink2 else if (c.isDark && listening) c.canvas else c.onAccent
     val description = when {
-        listening -> "Stop recording"
-        busy -> "Working on it"
-        else -> "Start recording"
+        listening -> tr("Stop recording", "रिकॉर्डिंग रोकें")
+        busy -> tr("Working on it", "काम चल रहा है")
+        else -> tr("Start recording", "रिकॉर्डिंग शुरू करें")
+    }
+    val state = when {
+        listening -> tr("Recording", "रिकॉर्डिंग हो रही है")
+        busy -> tr("Working", "काम चल रहा है")
+        else -> tr("Ready", "तैयार")
     }
     Box(
         modifier
             .pressMotion(interaction)
             .size(diameter + 56.dp)
-            .semantics { role = Role.Button; contentDescription = description; stateDescription = if (listening) "Recording" else if (busy) "Working" else "Ready" }
+            .semantics { role = Role.Button; contentDescription = description; stateDescription = state }
             .clip(CircleShape)
             .clickable(interactionSource = interaction, indication = null, enabled = !busy, onClickLabel = description, onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -130,9 +136,10 @@ fun MicButton(
 @Composable
 fun LevelBars(levels: List<Float>, modifier: Modifier = Modifier, count: Int = 24, barHeight: Dp = 40.dp) {
     val c = Theme.colors
+    val soundLevel = tr("Sound level", "आवाज़ का स्तर")
     val padded = List((count - levels.size).coerceAtLeast(0)) { 0f } + levels.takeLast(count)
     Row(
-        modifier.height(barHeight).semantics { contentDescription = "Sound level" },
+        modifier.height(barHeight).semantics { contentDescription = soundLevel },
         horizontalArrangement = Arrangement.spacedBy(3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

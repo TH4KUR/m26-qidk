@@ -65,7 +65,10 @@ import com.megathon.incident.ui.components.WorkingBar
 import com.megathon.incident.ui.components.TextAction
 import com.megathon.incident.ui.components.TranscriptCard
 import com.megathon.incident.ui.components.VoiceButton
+import com.megathon.incident.ui.components.coreText
 import com.megathon.incident.ui.components.formatClock
+import com.megathon.incident.ui.components.num
+import com.megathon.incident.ui.i18n.tr
 import com.megathon.incident.ui.theme.Size
 import com.megathon.incident.ui.theme.Space
 import com.megathon.incident.ui.theme.Theme
@@ -99,7 +102,7 @@ fun ReportScreen(ui: AppUi, vm: AppViewModel) {
     }
     Scaffold(
         containerColor = c.canvas,
-        topBar = { AppTopBar("Shape your report", onProof = vm::openProof, simulatedNote = ui.simulatedNote) },
+        topBar = { AppTopBar(tr("Shape your report", "अपनी रिपोर्ट तैयार करें"), onProof = vm::openProof, simulatedNote = ui.simulatedNote) },
         bottomBar = { ReportBottomBar(ui, vm, onQuestion = if (asking != null) ({ sheetOpen = true }) else null) },
     ) { pad ->
         if (wide) {
@@ -156,12 +159,12 @@ private fun androidx.compose.foundation.lazy.LazyListScope.conversation(ui: AppU
         var expanded by remember { mutableStateOf(false) }
         val reduce = LocalReduceMotion.current
         Column {
-        if (!ui.listening && !ui.processing) TextAction(if (expanded) "Hide original words" else "Read your original words", { expanded = !expanded })
+        if (!ui.listening && !ui.processing) TextAction(if (expanded) tr("Hide original words", "आपके मूल शब्द छिपाएँ") else tr("Read your original words", "आपके मूल शब्द पढ़ें"), { expanded = !expanded })
         AnimatedVisibility(expanded || ui.listening || ui.processing, enter = fadeIn(tween(if (reduce) 0 else Motion.standard)) + expandVertically(tween(if (reduce) 0 else Motion.standard)), exit = fadeOut(tween(if (reduce) 0 else Motion.quick)) + shrinkVertically(tween(if (reduce) 0 else Motion.standard))) {
         val highlight = ui.session.fields.firstOrNull { it.field == ui.selected }?.evidence
         TranscriptCard(
             ui.session.transcripts, highlight, ui.heardNow ?: ui.liveText, reading = ui.processing,
-            readingLabel = if (ui.heardNow == null) "Transcribing your recording…" else "Organizing the report…",
+            readingLabel = if (ui.heardNow == null) tr("Transcribing your recording…", "आपकी रिकॉर्डिंग को लिखा जा रहा है…") else tr("Organizing the report…", "रिपोर्ट को व्यवस्थित किया जा रहा है…"),
             scriptNote = ui.scriptNote,
         )
         }
@@ -190,14 +193,14 @@ private fun androidx.compose.foundation.lazy.LazyListScope.fields(ui: AppUi, vm:
     item(key = "h-needed") {
         Column(verticalArrangement = Arrangement.spacedBy(Space.s2)) {
             // No step timeline: the title bar already names the screen, and the bar below is the one progress there is.
-            if (!isWide()) Text("Your story, organized.", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
+            if (!isWide()) Text(tr("Your story, organized.", "आपकी बात, व्यवस्थित।"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("$resolved of ${mandatory.size} essentials ready", style = MaterialTheme.typography.bodyMedium, color = Theme.colors.ink2, modifier = Modifier.weight(1f))
+                Text(tr("$resolved of ${mandatory.size} essentials ready", "${num(mandatory.size)} में से ${num(resolved)} ज़रूरी बातें तैयार"), style = MaterialTheme.typography.bodyMedium, color = Theme.colors.ink2, modifier = Modifier.weight(1f))
                 val c = Theme.colors
                 when {
-                    needed > 0 -> Pill("$needed needed", c.dangerContainer, c.onDanger, icon = Icons.Rounded.Warning)
-                    toConfirm > 0 -> Pill("$toConfirm to confirm", c.attentionContainer, c.onAttention, icon = Icons.Rounded.Info)
-                    else -> Pill("Ready to review", c.accentContainer, c.onAccentContainer, icon = Icons.Rounded.Check)
+                    needed > 0 -> Pill(tr("$needed needed", "${num(needed)} बाकी"), c.dangerContainer, c.onDanger, icon = Icons.Rounded.Warning)
+                    toConfirm > 0 -> Pill(tr("$toConfirm to confirm", "${num(toConfirm)} की पुष्टि करें"), c.attentionContainer, c.onAttention, icon = Icons.Rounded.Info)
+                    else -> Pill(tr("Ready to review", "जाँच के लिए तैयार"), c.accentContainer, c.onAccentContainer, icon = Icons.Rounded.Check)
                 }
             }
             val reduce = LocalReduceMotion.current
@@ -209,8 +212,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.fields(ui: AppUi, vm:
         }
     }
     // Two panels on their own surface. The extra details are always shown: they are part of the report, not a hidden extra.
-    item(key = "mandatory") { Panel("Essentials") { FieldGroup(all.filter { it.mandatory }, ui, vm) } }
-    item(key = "details") { Panel("More details") { FieldGroup(all.filter { !it.mandatory }, ui, vm) } }
+    item(key = "mandatory") { Panel(tr("Essentials", "ज़रूरी बातें")) { FieldGroup(all.filter { it.mandatory }, ui, vm) } }
+    item(key = "details") { Panel(tr("More details", "और जानकारी")) { FieldGroup(all.filter { !it.mandatory }, ui, vm) } }
     item(key = "spacer") { Spacer(Modifier.height(Space.s6)) }
 }
 
@@ -226,6 +229,7 @@ private fun FieldGroup(group: List<FieldView>, ui: AppUi, vm: AppViewModel) {
                 editing = ui.editing == v.field,
                 justFilled = v.field in ui.justFilled,
                 choices = choicesFor(v.field),
+                storedText = ui.session.report.value(v.field).text,
                 onSelect = { openField = if (openField == v.field) null else v.field; vm.select(v.field) },
                 onEdit = { vm.startEdit(v.field) },
                 onSave = { vm.saveEdit(v.field, it) },
@@ -253,7 +257,7 @@ private fun ReportBottomBar(ui: AppUi, vm: AppViewModel, onQuestion: (() -> Unit
     Column(Modifier.fillMaxWidth().background(c.canvas).navigationBarsPadding()) {
         ui.undoLabel?.let { UndoBar(it, vm::undo) }
         if (ui.session.canSubmitNow && !ui.listening && !ui.processing) {
-            PrimaryButton("Save now", vm::send, Modifier.fillMaxWidth().padding(horizontal = Size.gutter, vertical = Space.s2))
+            PrimaryButton(tr("Save now", "अभी सेव करें"), vm::send, Modifier.fillMaxWidth().padding(horizontal = Size.gutter, vertical = Space.s2))
         }
         AnimatedContent(mode, transitionSpec = {
             if (reduce || targetState == 0) ContentTransform(EnterTransition.None, ExitTransition.None, sizeTransform = null)
@@ -267,14 +271,14 @@ private fun ReportBottomBar(ui: AppUi, vm: AppViewModel, onQuestion: (() -> Unit
                     0 -> ListeningBar(dockUi, vm)
                     1 -> Row(Modifier.padding(vertical = Space.s3), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
                         WorkingBar(width = 40.dp)
-                        Text("Shaping the details…", style = MaterialTheme.typography.bodyLarge, color = c.ink2)
+                        Text(tr("Shaping the details…", "जानकारी तैयार हो रही है…"), style = MaterialTheme.typography.bodyLarge, color = c.ink2)
                     }
                     else -> if (!ui.listening && !ui.processing) Row(Modifier.fillMaxWidth(if (wide) .58f else 1f).align(Alignment.End), horizontalArrangement = Arrangement.spacedBy(Space.s3), verticalAlignment = Alignment.CenterVertically) {
                         if (onQuestion != null) QuestionButton(onQuestion)
                         VoiceButton(vm::onMicTapped)
                         // One filled button per screen: "Save now" leads whenever it is offered, and reviewing steps back.
-                        if (ui.session.canSubmitNow) SecondaryButton("Review report", vm::goCheck, Modifier.weight(1f))
-                        else PrimaryButton("Review report", vm::goCheck, Modifier.weight(1f))
+                        if (ui.session.canSubmitNow) SecondaryButton(tr("Review report", "रिपोर्ट जाँचें"), vm::goCheck, Modifier.weight(1f))
+                        else PrimaryButton(tr("Review report", "रिपोर्ट जाँचें"), vm::goCheck, Modifier.weight(1f))
                     }
                 }
             }
@@ -287,7 +291,7 @@ private fun ListeningBar(ui: AppUi, vm: AppViewModel) {
     val c = Theme.colors
     Row(horizontalArrangement = Arrangement.spacedBy(Space.s3), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.s1)) {
-            Pill("Recording on this device", c.dangerContainer, c.onDanger)
+            Pill(tr("Recording on this device", "इस डिवाइस पर रिकॉर्डिंग चालू है"), c.dangerContainer, c.onDanger)
             Text(formatClock(ui.elapsedMs), style = MaterialTheme.typography.headlineSmall.copy(fontFeatureSettings = "tnum"))
             LevelBars(ui.levels, barHeight = 24.dp, count = 18)
         }
@@ -302,7 +306,7 @@ private fun UndoBar(label: String, onUndo: () -> Unit) {
         Modifier.fillMaxWidth().padding(horizontal = Size.gutter, vertical = Space.s2).background(c.accentContainer, RoundedCornerShape(4.dp)).padding(start = Space.s4),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = c.onAccentContainer, modifier = Modifier.weight(1f))
-        TextAction("Undo", onUndo, color = c.accent)
+        Text(coreText(label), style = MaterialTheme.typography.bodyMedium, color = c.onAccentContainer, modifier = Modifier.weight(1f))
+        TextAction(tr("Undo", "वापस करें"), onUndo, color = c.accent)
     }
 }
