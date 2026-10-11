@@ -49,6 +49,7 @@ class SupertonicSpeaker(
     private val context: Context,
     private val requireVerified: Boolean,
     private val sid: Int = 0,
+    private val speed: Float = DEFAULT_SPEED,
     private val voice: SupertonicVoice = SupertonicVoices.multilingual,
 ) : TtsBackend {
     override val compute = Compute.CPU
@@ -120,7 +121,7 @@ class SupertonicSpeaker(
                         try {
                             engine.generateWithConfig(
                                 chunk,
-                                GenerationConfig(sid = sid, speed = SPEED, numSteps = NUM_STEPS, extra = mapOf("lang" to lang)),
+                                GenerationConfig(sid = sid, speed = speed, numSteps = NUM_STEPS, extra = mapOf("lang" to lang)),
                             ).samples
                         } catch (failure: LinkageError) {
                             // A Kotlin binding that does not match the native library is an Error, not an Exception: uncaught it
@@ -159,7 +160,7 @@ class SupertonicSpeaker(
             val synthMs = synthNs / 1_000_000
             Log.i(
                 TAG,
-                "supertonic lang=$lang sid=$sid chars=${text.length} chunks=${chunks.size} loadMs=$loadedMs firstAudioMs=$firstAudioMs " +
+                "supertonic lang=$lang sid=$sid speed=$speed chars=${text.length} chunks=${chunks.size} loadMs=$loadedMs firstAudioMs=$firstAudioMs " +
                     "synthMs=$synthMs audioMs=$audioMs rtf=${if (audioMs > 0) "%.2f".format(synthMs.toDouble() / audioMs) else "n/a"} " +
                     "threads=$THREADS steps=$NUM_STEPS rate=$rate",
             )
@@ -265,8 +266,8 @@ class SupertonicSpeaker(
     private companion object {
         const val JNI_LIBRARY = "libsherpa-onnx-jni.so"
         const val TAG = "Incident"
-        /** Slow on purpose: 1.0 is the model's natural rate and was judged to sound better than faster (sherpa's example uses 1.25). */
-        const val SPEED = 1.0f
+        /** Slow on purpose: 1.0 is the model's natural rate and was reported as still too fast; lower is slower. */
+        const val DEFAULT_SPEED = 0.8f
         /** Not measured on the kit: four threads, the model's own default of 5 diffusion steps. Tune from the logged rtf. */
         const val THREADS = 4
         const val NUM_STEPS = 5

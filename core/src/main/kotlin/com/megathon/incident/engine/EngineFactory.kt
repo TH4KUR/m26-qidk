@@ -24,6 +24,8 @@ data class EngineSelection(
     val tts: TtsKind = TtsKind.ANDROID,
     /** Which of the neural voice's preset styles to use (`--es voice N`); only Supertonic has more than one. */
     val ttsVoice: Int = 0,
+    /** How fast the neural voice speaks: 1.0 is its natural rate, lower is slower (`--es speed 0.7`). 1.0 was too fast. */
+    val ttsSpeed: Float = 0.8f,
     val language: String = "en",
 )
 

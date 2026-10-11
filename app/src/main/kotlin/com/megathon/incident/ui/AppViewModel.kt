@@ -49,6 +49,7 @@ import com.megathon.incident.testing.Compute
 import com.megathon.incident.testing.FakeLlmEngine
 import com.megathon.incident.testing.SpeechEngine
 import com.megathon.incident.tts.HindiPhrases
+import com.megathon.incident.tts.HindiSummary
 import com.megathon.incident.tts.RoutingSpeaker
 import com.megathon.incident.tts.TtsBackend
 import com.megathon.incident.tts.TtsKind
@@ -140,7 +141,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             // Built only when PIPER is selected, and it loads nothing until it first speaks (the native library is lazy).
             TtsKind.PIPER to { PiperSpeaker(app, requireVerified = !Engines.isDebuggable(app), language = { speechLanguage() }) },
             // One model for Hindi and English; the language is chosen per call (see speakAloud).
-            TtsKind.SUPERTONIC to { SupertonicSpeaker(app, requireVerified = !Engines.isDebuggable(app), sid = selection.ttsVoice) },
+            TtsKind.SUPERTONIC to { SupertonicSpeaker(app, requireVerified = !Engines.isDebuggable(app), sid = selection.ttsVoice, speed = selection.ttsSpeed) },
         ),
     )
     private val recorder = MicRecorder(app)
@@ -670,7 +671,15 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             if (voice != null && reason == null) {
                 hindiVoiceNote = null
                 speaker.usePrimary(voice)
-                speaker.speakAll(HindiPhrases.segments(text))
+                // The saved-report summary becomes one connected Hindi chain (what was said, the steps, the 112 call with its
+                // reason); every other line is translated sentence by sentence.
+                val ui = session.ui.value
+                val segments = if (ui.spokenSummary != null && text == ui.spokenSummary) {
+                    HindiSummary.compose(ui.report, ui.priority, java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")))
+                } else {
+                    HindiPhrases.segments(text)
+                }
+                speaker.speakAll(segments)
                 return
             }
             hindiVoiceNote = "The Hindi voice is not available ($reason), so replies are spoken in English."

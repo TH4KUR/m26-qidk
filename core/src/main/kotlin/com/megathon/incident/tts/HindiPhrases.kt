@@ -65,6 +65,15 @@ object HindiPhrases {
         return if (latinOnly) listOf(hi(before), SpokenSegment(value, "en"), hi(after)) else listOf(hi("$before $value $after"))
     }
 
+    /** The Hindi name of an incident type from its English label ("Water leak or flood"), or null. */
+    fun typeName(englishLabel: String): String? = TYPE[englishLabel.lowercase()]
+
+    /** The Hindi word for a severity from its English label ("Moderate"), or null ("No harm" has none: it is its own sentence). */
+    fun severityName(englishLabel: String): String? = SEVERITY[englishLabel.lowercase()]
+
+    /** The Hindi words for a time given as English spoken words ("today at about 10 in the morning"), or null when it cannot be said correctly. */
+    fun whenWords(englishWhen: String): String? = whenPhrase(englishWhen)
+
     /** The words after "That was": [day] [part of day] [about] [clock], or null when a part cannot be said correctly. */
     private fun whenPhrase(text: String): String? {
         var rest = text.trim()

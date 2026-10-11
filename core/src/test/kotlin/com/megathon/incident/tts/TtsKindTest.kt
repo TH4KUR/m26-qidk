@@ -19,6 +19,12 @@ class TtsKindTest {
     }
 
     @Test
+    fun theNeuralVoiceSpeaksSlowerThanItsNaturalRateByDefault() {
+        // 1.0 is the model's natural rate and was reported as too fast; below 1.0 is slower. A switch lets it be tuned by ear.
+        assertEquals(0.8f, EngineSelection().ttsSpeed)
+    }
+
+    @Test
     fun supertonicIsParsedCaseInsensitively() {
         assertEquals(TtsKind.SUPERTONIC, TtsKind.parse("SUPERTONIC"))
         assertEquals(TtsKind.SUPERTONIC, TtsKind.parse(" supertonic "))

@@ -25,7 +25,7 @@ object Engines {
      * `adb shell am start -n com.megathon.incident/.MainActivity --es speech FAKE --es llm FAKE`
      * Unknown values fall back to that default.
      *
-     * Speech output: the Android system voice unless `--es tts PIPER` or `--es tts SUPERTONIC` is given (open-weight voices on the CPU through sherpa-onnx; Supertonic speaks Hindi and English, `--es voice N` picks its style).
+     * Speech output: the Android system voice unless `--es tts PIPER` or `--es tts SUPERTONIC` is given (open-weight voices on the CPU through sherpa-onnx; Supertonic speaks Hindi and English, `--es voice N` picks its style, `--es speed 0.7` its pace: 1.0 is natural, lower is slower).
      * `--es tts check` is the separate voice probe and leaves the choice at ANDROID. A release build keeps the Android voice
      * unless the Piper files are present and match their recorded size and SHA-256 (checked by the speaker on first use).
      *
@@ -40,6 +40,7 @@ object Engines {
             ?: if (File(context.filesDir, "geniex/models/" + GenieXLlmEngine.DEFAULT_MODEL).exists()) LlmKind.GENIEX else LlmKind.FAKE,
         tts = TtsKind.parse(intent?.getStringExtra("tts")),
         ttsVoice = intent?.getStringExtra("voice")?.toIntOrNull()?.coerceAtLeast(0) ?: 0,
+        ttsSpeed = intent?.getStringExtra("speed")?.toFloatOrNull()?.coerceIn(0.5f, 1.5f) ?: 0.8f,
         language = intent?.getStringExtra("lang") ?: "en",
     )
 }
