@@ -120,6 +120,13 @@ class PiperSpeaker(
                         val engine = engineFor(voice, modelFiles)
                         try {
                             engine.generate(chunk, 0, SPEED).samples
+                        } catch (failure: LinkageError) {
+                            // A Kotlin binding that does not match the native library (NoSuchFieldError and the like) is an
+                            // Error, not an Exception: uncaught it would end the app instead of falling back to the Android voice.
+                            // It repeats on every call, so it is permanent and the library is not tried again.
+                            val reason = "the sherpa-onnx library does not match its Kotlin binding: ${failure.message}"
+                            libraryError = reason
+                            throw TtsBackendException(reason, spokeSomething = framesWritten > 0, permanent = true, cause = failure)
                         } catch (failure: Exception) {
                             throw TtsBackendException("Piper could not speak: ${failure.message}", spokeSomething = framesWritten > 0, cause = failure)
                         }
