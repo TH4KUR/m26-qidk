@@ -69,6 +69,8 @@ class ReportSession(
     private var chipDecisions: List<com.megathon.incident.domain.JournalEntry> = emptyList()
     private val stages = mutableListOf<StageRecord>()
     private val asked = mutableListOf<Set<Field>>()
+    /** The open mandatory fields when the last question was chosen: a change means an answer made progress. */
+    private var lastOpen: Set<Field> = emptySet()
     private val undoStack = ArrayDeque<Snapshot>()
     private var priority: PriorityAdvice? = null
     private var deescalation: Deescalation? = null
@@ -264,7 +266,7 @@ class ReportSession(
         advisor = newAdvisor()
         report = IncidentReport.empty(newId(), clock.millis())
         clarify = emptySet()
-        chipDecisions = emptyList(); transcripts.clear(); toolLog.clear(); journal.clear(); stages.clear(); asked.clear(); undoStack.clear()
+        chipDecisions = emptyList(); transcripts.clear(); toolLog.clear(); journal.clear(); stages.clear(); asked.clear(); lastOpen = emptySet(); undoStack.clear()
         priority = null; deescalation = null; say = null; spokenSummary = null; stagedEmergency = null
         state = SessionState.Idle
         publish()
@@ -277,7 +279,13 @@ class ReportSession(
         val lead = listOfNotNull(stagedEmergency, prefix).joinToString(" ").ifEmpty { null }
         stagedEmergency = null
         val q = if (keyQuestion != null) Question(emptyList(), keyQuestion, key = true)
-        else planner.next(report, clarify, advisor.lane(), asked)
+        else {
+            // An answer that changed what is still open is progress: a field asked before may be asked again. A round of
+            // questions that changed nothing is not, so the report goes to review rather than the worker being nagged.
+            val open = planner.open(report, clarify, advisor.lane()).toSet()
+            if (open != lastOpen) { asked.clear(); lastOpen = open }
+            planner.next(report, clarify, advisor.lane(), asked)
+        }
         if (q != null) {
             if (!q.key) asked += q.asks.map { it.field }.toSet()
             log(

@@ -47,12 +47,12 @@ class ReportSessionTest {
         it.tap(Field.DATE_TIME, "Today")
     }
 
-    @Test fun theSlideExampleFillsTheFieldsAndAsksWhichDayAndHowSevere() {
+    @Test fun theSlideExampleFillsTheFieldsAndAsksWhichDayThenHowSevereOneAtATime() {
         val s = session()
         s.say(slide)
         val state = assertIs<SessionState.Asking>(s.ui.value.state)
-        assertEquals(listOf(Field.DATE_TIME, Field.SEVERITY), state.question.asks.map { it.field }, "the time has no date, so the day is asked")
-        assertEquals("Was that today? How bad is it?", s.ui.value.say?.text)
+        assertEquals(listOf(Field.DATE_TIME), state.question.asks.map { it.field }, "the time has no date, so the day is asked, alone")
+        assertEquals("Was that today?", s.ui.value.say?.text)
 
         assertEquals("Water leak or flood", s.field(Field.INCIDENT_TYPE).value)
         assertEquals(UiStatus.HEARD, s.field(Field.INCIDENT_TYPE).status)
@@ -88,8 +88,10 @@ class ReportSessionTest {
         val llm = Scripted(FakeLlmEngine.DECK_REPLY)
         val s = session(llm)
         s.say(slide)
-        s.tap(Field.SEVERITY, "Moderate")
         s.tap(Field.DATE_TIME, "Today")
+        assertEquals(listOf(Field.SEVERITY), assertIs<SessionState.Asking>(s.ui.value.state).question.asks.map { it.field }, "severity is the next, separate question")
+        assertEquals("How bad is it?", s.ui.value.say?.text)
+        s.tap(Field.SEVERITY, "Moderate")
         assertEquals(1, llm.calls, "a tap must not call the model")
         assertEquals(SessionState.Review, s.ui.value.state)
         assertEquals("Moderate", s.field(Field.SEVERITY).value)
