@@ -71,6 +71,9 @@ class LiveInferenceCoordinator(
     private var pcm = ShortArray(config.sampleRate * 10)
     private var total = 0
     private var decodedEnd = 0
+    /** Sample index after the last loud frame heard so far, and the same for the audio already decoded. */
+    private var lastVoicedEnd = 0
+    private var decodedVoicedEnd = 0
     private var heardVoice = false
     private var phraseEnded = false
     private var previewFailed = false
@@ -92,7 +95,9 @@ class LiveInferenceCoordinator(
             if (total + take > pcm.size) pcm = pcm.copyOf(minOf(capSamples, maxOf(pcm.size * 2, total + take)))
             copy.copyInto(pcm, total)
             total += take
-            when (vad.accept(copy)) {
+            val event = vad.accept(copy)
+            if (vad.lastFrameLoud) lastVoicedEnd = total
+            when (event) {
                 VadEvent.SPEECH_STARTED -> heardVoice = true
                 VadEvent.SPEECH_ENDED, VadEvent.MAX_LENGTH -> { heardVoice = true; phraseEnded = true }
                 else -> if (vad.currentVoicedMs > 0) heardVoice = true
@@ -114,9 +119,11 @@ class LiveInferenceCoordinator(
                 val start = if (decodedEnd == 0) 0 else maxOf(0, decodedEnd - overlapSamples)
                 val end = minOf(total, start + windowSamples)
                 if (end <= decodedEnd) return
-                heardVoice = false
-                phraseEnded = false
-                Window(start, end, pcm.copyOfRange(start, end))
+                if (end == total) { // a window cut at the cap leaves audio behind: it must stay "voiced" so Stop (or the next window) decodes it
+                    heardVoice = false
+                    phraseEnded = false
+                }
+                Window(start, end, pcm.copyOfRange(start, end), minOf(lastVoicedEnd, end))
             }
             val heard = try {
                 counted(engine.transcribe(job.pcm, language))
@@ -131,9 +138,12 @@ class LiveInferenceCoordinator(
                 windows++
                 val words = heard.trim().split(Regex("\\s+")).count { it.isNotEmpty() }
                 val tail = Math.ceil(words * overlapSamples.toDouble() / (job.end - job.start)).toInt().coerceAtLeast(1)
-                val overlapped = decodedEnd > 0
+                // Shared audio only counts when it holds speech: after a pause the overlap is silence and there is nothing to match.
+                val overlapped = decodedEnd > 0 && decodedVoicedEnd > job.start
                 decodedEnd = job.end
+                decodedVoicedEnd = job.voicedEnd
                 val changed = transcript.addWindow(heard, overlapped, maxOverlapWords, tailWords = tail)
+                if (!stopping && heardVoice && total - decodedEnd >= triggerSamples) triggers.trySend(Unit) // drain a backlog without waiting for more audio
                 if (changed) Snapshot(transcript.revision, transcript.stableText, transcript.tailText, windows) else null
             }
             snapshot?.let(onSnapshot)
@@ -190,7 +200,7 @@ class LiveInferenceCoordinator(
     }
 
     private suspend fun tail(plan: Plan.Tail): String {
-        val (audio, overlapped) = synchronized(lock) { pcm.copyOfRange(plan.start, plan.end) to (decodedEnd > 0) }
+        val (audio, overlapped) = synchronized(lock) { pcm.copyOfRange(plan.start, plan.end) to (decodedEnd > 0 && decodedVoicedEnd > plan.start) }
         val heard = try {
             counted(engine.transcribe(audio, language))
         } catch (e: CancellationException) {
@@ -220,7 +230,7 @@ class LiveInferenceCoordinator(
         }
     }
 
-    private class Window(val start: Int, val end: Int, val pcm: ShortArray)
+    private class Window(val start: Int, val end: Int, val pcm: ShortArray, val voicedEnd: Int)
 
     private companion object {
         /** Fast speech is about 4-5 words a second; used only to bound how many words a shared region can hold. */

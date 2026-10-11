@@ -26,13 +26,20 @@ class IncrementalTranscript {
 
     /** Returns true when the transcript changed. */
     fun addWindow(window: String, overlapped: Boolean, maxOverlapWords: Int = 0, tailWords: Int = 0): Boolean {
-        val incoming = window.trim().split(WHITESPACE).filter { it.isNotEmpty() }
+        val incoming = window.trim().split(WHITESPACE).filter { it.isNotEmpty() }.toMutableList()
         if (incoming.isEmpty()) return false
         val before = text
         var keep = words.size
         if (overlapped && words.isNotEmpty()) {
             val k = overlap(incoming, maxOverlapWords)
-            if (k > 0) keep -= k else ambiguous = true
+            if (k > 0) {
+                keep -= k
+                // The later window began mid-word ("ree"): keep the earlier, whole word rather than the clipped one.
+                val whole = words[keep]
+                if (norm(whole) != norm(incoming[0]) && norm(whole).endsWith(norm(incoming[0]))) incoming[0] = whole
+            } else {
+                ambiguous = true
+            }
         }
         while (words.size > keep) words.removeAt(words.lastIndex)
         words += incoming
@@ -49,17 +56,21 @@ class IncrementalTranscript {
     private fun overlap(incoming: List<String>, limit: Int): Int {
         for (k in minOf(limit, words.size, incoming.size) downTo 1) {
             val ours = words.subList(words.size - k, words.size)
-            if ((0 until k).all { same(ours[it], incoming[it], edge = it == k - 1 || it == 0) }) return k
+            if ((0 until k).all { same(ours[it], incoming[it], startEdge = it == 0, endEdge = it == k - 1) }) return k
         }
         return 0
     }
 
-    /** Equal words, or at a window edge a word cut short by the window ("thr" for "three"). */
-    private fun same(a: String, b: String, edge: Boolean): Boolean {
-        val x = norm(a)
-        val y = norm(b)
+    /**
+     * Equal words, or a word the window cut: the earlier window ended mid-word ("thr" for "three", [endEdge]) or the later one
+     * began mid-word ("ree" for "three", [startEdge]). Numbers are never matched by prefix ("12" is not "120").
+     */
+    private fun same(ours: String, incoming: String, startEdge: Boolean, endEdge: Boolean): Boolean {
+        val x = norm(ours)
+        val y = norm(incoming)
         if (x == y) return true
-        return edge && minOf(x.length, y.length) >= 2 && (x.startsWith(y) || y.startsWith(x))
+        if (x.any { it.isDigit() } || y.any { it.isDigit() } || minOf(x.length, y.length) < 3) return false
+        return (startEdge && x.endsWith(y)) || (endEdge && y.startsWith(x))
     }
 
     private fun norm(w: String) = w.lowercase().filter { it.isLetterOrDigit() }

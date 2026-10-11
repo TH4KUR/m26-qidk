@@ -43,7 +43,11 @@ private class ScriptedEngine(private val script: List<String>, var gate: Complet
 
 class LiveInferenceCoordinatorTest {
     private fun quiet(ms: Int) = ShortArray(RATE * ms / 1000) { if (it % 2 == 0) 20 else -20 }
-    private fun speech(ms: Int) = ShortArray(RATE * ms / 1000) { if (it / 20 % 2 == 0) 3000 else -3000 }
+    /** Loud square wave with a dip every fifth 100 ms, like the pauses between words: a perfectly steady tone is read as room noise after 6 s. */
+    private fun speech(ms: Int) = ShortArray(RATE * ms / 1000) {
+        val amplitude = if (it / (RATE / 10) % 5 == 4) 600 else 3000
+        if (it / 20 % 2 == 0) amplitude.toShort() else (-amplitude).toShort()
+    }
 
     /** Feeds 100 ms chunks through ONE reused buffer, like the microphone read loop does. */
     private fun feed(c: LiveInferenceCoordinator, pcm: ShortArray) {
@@ -211,5 +215,47 @@ class LiveInferenceCoordinatorTest {
         worker.join()
         yield()
         assertTrue(snapshots.isEmpty())
+    }
+
+    @Test
+    fun audioLeftOverWhenAWindowWasCutAtTheCapIsStillDecodedAtStop() = runBlocking {
+        val engine = ScriptedEngine(listOf("one two three four five six", "five six seven eight"))
+        val c = LiveInferenceCoordinator(engine, "en")
+        val worker = start(c)
+        feed(c, quiet(300) + speech(7_000)) // the speaker is already silent when the first (6 s) window runs
+        until("first window") { engine.calls.isNotEmpty() }
+        val done = c.finish()
+        worker.join()
+        assertEquals("one two three four five six seven eight", done.text, "the words after the cap must not be lost")
+        assertFalse(done.fullPass)
+    }
+
+    @Test
+    fun aBacklogLongerThanOneWindowDrainsWithoutWaitingForMoreAudio() = runBlocking {
+        val engine = ScriptedEngine(listOf("a b c d e f", "e f g h i j", "i j k l"))
+        val c = LiveInferenceCoordinator(engine, "en")
+        val worker = start(c)
+        feed(c, quiet(300) + speech(14_000))
+        until("three windows") { engine.calls.size == 3 }
+        val done = c.finish()
+        worker.join()
+        assertEquals(3, engine.calls.size, "nothing is left for Stop to decode")
+        assertEquals("a b c d e f g h i j k l", done.text)
+    }
+
+    @Test
+    fun aPauseLongerThanTheOverlapDoesNotMakeTheNextWindowAmbiguous() = runBlocking {
+        val engine = ScriptedEngine(listOf("the pump burst", "near room three"))
+        val c = LiveInferenceCoordinator(engine, "en")
+        val worker = start(c)
+        feed(c, quiet(300) + speech(3_000) + quiet(1_200)) // the shared region at the next window's start is silence
+        until("first") { engine.calls.size == 1 }
+        feed(c, speech(3_000) + quiet(1_200))
+        until("second") { engine.calls.size == 2 }
+        val done = c.finish()
+        worker.join()
+        assertFalse(done.fullPass, "no whole-recording decode is needed after an ordinary pause")
+        assertEquals("the pump burst near room three", done.text)
+        assertEquals(2, engine.calls.size)
     }
 }

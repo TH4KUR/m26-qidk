@@ -72,4 +72,22 @@ class IncrementalTranscriptTest {
         assertEquals("", t.tailText)
         assertEquals("one two three four five six seven eight", t.stableText)
     }
+
+    @Test
+    fun aWordClippedAtTheStartOfTheLaterWindowStillMatches() {
+        val t = IncrementalTranscript()
+        t.addWindow("the leak is near room three", overlapped = false)
+        t.addWindow("ree on the second floor", overlapped = true, maxOverlapWords = 6)
+        assertEquals("the leak is near room three on the second floor", t.text)
+        assertFalse(t.ambiguous)
+    }
+
+    @Test
+    fun aNumberIsNeverMergedWithADifferentNumberThatMerelyStartsWithIt() {
+        val t = IncrementalTranscript()
+        t.addWindow("the tank on floor 12", overlapped = false)
+        t.addWindow("120 litres leaked", overlapped = true, maxOverlapWords = 6)
+        assertTrue(t.ambiguous, "unmatched shared audio is flagged, not silently merged")
+        assertEquals("the tank on floor 12 120 litres leaked", t.text)
+    }
 }
