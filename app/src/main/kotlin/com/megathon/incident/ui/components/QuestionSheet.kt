@@ -1,6 +1,14 @@
 package com.megathon.incident.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.runtime.getValue
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -84,10 +92,10 @@ fun QuestionSheet(
                 // The advisor's one dispatch-style question: no field behind it, answered Yes / No / Not sure.
                 Column(verticalArrangement = Arrangement.spacedBy(Space.s3), modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
                     Text(question.spoken, style = MaterialTheme.typography.headlineSmall, color = c.ink)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.s2), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
-                        OutlinedChoiceChip("Yes", onClick = { onKeyAnswer(KeyAnswer.YES) })
-                        OutlinedChoiceChip("No", onClick = { onKeyAnswer(KeyAnswer.NO) })
-                        OutlinedChoiceChip("Not sure", onClick = { onKeyAnswer(KeyAnswer.UNSURE) })
+                    FlowRow(maxItemsInEachRow = 3, horizontalArrangement = Arrangement.spacedBy(Space.s2), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+                        AnswerButton("Yes", { onKeyAnswer(KeyAnswer.YES) }, Modifier.weight(1f))
+                        AnswerButton("No", { onKeyAnswer(KeyAnswer.NO) }, Modifier.weight(1f))
+                        AnswerButton("Not sure", { onKeyAnswer(KeyAnswer.UNSURE) }, Modifier.weight(1f))
                     }
                 }
             }
@@ -95,22 +103,20 @@ fun QuestionSheet(
                 Column(verticalArrangement = Arrangement.spacedBy(Space.s3), modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
                     Text(ask.prompt, style = MaterialTheme.typography.headlineSmall, color = c.ink)
                     if (ask.replies.isNotEmpty()) {
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.s2), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+                        // Two columns, in the order the question lists them; the odd one out takes the full row.
+                        FlowRow(maxItemsInEachRow = 2, horizontalArrangement = Arrangement.spacedBy(Space.s2), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
                             ask.replies.forEach { r ->
-                                OutlinedChoiceChip(r.label, onClick = { onReply(r) }, note = if (r.suggested) "suggested" else null, emphasis = r.suggested)
+                                AnswerButton(r.label, { onReply(r) }, Modifier.weight(1f), note = if (r.suggested) "Suggested" else null, emphasized = r.suggested)
                             }
                         }
                     }
                 }
             }
-            Hairline()
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                    MicGlyph(c.accent, size = 20.dp)
-                    TextAction("Answer by voice", onVoice, flush = true)
-                }
-                TextAction("Not now", onDismiss, color = c.ink2)
-            }
+            SecondaryButton(
+                "Answer by voice", onVoice, Modifier.fillMaxWidth(),
+                leading = { MicGlyph(c.ink, size = 20.dp); Spacer(Modifier.width(Space.s2)) },
+            )
+            TextAction("Not now", onDismiss, Modifier.align(Alignment.CenterHorizontally), color = c.ink2)
         }
     }
 }
@@ -133,5 +139,40 @@ fun QuestionButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
         contentAlignment = Alignment.Center,
     ) {
         Text("!", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold), color = c.onAttention)
+    }
+}
+
+/**
+ * One answer to the question: a real button at least 56 dp tall with a visible border (it does not rely on colour), a pressed
+ * state, and a label that wraps instead of being cut off at large text sizes or in Hindi. The suggested answer is the
+ * emphasised one and says so in a word.
+ */
+@Composable
+private fun AnswerButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, note: String? = null, emphasized: Boolean = false) {
+    val c = Theme.colors
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val shape = RoundedCornerShape(14.dp)
+    val container = when {
+        pressed -> c.accentContainer
+        emphasized -> c.accentContainer
+        else -> c.canvas
+    }
+    Box(
+        modifier
+            .heightIn(min = 56.dp)
+            .pressMotion(interaction)
+            .clip(shape)
+            .background(container, shape)
+            .border(BorderStroke(if (emphasized) 2.dp else 1.5.dp, if (emphasized) c.accent else c.ink3), shape)
+            .semantics { contentDescription = if (note != null) "$label, $note" else label }
+            .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick)
+            .padding(horizontal = Space.s3, vertical = Space.s2),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(label, style = MaterialTheme.typography.titleMedium, color = c.ink, textAlign = TextAlign.Center)
+            if (note != null) Text(note, style = MaterialTheme.typography.labelSmall, color = c.onAccentContainer)
+        }
     }
 }
