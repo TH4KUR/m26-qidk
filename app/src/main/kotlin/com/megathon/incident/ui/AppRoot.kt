@@ -21,6 +21,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import com.megathon.incident.ui.i18n.LocalLanguage
+import com.megathon.incident.ui.i18n.AppLanguage
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -64,6 +67,9 @@ fun AppRoot(vm: AppViewModel) {
     BackHandler(enabled = ui.screen == Screen.SAVED && !ui.showProof) { vm.closeSavedReport() }
     BackHandler(enabled = ui.screen == Screen.REPORTS && !ui.showProof) { vm.closeReports() }
 
+    // The whole app follows the Hindi switch: one language for every screen, changed at once.
+    val language = if (ui.hindiLane) AppLanguage.HI else AppLanguage.EN
+    CompositionLocalProvider(LocalLanguage provides language) {
     Surface(Modifier.fillMaxSize().imePadding(), color = Theme.colors.canvas) {
         AnimatedContent(
             targetState = ui.screen,
@@ -94,5 +100,6 @@ fun AppRoot(vm: AppViewModel) {
             }
         }
         if (ui.showProof) ProofSheet(ui, onClose = vm::closeProof)
+    }
     }
 }
