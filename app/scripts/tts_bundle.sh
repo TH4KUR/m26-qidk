@@ -8,6 +8,11 @@
 #   tts_bundle.sh push  [TTS_DIR]                 push the voice folders into the app's private folder on the kit,
 #                                                 files/tts/<voice>/ (needs `adb root`; the app must be installed once)
 #
+# Supertonic 3 (one model for Hindi and English, about 145 MB; sherpa-onnx release `sherpa-onnx-supertonic-3-tts-int8-2026-05-11`):
+#
+#   tts_bundle.sh check-supertonic [TTS_DIR]      local only: are its seven files in TTS_DIR/<folder> with the recorded size and SHA-256?
+#   tts_bundle.sh push-supertonic  [TTS_DIR]      push those seven files to files/tts/<folder>/ and compare the device SHA-256 of each
+#
 # BUNDLE_DIR defaults to $HOME/sherpa-bundle/bundle, TTS_DIR to $HOME/tts-models.
 # Then launch with Piper: adb shell am start -n com.megathon.incident/.MainActivity --es tts PIPER
 set -euo pipefail
@@ -23,7 +28,32 @@ VOICES=(
   "vits-piper-hi_IN-rohan-medium-int8|hi_IN-rohan-medium.onnx|4f2dc5324c762fc676eb65be30b79b65c91848f47c3697ff86de69f3315c5da6|18301724"
 )
 
+# Supertonic 3: folder, then name|size|sha256 per file (the same values as SupertonicVoices in :core).
+SUPERTONIC_FOLDER=sherpa-onnx-supertonic-3-tts-int8-2026-05-11
+SUPERTONIC_FILES=(
+  "duration_predictor.int8.onnx|3700147|c3eb91414d5ff8a7a239b7fe9e34e7e2bf8a8140d8375ffb14718b1c639325db"
+  "text_encoder.int8.onnx|36416150|c7befd5ea8c3119769e8a6c1486c4edc6a3bc8365c67621c881bbb774b9902ff"
+  "vector_estimator.int8.onnx|78400833|20cd86fa5c6effedfda0e7cffe5b0569ca401c440a0c3a1d72bf39286c0db3fd"
+  "vocoder.int8.onnx|25991073|e923d60f53f95eb1ce235f1dc33ec56d9c057823c96fa6f8acf98f32b0da6152"
+  "tts.json|8253|42078d3aef1cd43ab43021f3c54f47d2d75ceb4e75f627f118890128b06a0d09"
+  "unicode_indexer.bin|262144|8402ca48e5189a8950138580b0fff64db6f072f24ac07cd54ba8b2fbb9883b30"
+  "voice.bin|517168|67d5209b0ee8ce6c74105ffbe12fe6a7628aea3b4ba2fcb308a4a67938a93ce8"
+)
+
 need() { [ -e "$1" ] || { echo "missing: $1"; exit 1; }; }
+
+check_supertonic() {
+  local dir="$1/$SUPERTONIC_FOLDER" bad=0 entry name size sha got
+  for entry in "${SUPERTONIC_FILES[@]}"; do
+    IFS='|' read -r name size sha <<<"$entry"
+    if [ ! -f "$dir/$name" ]; then echo "MISSING  $name"; bad=1; continue; fi
+    got="$(stat -L -c %s "$dir/$name")"
+    if [ "$got" != "$size" ]; then echo "BAD SIZE $name ($got, expected $size)"; bad=1; continue; fi
+    if [ "$(sha256sum "$dir/$name" | cut -d' ' -f1)" != "$sha" ]; then echo "BAD HASH $name"; bad=1; continue; fi
+    echo "OK       $name"
+  done
+  return $bad
+}
 
 check_voices() {
   local dir="$1" ok=0 entry folder model sha size actual
@@ -72,6 +102,29 @@ case "$cmd" in
     adb shell "chown -R $uid:$uid $base && chmod -R u+rX,go-rwx $base && restorecon -R $base"
     echo "pushed to $base:"; adb shell "ls -la $base" | grep -v '^total'
     ;;
+  check-supertonic)
+    check_supertonic "${2:-$HOME/tts-models}" || { echo "supertonic bundle is NOT usable"; exit 1; }
+    ;;
+  push-supertonic)
+    dir="${2:-$HOME/tts-models}"
+    check_supertonic "$dir" || { echo "supertonic bundle is NOT usable"; exit 1; }
+    adb root >/dev/null; adb wait-for-device
+    uid="$(adb shell stat -c %u /data/data/$PKG | tr -d '\r')"
+    [ -n "$uid" ] || { echo "install the app first: $PKG has no data dir"; exit 1; }
+    base=/data/data/$PKG/files/tts/$SUPERTONIC_FOLDER
+    adb shell "mkdir -p $base"
+    for entry in "${SUPERTONIC_FILES[@]}"; do
+      IFS='|' read -r name size sha <<<"$entry"
+      adb push "$dir/$SUPERTONIC_FOLDER/$name" "$base/$name" >/dev/null
+    done
+    adb shell "chown -R $uid:$uid /data/data/$PKG/files/tts && chmod -R u+rX,go-rwx $base && restorecon -R $base" >/dev/null 2>&1
+    for entry in "${SUPERTONIC_FILES[@]}"; do
+      IFS='|' read -r name size sha <<<"$entry"
+      got="$(adb shell sha256sum "$base/$name" | tr -d '\r' | cut -d' ' -f1)"
+      [ "$got" = "$sha" ] && echo "device OK  $name" || { echo "DEVICE HASH DIFFERS $name ($got)"; exit 1; }
+    done
+    ;;
   *)
-    sed -n '2,13p' "$0"; exit 2 ;;
+    # The usage text is the leading comment block (line 2 up to the first line that is not a comment).
+    awk 'NR > 1 { if (/^#/) print; else exit }' "$0"; exit 2 ;;
 esac

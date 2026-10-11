@@ -25,7 +25,15 @@ data class FieldView(
 )
 
 /** A ready-made answer the reporter can tap instead of speaking. */
-data class QuickReply(val label: String, val field: Field, val value: String, val suggested: Boolean = false)
+data class QuickReply(val label: String, val field: Field, val value: String, val suggested: Boolean = false) {
+    companion object {
+        /** "None" / "No one": an answered, empty field (EXPLICIT_NONE). */
+        const val NONE = "@none"
+
+        /** "Skip": record nothing; the field is not asked again. */
+        const val SKIP = "@skip"
+    }
+}
 
 data class Ask(val field: Field, val prompt: String, val replies: List<QuickReply>)
 

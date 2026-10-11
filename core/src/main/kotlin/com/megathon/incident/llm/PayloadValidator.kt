@@ -351,7 +351,9 @@ class PayloadValidator(
         // A near-miss is still resolved (so the planner can ask), but stays a chip: it was not heard as such.
         val status = if (miss != null) ValueStatus.SUGGESTED else ValueStatus.REPORTED
         val shownEvidence = miss?.heard ?: evidence
-        val resolved = temporal.resolve(text, capturedAt)
+        // POST-HELD-OUT CHANGE (user's word, dev only): the sentence's tense settles "kal" / "parso" (hua, tha = past), so the phrase is
+        // resolved in the context it was said in; a future clause (hoga, karunga) is not an incident time and stays unresolved.
+        val resolved = temporal.resolveInContext(text, transcript, capturedAt)
         if (resolved == null) {
             val note = listOfNotNull(miss?.let(::nearMissNote), "could not resolve this time; ask the reporter").joinToString("; ")
             proposals += FieldProposal(

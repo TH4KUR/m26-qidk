@@ -63,6 +63,8 @@ class EvalRunner(private val filesDir: File, private val engine: LlmEngine, priv
         runName: String,
         only: Set<String>?,
         split: EvalSplit = EvalSplit.DEV,
+        /** `--es probe on`: after each item's turns, run the focused second look and record its chips (dev scoring only; the first-pass numbers are unchanged). */
+        probe: Boolean = false,
         onSelected: (List<String>) -> Unit = {},
     ): File {
         val outDir = File(filesDir, "eval/$runName").apply { mkdirs() }
@@ -73,6 +75,7 @@ class EvalRunner(private val filesDir: File, private val engine: LlmEngine, priv
         val loadMs = warmUp()
 
         val raw = StringBuilder()
+        val probeRaw = StringBuilder()
         val preds = StringBuilder()
         val zone = ZoneOffset.ofHoursMinutes(5, 30)
         val summary = mutableListOf<String>()
@@ -114,6 +117,26 @@ class EvalRunner(private val filesDir: File, private val engine: LlmEngine, priv
                 (session.ui.value.state as? SessionState.Asking)?.let { asked += it.question.asks.map { a -> a.field.name.lowercase() } } ?: asked.add(emptyList())
                 if (failed != null) break
             }
+            val firstPassCalls = recording.calls.size
+            var probeChips = emptyList<com.megathon.incident.domain.Suggestion>()
+            var probeError: String? = null
+            if (probe && failed == null) {
+                try {
+                    session.probeMissing()
+                } catch (e: Exception) {
+                    probeError = "${e.javaClass.simpleName}: ${e.message}"
+                }
+                probeChips = session.ui.value.suggestions.filter { it.source == com.megathon.incident.domain.Source.LLM }
+                recording.calls.drop(firstPassCalls).forEach { c ->
+                    probeRaw.appendLine(
+                        buildJsonObject {
+                            put("gold_id", id); put("output", c.result?.text ?: "")
+                            c.result?.let { r -> put("elapsed_ms", r.elapsedMs); put("compute", r.compute.name) }
+                            c.error?.let { put("error", it) }
+                        }.toString(),
+                    )
+                }
+            }
             val report: IncidentReport = session.ui.value.report
             val compute = recording.calls.lastOrNull { it.result != null }?.result?.compute?.name ?: "NONE"
             preds.appendLine(
@@ -121,13 +144,16 @@ class EvalRunner(private val filesDir: File, private val engine: LlmEngine, priv
                     put("gold_id", id); put("captured_at", capturedAt); put("compute", compute)
                     put("report", json.parseToJsonElement(json.encodeToString(IncidentReport.serializer(), report)))
                     putJsonArray("asked") { asked.forEach { turn -> add(JsonArray(turn.map { JsonPrimitive(it) })) } }
+                    if (probe) putJsonArray("probe_chips") { probeChips.forEach { c -> add(buildJsonObject { put("field", c.field.name.lowercase()); put("proposed", c.proposed); put("reason", c.reason) }) } }
+                    probeError?.let { put("probe_error", it) }
                     failed?.let { put("error", it) }
                 }.toString(),
             )
-            summary += "$id calls=${recording.calls.size} valid=${recording.calls.count { c -> c.result?.let { ToolCallParser.parse(it.text) is ParseResult.Ok } == true }}${failed?.let { " ERROR $it" } ?: ""}"
+            summary += "$id calls=${firstPassCalls} valid=${recording.calls.take(firstPassCalls).count { c -> c.result?.let { ToolCallParser.parse(it.text) is ParseResult.Ok } == true }}${failed?.let { " ERROR $it" } ?: ""}"
         }
         File(outDir, "raw.jsonl").writeText(raw.toString())
         File(outDir, "predictions.jsonl").writeText(preds.toString())
+        if (probe) File(outDir, "probe_raw.jsonl").writeText(probeRaw.toString())
         File(outDir, "meta.json").writeText(
             buildJsonObject {
                 put("run", runName); put("engine", engine.name); put("items", items.size); put("model_load_ms", loadMs)

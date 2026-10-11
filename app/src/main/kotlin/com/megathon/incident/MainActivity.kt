@@ -48,7 +48,7 @@ class MainActivity : ComponentActivity() {
             )
         } else {
             intent.getStringExtra("eval")?.let { gold ->
-                vm.debugEval(gold, intent.getStringExtra("prompt"), intent.getStringExtra("run") ?: "run", intent.getStringExtra("only")?.split(',')?.toSet())
+                vm.debugEval(gold, intent.getStringExtra("prompt"), intent.getStringExtra("run") ?: "run", intent.getStringExtra("only")?.split(',')?.toSet(), probe = intent.getStringExtra("probe") == "on")
             }
         }
         // Debug builds: `--es tts PIPER` speaks with Piper TTS (sherpa-onnx, CPU) instead of the Android voice, falling back to the

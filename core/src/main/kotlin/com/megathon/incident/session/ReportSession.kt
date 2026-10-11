@@ -1,5 +1,6 @@
 package com.megathon.incident.session
 
+import com.megathon.incident.speech.HindiTranscript
 import com.megathon.incident.domain.ExtractionPayload
 import com.megathon.incident.domain.Field
 import com.megathon.incident.domain.FieldValue
@@ -50,6 +51,8 @@ class ReportSession(
     private val newId: () -> String,
     /** D's chip engine (spec D16); null means no chips. It only proposes; the reporter's tap is the only thing that changes a field. */
     private val suggestions: SuggestionEngine? = null,
+    /** The focused second look at fields the first pass left empty; it only proposes chips, and only [probeMissing] runs it. */
+    private val probe: FocusedProbe? = null,
 ) {
     private data class Snapshot(
         val report: IncidentReport,
@@ -67,8 +70,13 @@ class ReportSession(
     private val journal = mutableListOf<JournalEntry>()
     /** Accepted and rejected chips, in D's journal type: this is how a dismissed chip stays dismissed. */
     private var chipDecisions: List<com.megathon.incident.domain.JournalEntry> = emptyList()
+    /** Chips from [probe]: kept until the reporter speaks again, shown only while they still apply. */
+    private var probeChips: List<Suggestion> = emptyList()
+    private val probeDecisions = com.megathon.incident.suggest.ChipDecisions(clock)
     private val stages = mutableListOf<StageRecord>()
     private val asked = mutableListOf<Set<Field>>()
+    /** The open mandatory fields when the last question was chosen: a change means an answer made progress. */
+    private var lastOpen: Set<Field> = emptySet()
     private val undoStack = ArrayDeque<Snapshot>()
     private var priority: PriorityAdvice? = null
     private var deescalation: Deescalation? = null
@@ -94,8 +102,10 @@ class ReportSession(
             return
         }
         val said = text.trim()
+        if (answerOpenQuestion(said)) return // a short answer to an open optional question answers that field
         val at = capturedAt ?: clock.instant() // when the reporter stopped speaking: "right now" and "10 minutes ago" are relative to this
         remember() // one voice turn is one undoable step
+        probeChips = emptyList()
         transcripts += said
         stt?.let(::record)
         state = SessionState.Extracting
@@ -131,6 +141,26 @@ class ReportSession(
     }
 
     /**
+     * While a single optional question (tool or item, people, witnesses) is open, a short spoken answer such as "Meera and Ravi", "no one"
+     * or "pata nahi" answers it directly, without the first-pass prompt (which would not know what a bare name is for). Anything that does not
+     * look like an answer returns false and is read as a normal sentence. The answer is the reporter's own: USER_CONFIRMED, evidence = their words.
+     */
+    private fun answerOpenQuestion(said: String): Boolean {
+        val ask = (state as? SessionState.Asking)?.question?.takeIf { !it.key }?.asks?.singleOrNull() ?: return false
+        if (ask.field !in OptionalAsks.ASKABLE) return false
+        val value = when (val a = AnswerParser.parse(ask.field, said)) {
+            AnswerParser.Answer.NotAnAnswer -> return false
+            AnswerParser.Answer.Skip -> null
+            AnswerParser.Answer.None -> FieldValue.explicitNone(said)
+            is AnswerParser.Answer.Value -> FieldValue(a.text, ValueStatus.USER_CONFIRMED, said)
+        }
+        remember()
+        value?.let { setByReporter(ask.field, it, "answered by voice") }
+        advance(prefix = null)
+        return true
+    }
+
+    /**
      * What the reporter has stated in the report (a severity, a hazard incident type) floors the advice: raise-only and
      * idempotent, so it is safe to call after every change. Returns the emergency line when this call is what made it
      * warranted: the advisor hands it out once, so the caller must speak it or it is lost.
@@ -149,7 +179,7 @@ class ReportSession(
      */
     private fun withNowPhrase(payload: ExtractionPayload, said: String): ExtractionPayload {
         if (!payload.date_time_text.isNullOrBlank() || report.isFilled(Field.DATE_TIME)) return payload
-        val phrase = NOW_PHRASE.find(said)?.value ?: return payload
+        val phrase = NOW_PHRASE.find(said)?.value ?: HindiTranscript.timePhrase(said) ?: return payload
         return payload.copy(date_time_text = phrase, evidence = payload.evidence + ("date_time_text" to phrase))
     }
 
@@ -158,11 +188,19 @@ class ReportSession(
     /** The reporter tapped a ready-made answer. The model is not involved. */
     fun answer(reply: QuickReply) {
         remember()
-        val value = when (reply.field) {
-            Field.DATE_TIME -> FieldValue(dateAnswer(reply), ValueStatus.USER_CONFIRMED, "tapped ${reply.label}")
-            else -> FieldValue(reply.value, ValueStatus.USER_CONFIRMED, "tapped ${reply.label}")
+        when (reply.value) {
+            // "Skip" records nothing: the field stays as it was and, being in the asked history, is not asked again.
+            QuickReply.SKIP -> Unit
+            // "None" / "No one" is an answer: the field is explicitly empty, so it is never asked again either.
+            QuickReply.NONE -> setByReporter(reply.field, FieldValue.explicitNone("tapped ${reply.label}"), "tapped ${reply.label}")
+            else -> {
+                val value = when (reply.field) {
+                    Field.DATE_TIME -> FieldValue(dateAnswer(reply), ValueStatus.USER_CONFIRMED, "tapped ${reply.label}")
+                    else -> FieldValue(reply.value, ValueStatus.USER_CONFIRMED, "tapped ${reply.label}")
+                }
+                setByReporter(reply.field, value, "tapped ${reply.label}")
+            }
         }
-        setByReporter(reply.field, value, "tapped ${reply.label}")
         if (state is SessionState.Asking) advance(prefix = null) else publish()
     }
 
@@ -190,9 +228,8 @@ class ReportSession(
      * heard stays in the journal, and Undo brings it back. A chip made for a value that has since changed does nothing.
      */
     fun acceptSuggestion(chip: Suggestion) {
-        val engine = suggestions ?: return
         val now = chipState()
-        val after = engine.accept(now, chip)
+        val after = if (chip in probeChips) probeDecisions.accept(now, chip) else (suggestions ?: return).accept(now, chip)
         if (after == now) return
         remember()
         chipDecisions = after.journal
@@ -202,9 +239,8 @@ class ReportSession(
 
     /** The reporter dismissed a chip: the field is untouched and the same chip is not offered again. */
     fun rejectSuggestion(chip: Suggestion) {
-        val engine = suggestions ?: return
         val now = chipState()
-        val after = engine.reject(now, chip)
+        val after = if (chip in probeChips) probeDecisions.reject(now, chip) else (suggestions ?: return).reject(now, chip)
         if (after == now) return
         remember()
         chipDecisions = after.journal
@@ -264,7 +300,7 @@ class ReportSession(
         advisor = newAdvisor()
         report = IncidentReport.empty(newId(), clock.millis())
         clarify = emptySet()
-        chipDecisions = emptyList(); transcripts.clear(); toolLog.clear(); journal.clear(); stages.clear(); asked.clear(); undoStack.clear()
+        chipDecisions = emptyList(); probeChips = emptyList(); transcripts.clear(); toolLog.clear(); journal.clear(); stages.clear(); asked.clear(); lastOpen = emptySet(); undoStack.clear()
         priority = null; deescalation = null; say = null; spokenSummary = null; stagedEmergency = null
         state = SessionState.Idle
         publish()
@@ -277,7 +313,13 @@ class ReportSession(
         val lead = listOfNotNull(stagedEmergency, prefix).joinToString(" ").ifEmpty { null }
         stagedEmergency = null
         val q = if (keyQuestion != null) Question(emptyList(), keyQuestion, key = true)
-        else planner.next(report, clarify, advisor.lane(), asked)
+        else {
+            // An answer that changed what is still open is progress: a field asked before may be asked again. A round of
+            // questions that changed nothing is not, so the report goes to review rather than the worker being nagged.
+            val open = planner.open(report, clarify, advisor.lane()).toSet()
+            if (open != lastOpen) { asked.clear(); lastOpen = open }
+            planner.next(report, clarify, advisor.lane(), asked, heard = transcripts.joinToString(" "), candidates = itemCandidates())
+        }
         if (q != null) {
             if (!q.key) asked += q.asks.map { it.field }.toSet()
             log(
@@ -375,20 +417,47 @@ class ReportSession(
 
     private fun chipState() = ReportState(report, chipDecisions)
 
+    /** A tool or item a chip already proposes: the planner turns it into a yes or no instead of an open question. */
+    private fun itemCandidates(): Map<Field, String> =
+        chips().filter { it.field == Field.EQUIPMENT_ASSET && it.original.isEmpty() }
+            .groupBy { it.field }.mapValues { (_, c) -> c.first().proposed }
+
     /**
      * Recomputed from the report each time (chips are never stored). Severity is left to its own suggestion
      * ([acceptSuggestion] by field) while it is still only suggested, so the reporter is not shown it twice.
      * A failing engine costs the chips, never the session.
      */
     private fun chips(): List<Suggestion> {
-        val engine = suggestions ?: return emptyList()
         if (state is SessionState.Submitted) return emptyList()
-        val found = try {
-            engine.suggest(chipState(), transcripts.joinToString(" "))
-        } catch (e: Exception) {
-            emptyList()
-        }
-        return found.filterNot { it.field == Field.SEVERITY && report.value(Field.SEVERITY).status == ValueStatus.SUGGESTED }
+        val found = suggestions?.let { engine ->
+            try {
+                engine.suggest(chipState(), transcripts.joinToString(" "))
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }.orEmpty().filterNot { it.field == Field.SEVERITY && report.value(Field.SEVERITY).status == ValueStatus.SUGGESTED }
+        val decided = chipState()
+        // A probe chip counts only while the field is still what it was made for, nothing else proposes that field, and it was not dismissed.
+        val live = probeChips.filter { c -> found.none { it.field == c.field } && (report.value(c.field).text ?: "") == c.original && !decided.hasDecided(c) }
+        return found + live
+    }
+
+    /**
+     * The second look (see [FocusedProbe]): call it AFTER a turn has finished, while the reply is being spoken, never inside the
+     * turn, so it adds nothing to the turn time. The chips appear when it returns. If the reporter spoke or submitted meanwhile,
+     * the result is dropped as stale.
+     */
+    suspend fun probeMissing() {
+        val p = probe ?: return
+        if (state is SessionState.Submitted || state is SessionState.Extracting) return
+        val heard = transcripts.size
+        val said = transcripts.joinToString(" ")
+        if (said.isBlank()) return
+        val taken = suggestions?.let { runCatching { it.suggest(chipState(), said) }.getOrNull() }.orEmpty().map { it.field }.toSet()
+        val found = p.propose(report, said, skip = taken)
+        if (found.isEmpty() || transcripts.size != heard || state is SessionState.Submitted) return
+        probeChips = probeChips.filterNot { c -> found.any { it.field == c.field } } + found
+        publish()
     }
 
     private fun build() = SessionUi(

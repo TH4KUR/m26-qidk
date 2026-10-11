@@ -15,11 +15,16 @@ enum class LlmKind { FAKE, GENIEX }
 /**
  * Which engines to use. Default is FAKE until the real engine passes its contract test (handoff section 8).
  * [tts] is the speech-output engine: the system voice unless Piper is asked for (debug switch `--es tts PIPER`).
+ * [language] is the raw language code asked for with `--es lang` (`en` by default; `hi` is the experimental Hindi lane).
+ * It is resolved to a lane by `com.megathon.incident.speech.SpeechLanes.select`, which falls back to English.
  */
 data class EngineSelection(
     val speech: SpeechKind = SpeechKind.FAKE,
     val llm: LlmKind = LlmKind.FAKE,
     val tts: TtsKind = TtsKind.ANDROID,
+    /** Which of the neural voice's preset styles to use (`--es voice N`); only Supertonic has more than one. */
+    val ttsVoice: Int = 0,
+    val language: String = "en",
 )
 
 /** A release build was asked to run a simulated engine. A scripted result must never look like live recognition. */

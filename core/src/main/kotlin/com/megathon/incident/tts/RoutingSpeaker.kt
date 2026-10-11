@@ -61,7 +61,7 @@ data class SpokenWith(
  * The label always names the engine that produced the audio, never the one that was asked for.
  */
 class RoutingSpeaker(
-    private val primary: TtsBackend?,
+    primary: TtsBackend?,
     private val fallback: TtsBackend,
     private val language: () -> String = { "en" },
 ) : Speaker {
@@ -70,18 +70,42 @@ class RoutingSpeaker(
         private set
 
     @Volatile
+    private var primary: TtsBackend? = primary
+
+    /**
+     * Changes the preferred voice (or none). The Hindi lane uses it to put the Hindi-capable voice in front for as long as the
+     * lane is on. A voice that had failed for good is forgotten, since the new one has not failed.
+     */
+    fun usePrimary(backend: TtsBackend?) {
+        primary = backend
+        primaryDisabled = null
+    }
+
+    @Volatile
     private var primaryDisabled: String? = null
 
-    override suspend fun speak(text: String) {
+    /** Counts [stop] calls, so a run of segments can tell that it was interrupted. */
+    private val stops = java.util.concurrent.atomic.AtomicInteger(0)
+
+    override suspend fun speak(text: String) = speak(text, language())
+
+    /** Why the preferred voice cannot speak [language] right now; null when it can. Speaks nothing. */
+    suspend fun primaryUnavailableReason(language: String): String? {
+        val p = primary ?: return "no preferred voice was selected"
+        return primaryDisabled ?: p.unavailableReason(language)
+    }
+
+    /** [speak] in an explicit language, for text whose language differs from the session's (a Hindi sentence, an English place). */
+    suspend fun speak(text: String, lang: String) {
         if (text.isBlank()) return
-        val lang = language()
         var reason: String? = null
-        if (primary != null) {
-            reason = primaryDisabled ?: primary.unavailableReason(lang)
+        val p = primary
+        if (p != null) {
+            reason = primaryDisabled ?: p.unavailableReason(lang)
             if (reason == null) {
                 try {
-                    primary.speak(text, lang)
-                    last = SpokenWith(primary.label(lang), primary.compute, primary.offline)
+                    p.speak(text, lang)
+                    last = SpokenWith(p.label(lang), p.compute, p.offline)
                     return
                 } catch (cancelled: CancellationException) {
                     throw cancelled
@@ -90,7 +114,7 @@ class RoutingSpeaker(
                     val permanent = (failure as? TtsBackendException)?.permanent ?: (failure is LinkageError)
                     if (permanent) primaryDisabled = reason
                     if ((failure as? TtsBackendException)?.spokeSomething == true) {
-                        last = SpokenWith(primary.label(lang), primary.compute, primary.offline, "stopped part way: $reason")
+                        last = SpokenWith(p.label(lang), p.compute, p.offline, "stopped part way: $reason")
                         return
                     }
                 }
@@ -100,7 +124,17 @@ class RoutingSpeaker(
         last = SpokenWith(fallback.label(lang), fallback.compute, fallback.offline, reason)
     }
 
+    /** Speaks [segments] one after the other, each in its own language; a [stop] during one silences the rest. */
+    suspend fun speakAll(segments: List<SpokenSegment>) {
+        val mine = stops.get()
+        for (segment in segments) {
+            if (stops.get() != mine) return
+            speak(segment.text, segment.language)
+        }
+    }
+
     fun stop() {
+        stops.incrementAndGet()
         primary?.stop()
         fallback.stop()
     }

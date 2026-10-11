@@ -32,7 +32,7 @@ class ReportSessionTest {
     private val slide = FakeLlmEngine.DECK_TRANSCRIPT
 
     private fun session(llm: LlmEngine = FakeLlmEngine(), store: InMemoryReportStore = InMemoryReportStore()) =
-        Pipeline.newSession(llm, store, clock)
+        Pipeline.newSession(llm, store, clock, askOptional = false) // the mandatory flow; the optional asks have their own tests
 
     private fun ReportSession.say(text: String, stt: StageRecord? = null) = runBlocking { onUtterance(text, stt) }
     private fun ReportSession.field(f: Field) = ui.value.fields.first { it.field == f }
@@ -47,12 +47,12 @@ class ReportSessionTest {
         it.tap(Field.DATE_TIME, "Today")
     }
 
-    @Test fun theSlideExampleFillsTheFieldsAndAsksWhichDayAndHowSevere() {
+    @Test fun theSlideExampleFillsTheFieldsAndAsksWhichDayThenHowSevereOneAtATime() {
         val s = session()
         s.say(slide)
         val state = assertIs<SessionState.Asking>(s.ui.value.state)
-        assertEquals(listOf(Field.DATE_TIME, Field.SEVERITY), state.question.asks.map { it.field }, "the time has no date, so the day is asked")
-        assertEquals("Was that today? How bad is it?", s.ui.value.say?.text)
+        assertEquals(listOf(Field.DATE_TIME), state.question.asks.map { it.field }, "the time has no date, so the day is asked, alone")
+        assertEquals("Was that today?", s.ui.value.say?.text)
 
         assertEquals("Water leak or flood", s.field(Field.INCIDENT_TYPE).value)
         assertEquals(UiStatus.HEARD, s.field(Field.INCIDENT_TYPE).status)
@@ -63,6 +63,16 @@ class ReportSessionTest {
         assertEquals("Which day was this?", s.field(Field.DATE_TIME).hint)
         assertEquals("isolated the area", s.field(Field.IMMEDIATE_ACTIONS).value)
         assertEquals(listOf("update_report", "ask_user"), s.ui.value.toolLog.map { it.tool })
+    }
+
+    @Test fun aHindiTimeTheModelMissedIsStillReadFromTheWordsSoTheDayIsNotAskedAgain() {
+        val reply = """{"tool":"update_report","arguments":{"incident_type":"water_leak_flood","location":"कमरे","evidence":{"incident_type":"पानी लीक","location":"कमरे"}}}"""
+        val s = session(Scripted(reply))
+        s.say("आज सुबह 10 बजे कमरे में पानी लीक हो गया")
+        assertEquals(UiStatus.HEARD, s.field(Field.DATE_TIME).status)
+        assertTrue("10" in s.field(Field.DATE_TIME).value.orEmpty(), s.field(Field.DATE_TIME).value.orEmpty())
+        val asked = (s.ui.value.state as? SessionState.Asking)?.question?.asks?.map { it.field }.orEmpty()
+        assertTrue(Field.DATE_TIME !in asked, "the time was said, so it is not asked: $asked")
     }
 
     @Test fun severityIsOnlySuggestedUntilTheReporterAnswers() {
@@ -88,8 +98,10 @@ class ReportSessionTest {
         val llm = Scripted(FakeLlmEngine.DECK_REPLY)
         val s = session(llm)
         s.say(slide)
-        s.tap(Field.SEVERITY, "Moderate")
         s.tap(Field.DATE_TIME, "Today")
+        assertEquals(listOf(Field.SEVERITY), assertIs<SessionState.Asking>(s.ui.value.state).question.asks.map { it.field }, "severity is the next, separate question")
+        assertEquals("How bad is it?", s.ui.value.say?.text)
+        s.tap(Field.SEVERITY, "Moderate")
         assertEquals(1, llm.calls, "a tap must not call the model")
         assertEquals(SessionState.Review, s.ui.value.state)
         assertEquals("Moderate", s.field(Field.SEVERITY).value)

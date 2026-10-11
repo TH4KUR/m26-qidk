@@ -58,11 +58,14 @@ import com.megathon.incident.ui.theme.Motion
 import com.megathon.incident.ui.theme.Space
 import com.megathon.incident.ui.theme.Theme
 
+/** The option buttons are squarer than a pill: a 10 dp corner (the user asked for less rounded). */
+private val ChipShape = RoundedCornerShape(10.dp)
+
 /** A tappable answer chip. 48 dp tall, 3:1 border. [note] is a second small line (for example "suggested"). */
 @Composable
 fun ChoiceChip(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, note: String? = null, selected: Boolean = false) {
     val c = Theme.colors
-    val shape = RoundedCornerShape(24.dp)
+    val shape = ChipShape
     Column(
         modifier
             .defaultMinSize(minHeight = 48.dp)
@@ -82,7 +85,7 @@ fun ChoiceChip(label: String, onClick: () -> Unit, modifier: Modifier = Modifier
 @Composable
 fun OutlinedChoiceChip(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, note: String? = null, emphasis: Boolean = false) {
     val c = Theme.colors
-    val shape = RoundedCornerShape(24.dp)
+    val shape = ChipShape
     Column(
         modifier
             .defaultMinSize(minHeight = 48.dp)
