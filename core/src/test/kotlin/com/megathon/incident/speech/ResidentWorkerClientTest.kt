@@ -22,12 +22,12 @@ private class FakeChannel(
     val sent = CopyOnWriteArrayList<String>()
     @Volatile var destroyed = false
 
-    init { ready?.let(lines::put) }
+    init { ready?.lines()?.forEach(lines::put) }
 
     override fun send(line: String) {
         sent += line
         if (destroyed) return
-        handler(line)?.let(lines::put)
+        handler(line)?.lines()?.forEach(lines::put)
     }
 
     override fun readLine(): String? = lines.take().takeIf { it != EOF }
@@ -83,7 +83,7 @@ class ResidentWorkerClientTest {
 
     @Test
     fun aMalformedReplyFailsVisibly() = runBlocking {
-        val (c, made) = client { FakeChannel { "this is not json" } }
+        val (c, made) = client { FakeChannel { """{"v":1,"id":""" } } // starts like protocol but is cut off
         val e = assertFailsWith<WorkerException> { c.transcribe("/a.wav", "en") }
         assertTrue("malformed" in e.message.orEmpty(), e.message)
         assertTrue(made.single().destroyed)
@@ -166,6 +166,22 @@ class ResidentWorkerClientTest {
         c.transcribe("/a.wav", "en")
         c.close()
         assertTrue(made.single().sent.last().contains("\"cmd\":\"quit\""))
+        assertTrue(made.single().destroyed)
+    }
+
+    @Test
+    fun libraryLogLinesOnStdoutAreSkippedNotFatal() = runBlocking {
+        val (c, made) = client { FakeChannel(ready = "QNN: HtpProvider created\n{\"v\":1,\"ready\":true,\"init_ms\":5}") { "decoding...\n" + ok(it, "heard") } }
+        assertEquals("heard", c.transcribe("/a.wav", "en").text)
+        assertEquals(1, made.size)
+        c.close()
+    }
+
+    @Test
+    fun aWorkerThatOnlyChattersIsDroppedInsteadOfWaitingForever() = runBlocking {
+        val (c, made) = client { FakeChannel { (1..300).joinToString("\n") { "noise $it" } } }
+        val e = assertFailsWith<WorkerException> { c.transcribe("/a.wav", "en") }
+        assertTrue("non-protocol" in e.message.orEmpty(), e.message)
         assertTrue(made.single().destroyed)
     }
 }

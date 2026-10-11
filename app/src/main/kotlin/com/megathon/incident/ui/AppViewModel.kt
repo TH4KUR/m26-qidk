@@ -53,6 +53,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -181,7 +182,8 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     ))
 
     /** Debug switch (`--es live off`): transcribe and extract only after Stop, as before, for a reproducible comparison. */
-    private var liveInference = selection.speech != SpeechKind.FAKE
+    // Only with the resident worker: through the per-utterance CLI every 3 s preview would reload Whisper on the shared lane.
+    private var liveInference = speech is ResidentSherpaSpeechEngine
     private var live: Live? = null
     private var warm: Job? = null
 
@@ -192,7 +194,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     private class Live(val id: Long, val coordinator: LiveInferenceCoordinator, val scheduler: PreviewScheduler)
 
     fun debugSetLiveInference(on: Boolean) {
-        if (Engines.isDebuggable(getApplication())) liveInference = on && selection.speech != SpeechKind.FAKE
+        if (Engines.isDebuggable(getApplication())) liveInference = on && speech is ResidentSherpaSpeechEngine
     }
 
     init {
@@ -270,6 +272,8 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     }
 
     private fun stopAndProcess() {
+        // Atomic: a tap and the 30 s limit can both arrive; only the first one commits the recording.
+        if (!local.getAndUpdate { it.copy(listening = false, processing = it.listening || it.processing) }.listening) return
         viewModelScope.launch {
             timer?.cancel()
             val l = live // taken before waiting: a second Stop (the 30 s limit racing a tap) must not commit the same recording twice

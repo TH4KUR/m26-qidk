@@ -72,7 +72,7 @@ class ResidentWorkerClient(
             drop(ch)
             throw WorkerException("could not send to the speech worker: ${e.message}", e)
         }
-        val line = read(ch, requestTimeoutMs) ?: throw fail(ch, "the speech worker timed out after $requestTimeoutMs ms")
+        val line = readProtocol(ch, requestTimeoutMs) ?: throw fail(ch, "the speech worker timed out after $requestTimeoutMs ms")
         val reply = parse(line) ?: throw fail(ch, "malformed reply from the speech worker: ${line.take(120)}")
         val replyId = reply["id"]?.jsonPrimitive?.long
         if (replyId != id.toLong()) throw fail(ch, "the speech worker answered request $replyId, but request $id was waiting")
@@ -95,13 +95,29 @@ class ResidentWorkerClient(
             throw WorkerException("could not start the speech worker: ${e.message}", e)
         }
         launches++
-        val line = read(ch, startupTimeoutMs) ?: throw fail(ch, "the speech worker did not start within $startupTimeoutMs ms")
+        val line = readProtocol(ch, startupTimeoutMs) ?: throw fail(ch, "the speech worker did not start within $startupTimeoutMs ms")
         val hello = parse(line) ?: throw fail(ch, "malformed start line from the speech worker: ${line.take(120)}")
         if (hello["ready"]?.jsonPrimitive?.boolean != true) {
             throw fail(ch, "the speech worker could not start: ${hello["error"]?.jsonPrimitive?.content ?: "no reason given"}")
         }
         channel = ch
         return ch
+    }
+
+    /**
+     * The next protocol line (one that starts with `{`), or null when [timeoutMs] runs out. Anything else on stdout is a library
+     * log line that escaped to the wrong stream: it is skipped, but a worker that only chatters is dropped.
+     */
+    private suspend fun readProtocol(ch: WorkerChannel, timeoutMs: Long): String? {
+        val deadline = System.nanoTime() + timeoutMs * 1_000_000
+        var skipped = 0
+        while (true) {
+            val left = (deadline - System.nanoTime()) / 1_000_000
+            if (left <= 0) return null
+            val line = read(ch, left) ?: return null
+            if (line.trimStart().startsWith("{")) return line
+            if (++skipped > MAX_SKIPPED_LINES) throw fail(ch, "the speech worker wrote too much non-protocol output on stdout")
+        }
     }
 
     /** One line, or null after [timeoutMs]; the worker's end of stream is a failure that names itself. */
@@ -121,6 +137,10 @@ class ResidentWorkerClient(
     private fun fail(ch: WorkerChannel, message: String): WorkerException {
         drop(ch)
         return WorkerException(message)
+    }
+
+    private companion object {
+        const val MAX_SKIPPED_LINES = 200
     }
 
     private fun drop(ch: WorkerChannel) {

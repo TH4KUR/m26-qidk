@@ -18,7 +18,7 @@ app/scripts/speech_bundle.sh stage                            # packs it as libs
 
 ## Protocol (v1, JSON lines)
 
-stdout carries protocol only; stderr carries sherpa's logs and is drained continuously by the app, which also reads the Hexagon evidence from it.
+stdout carries protocol only (the worker moves its protocol to a private copy of fd 1 and points fd 1 at stderr, so library `printf`s cannot corrupt it; the app also skips any non-`{` line it still sees); stderr carries sherpa's logs and is drained continuously by the app, which also reads the Hexagon evidence from it.
 
 | direction | line |
 |---|---|

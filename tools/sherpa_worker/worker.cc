@@ -15,6 +15,7 @@
 // Built against k2-fsa/sherpa-onnx commit 9db1af1871ed78cee9357c23898e5a7d8702d21a (see README.md). NOT yet compiled or run.
 
 #include <stdio.h>
+#include <unistd.h>
 
 #include <chrono>
 #include <iostream>
@@ -88,10 +89,14 @@ bool GetInt(const std::string &line, const std::string &key, long long *value) {
   }
 }
 
+// Protocol goes to a private duplicate of the original stdout. File descriptor 1 is then pointed at stderr, so a library that
+// prints with printf/std::cout (ONNX Runtime, QNN, sherpa) can never put a stray line into the protocol stream.
+FILE *g_proto = nullptr;
+
 void Emit(const std::string &json) {
-  fputs(json.c_str(), stdout);
-  fputc('\n', stdout);
-  fflush(stdout);
+  fputs(json.c_str(), g_proto);
+  fputc('\n', g_proto);
+  fflush(g_proto);
 }
 
 void EmitError(long long id, const std::string &message) {
@@ -101,6 +106,11 @@ void EmitError(long long id, const std::string &message) {
 }  // namespace
 
 int main(int argc, char *argv[]) {
+  const int proto_fd = dup(STDOUT_FILENO);
+  if (proto_fd < 0 || dup2(STDERR_FILENO, STDOUT_FILENO) < 0) return 2;
+  g_proto = fdopen(proto_fd, "w");
+  if (g_proto == nullptr) return 2;
+
   sherpa_onnx::ParseOptions po("Resident sherpa-onnx offline recognizer: JSON lines on stdin/stdout. See tools/sherpa_worker/README.md");
   sherpa_onnx::OfflineRecognizerConfig config;
   config.Register(&po);
