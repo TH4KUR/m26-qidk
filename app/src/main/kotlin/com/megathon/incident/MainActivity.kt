@@ -53,6 +53,10 @@ class MainActivity : ComponentActivity() {
             val n = intent.getStringExtra("loops")?.toIntOrNull() ?: intent.getIntExtra("loops", 20)
             vm.debugCoexist(wav, n.coerceAtLeast(1))
         }
+        // Normal launches load the language model in the background now, so the first turn does not wait for it. The debug
+        // eval, coexist and WAV paths time the load themselves and must not have it done for them.
+        val timedByDebugPath = Engines.isDebuggable(this) && listOf("eval", "coexist", "wav").any { intent.hasExtra(it) }
+        if (!timedByDebugPath) vm.preloadModels()
         setContent { IncidentTheme { AppRoot(vm) } }
     }
 }

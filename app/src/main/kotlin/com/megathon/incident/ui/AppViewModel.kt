@@ -267,6 +267,32 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         }
     }
 
+    private val preloadStarted = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /**
+     * Loads the language model in the background as soon as the screen is up, so the first turn does not pay the 9 to 13 s
+     * model load. Only a real model has anything to load (the demo engine is not [Warmable]); models load one after the
+     * other. A failure is logged with its reason and changes nothing else: the first real turn tries again and fails
+     * visibly exactly as it did before. Started once per view model, never on a debug eval, coexist or WAV launch (those
+     * time the load themselves).
+     */
+    fun preloadModels() {
+        if (blocked != null || !preloadStarted.compareAndSet(false, true)) return
+        val steps = listOfNotNull((llm as? com.megathon.incident.llm.Warmable)?.let { "language model" to it })
+        if (steps.isEmpty()) return
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val t0 = System.nanoTime()
+            com.megathon.incident.llm.ModelPreloader().run(steps).forEach {
+                when (it) {
+                    is com.megathon.incident.llm.PreloadOutcome.Loaded ->
+                        android.util.Log.i(TAG, "preload ${it.name}: ready after ${(System.nanoTime() - t0) / 1_000_000} ms (load ${it.ms} ms)")
+                    is com.megathon.incident.llm.PreloadOutcome.Failed ->
+                        android.util.Log.w(TAG, "preload ${it.name} failed: ${it.reason}")
+                }
+            }
+        }
+    }
+
     /** Debug builds only: run E's gold dev split through the real pipeline and write predictions for E's scorer. */
     fun debugEval(gold: String, promptFile: String?, runName: String, only: Set<String>?) {
         if (!Engines.isDebuggable(getApplication())) return
