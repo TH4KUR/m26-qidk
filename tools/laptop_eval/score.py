@@ -154,6 +154,49 @@ def outcome(field: str, gold: dict, pred: dict | None, captured_at: str | None =
     return "hallucination" if filled else "correct_empty"
 
 
+# ---- lenient free-text view (reported next to the headline, never instead of it) ------------
+# The headline rule (Dice >= 0.8) scores "stack of heavy bulk bags" against gold "bulk bags" as wrong. This view
+# counts a free-text value as correct when it holds every content word of the gold (or an alt), with light
+# stemming and at most LENIENT_EXTRA extra content words, so a whole-sentence dump does not earn credit.
+
+FREE_TEXT_FIELDS = {"equipment_asset", "immediate_actions"}
+LENIENT_EXTRA = 4
+
+
+def _stem(t: str) -> str:
+    for suffix in ("ing", "ed", "es", "s"):
+        if len(t) > 4 and t.endswith(suffix):
+            return t[: -len(suffix)]
+    return t
+
+
+def _stems(text) -> set[str]:
+    return {_stem(t) for t in content(" ".join(text) if isinstance(text, list) else str(text))}
+
+
+def free_text_match(gold: dict, text: str) -> str | None:
+    """'contains' (all gold content words present, few extra), 'partial' (a strict subset of the gold) or None."""
+    pred = _stems(text)
+    squashed = re.sub(r"\W", "", str(text).lower())
+    golds = [gold.get("value"), *gold.get("alts", [])]
+    for g in golds:
+        gw = _stems(g)
+        g_squashed = re.sub(r"\W", "", (" ".join(g) if isinstance(g, list) else str(g)).lower())
+        close = len(pred) <= len(gw) + LENIENT_EXTRA
+        if gw and close and (gw <= pred or (len(g_squashed) > 3 and g_squashed in squashed)):
+            return "contains"
+    if pred and any(pred < _stems(g) for g in golds):
+        return "partial"
+    return None
+
+
+def outcome_lenient(field: str, gold: dict, pred: dict | None, captured_at: str | None = None) -> str:
+    o = outcome(field, gold, pred, captured_at)
+    if o == "wrong" and field in FREE_TEXT_FIELDS and free_text_match(gold, pred.get("text") or "") == "contains":
+        return "correct"
+    return o
+
+
 # ---- aggregation ---------------------------------------------------------------------------
 
 def wilson(num: int, den: int, z: float = 1.96) -> list[float] | None:
@@ -195,6 +238,7 @@ def _asked_fields(pred: dict | None) -> set[str]:
 def score(golds: list[dict], preds: list[dict]) -> dict:
     by_id = {p["gold_id"]: p for p in preds}
     per_field = {f: dict.fromkeys(OUTCOMES, 0) for f in FIELDS}
+    lenient = {f: dict.fromkeys(OUTCOMES, 0) for f in FREE_TEXT_FIELDS}
     missing_preds = 0
     fu_hit = fu_asked = fu_missing = 0
     agree = {st: [0, 0] for st in SPECIAL_STATUSES}
@@ -209,6 +253,8 @@ def score(golds: list[dict], preds: list[dict]) -> dict:
             gold = item["gold"].get(f, {"status": "MISSING"})
             pv = fields.get(REPORT_KEY[f])
             per_field[f][outcome(f, gold, pv, captured_at)] += 1
+            if f in FREE_TEXT_FIELDS:
+                lenient[f][outcome_lenient(f, gold, pv, captured_at)] += 1
             if gold["status"] in agree:
                 agree[gold["status"]][1] += 1
                 agree[gold["status"]][0] += (pv or {}).get("status", "MISSING") == gold["status"]
@@ -230,6 +276,7 @@ def score(golds: list[dict], preds: list[dict]) -> dict:
         "mandatory": total(MANDATORY),
         "followup": {"precision": ratio(fu_hit, fu_asked), "recall": ratio(fu_hit, fu_missing)},
         "status_agreement": {st: ratio(*agree[st]) for st in SPECIAL_STATUSES},
+        "lenient_free_text": {f: _summarise(lenient[f]) for f in sorted(FREE_TEXT_FIELDS)},
     }
 
 
@@ -249,4 +296,7 @@ def render_markdown(s: dict, title: str = "") -> str:
     lines += ["", f"Follow-up precision {_fmt(fu['precision'])}, recall {_fmt(fu['recall'])}"]
     for st, r in s["status_agreement"].items():
         lines.append(f"{st} agreement {_fmt(r)}")
+    if s.get("lenient_free_text"):
+        view = "; ".join(f"{f} recall {_fmt(r['recall'])}" for f, r in s["lenient_free_text"].items())
+        lines.append(f"Free-text lenient view (not the headline; extra words allowed): {view}")
     return "\n".join(lines).lstrip() + "\n"

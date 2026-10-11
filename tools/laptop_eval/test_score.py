@@ -127,3 +127,40 @@ def test_markdown_table_shows_counts_and_denominators():
     assert "| location |" in md
     assert "0/1" in md          # location recall
     assert "n/a (0/0)" in md    # precision of a blank run
+
+
+# ---- lenient free-text view (a second view; the headline outcome() is unchanged) ----------------
+
+from score import free_text_match, outcome_lenient, render_markdown  # noqa: E402
+
+
+def test_free_text_match_credits_extra_words_but_not_a_whole_sentence():
+    vm = {"status": "REPORTED", "value": "vending machine"}
+    assert free_text_match(vm, "glass door of the vending machine") == "contains"
+    assert free_text_match({"status": "REPORTED", "value": "calling the ambulance"}, "called the ambulance now") == "contains"
+    assert free_text_match({"status": "REPORTED", "value": "gave her an ice pack"}, "gave her an icepack") == "contains"
+    long = "someone smashed the glass door of the vending machine on the ground floor of north block last night"
+    assert free_text_match(vm, long) is None
+    assert free_text_match({"status": "REPORTED", "value": "parked car", "alts": ["car"]}, "tree branch") is None
+    assert free_text_match({"status": "REPORTED", "value": "put a cone next to it and informed the estate office"},
+                           "put a cone next to it") == "partial"
+
+
+def test_outcome_lenient_only_upgrades_wrong_free_text_and_leaves_headline_alone():
+    gold = {"status": "REPORTED", "value": "bulk bags"}
+    pred = {"text": "stack of heavy bulk bags", "status": "REPORTED"}
+    assert outcome("equipment_asset", gold, pred) == "wrong"
+    assert outcome_lenient("equipment_asset", gold, pred) == "correct"
+    loc = {"status": "REPORTED", "value": "Lab C4"}
+    assert outcome_lenient("location", loc, {"text": "stairwell next to Lab C4 on floor 2", "status": "REPORTED"}) == \
+        outcome("location", loc, {"text": "stairwell next to Lab C4 on floor 2", "status": "REPORTED"})
+    assert outcome_lenient("equipment_asset", {"status": "MISSING"}, pred) == "hallucination"
+
+
+def test_score_reports_the_lenient_view_next_to_the_headline():
+    golds = [{"id": "x", "gold": {"equipment_asset": {"status": "REPORTED", "value": "bulk bags"}}}]
+    preds = [{"gold_id": "x", "report": {"fields": {"EQUIPMENT_ASSET": {"text": "stack of heavy bulk bags", "status": "REPORTED"}}}}]
+    s = score(golds, preds)
+    assert s["fields"]["equipment_asset"]["correct"] == 0
+    assert s["lenient_free_text"]["equipment_asset"]["correct"] == 1
+    assert "lenient" in render_markdown(s)

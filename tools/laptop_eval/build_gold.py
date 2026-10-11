@@ -449,10 +449,19 @@ def assign_splits(items: list[dict]) -> None:
         it["split"] = "holdout" if n % 3 == 0 else "dev"
 
 
-if __name__ == "__main__":
+def write(confirm: bool, out: Path = OUT, out_homophones: Path = OUT_HOMOPHONES) -> None:
+    """The committed gold was scored once on the held-out split (A/027): overwrite it only with --confirm-overwrite."""
+    if not confirm:
+        raise SystemExit("refusing to overwrite the gold: the held-out split is spent (A/027); "
+                         "pass --confirm-overwrite to regenerate it")
     assign_splits(ITEMS)
     assign_splits(HOMOPHONE_ITEMS)
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    for path, rows in ((OUT, ITEMS), (OUT_HOMOPHONES, HOMOPHONE_ITEMS)):
+    out.parent.mkdir(parents=True, exist_ok=True)
+    for path, rows in ((out, ITEMS), (out_homophones, HOMOPHONE_ITEMS)):
         path.write_text("".join(json.dumps(i, ensure_ascii=False) + "\n" for i in rows), encoding="utf-8")
         print(f"wrote {len(rows)} items to {path}")
+
+
+if __name__ == "__main__":
+    import sys
+    write(confirm="--confirm-overwrite" in sys.argv)
