@@ -56,8 +56,22 @@ class ResidentWorkerClient(
     var launches = 0
         private set
 
+    /** Starts the worker now (loading the models) if it is not running, so the first real request does not pay for it. */
+    suspend fun warmUp() {
+        lock.withLock { if (channel == null) start() }
+    }
+
     suspend fun transcribe(wavPath: String, language: String): WorkerReply = lock.withLock {
         val ch = channel ?: start()
+        try {
+            exchange(ch, wavPath, language)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            drop(ch) // a request is outstanding; its reply must not be read by the next call
+            throw e
+        }
+    }
+
+    private suspend fun exchange(ch: WorkerChannel, wavPath: String, language: String): WorkerReply {
         val id = ++nextId
         try {
             ch.send(
@@ -78,7 +92,7 @@ class ResidentWorkerClient(
         if (replyId != id.toLong()) throw fail(ch, "the speech worker answered request $replyId, but request $id was waiting")
         reply["error"]?.let { throw WorkerException("speech worker: ${it.jsonPrimitive.content}") } // the worker is healthy; keep it
         val text = reply["text"]?.jsonPrimitive?.content ?: throw fail(ch, "reply without text: ${line.take(120)}")
-        WorkerReply(text.trim(), reply["decode_ms"]?.jsonPrimitive?.long ?: 0, ch.sawLog(hexagonMarker))
+        return WorkerReply(text.trim(), reply["decode_ms"]?.jsonPrimitive?.long ?: 0, ch.sawLog(hexagonMarker))
     }
 
     /** Asks the worker to quit and releases it. Safe to call when none is running; the next call would start a new one. */
@@ -95,13 +109,19 @@ class ResidentWorkerClient(
             throw WorkerException("could not start the speech worker: ${e.message}", e)
         }
         launches++
-        val line = readProtocol(ch, startupTimeoutMs) ?: throw fail(ch, "the speech worker did not start within $startupTimeoutMs ms")
-        val hello = parse(line) ?: throw fail(ch, "malformed start line from the speech worker: ${line.take(120)}")
-        if (hello["ready"]?.jsonPrimitive?.boolean != true) {
-            throw fail(ch, "the speech worker could not start: ${hello["error"]?.jsonPrimitive?.content ?: "no reason given"}")
+        try {
+            val line = readProtocol(ch, startupTimeoutMs) ?: throw fail(ch, "the speech worker did not start within $startupTimeoutMs ms")
+            val hello = parse(line) ?: throw fail(ch, "malformed start line from the speech worker: ${line.take(120)}")
+            val ready = runCatching { hello["ready"]?.jsonPrimitive?.boolean }.getOrNull()
+            if (ready != true) {
+                throw fail(ch, "the speech worker could not start: ${runCatching { hello["error"]?.jsonPrimitive?.content }.getOrNull() ?: "no reason given"}")
+            }
+            channel = ch
+            return ch
+        } catch (e: Throwable) {
+            drop(ch) // any way out of start-up (including the caller being cancelled) must not leave a model-loading process behind
+            throw e
         }
-        channel = ch
-        return ch
     }
 
     /**

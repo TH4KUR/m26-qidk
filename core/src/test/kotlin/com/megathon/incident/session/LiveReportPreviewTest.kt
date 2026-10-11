@@ -110,6 +110,7 @@ class LiveReportPreviewTest {
         s.previewRecording(id, "the pump burst near Room 2")
         s.onUtterance("the pump burst near Room 2", recording = id)
         assertEquals(1, llm.calls)
+        assertTrue(s.ui.value.stages.single { it.stage == "Read" }.engine.contains("during recording"), "a reused call must not be shown as if it ran after Stop")
         assertEquals("Room 2", s.ui.value.fields.first { it.field == Field.LOCATION }.value)
         assertNull(s.ui.value.provisional)
         assertEquals(1, s.ui.value.transcripts.size)

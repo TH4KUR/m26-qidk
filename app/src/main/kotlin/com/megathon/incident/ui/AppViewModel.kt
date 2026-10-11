@@ -65,7 +65,7 @@ import kotlinx.coroutines.Dispatchers
 
 enum class Screen { HOME, REPORT, CHECK, SENT }
 
-/** Whether the on-device models are loaded. Loading moves earlier (at launch); it is not removed. */
+/** Whether the on-device models (language model and, with the resident worker, speech) are loaded. Loading moves earlier (at launch); it is not removed. */
 enum class Readiness { NOT_NEEDED, LOADING, READY, FAILED }
 
 /** Everything the screens draw. The report itself lives in [SessionUi]. */
@@ -218,13 +218,17 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
      * request tries the lazy load again.
      */
     private fun warmUpModels() {
-        val genie = llm as? GenieXLlmEngine ?: return
+        val genie = llm as? GenieXLlmEngine
+        val worker = speech as? ResidentSherpaSpeechEngine
+        if (genie == null && worker == null) return
         if (warm != null) return
         local.update { it.copy(readiness = Readiness.LOADING) }
         warm = viewModelScope.launch {
             val started = System.nanoTime()
             try {
-                lane.run { genie.warmUp() }
+                // One after the other on the shared lane: two accelerator initialisations at once is not something to test at launch.
+                lane.run { worker?.warmUp() }
+                lane.run { genie?.warmUp() }
                 android.util.Log.i(TAG, "models ready after ${(System.nanoTime() - started) / 1_000_000} ms (launch-time load)")
                 local.update { it.copy(readiness = Readiness.READY) }
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -330,6 +334,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             } catch (e: Exception) {
                 android.util.Log.e(TAG, "speech engine failed", e)
                 session.cancelRecording(l.id)
+                local.update { it.copy(liveText = null) }
                 finishTurn(before, journalBefore, "I couldn't hear that: ${e.message?.take(160) ?: "the speech engine failed"}")
                 return@withLock
             }

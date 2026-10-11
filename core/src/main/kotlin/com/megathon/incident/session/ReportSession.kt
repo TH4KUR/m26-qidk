@@ -128,7 +128,8 @@ class ReportSession(
         val proposed = reusable ?: propose(said, report, transcripts.dropLast(1))
         val result = proposed.result
         val parsed = proposed.parsed
-        record(StageRecord("Read", llm.name, result.compute, result.elapsedMs))
+        // A proposal made while the reporter was still speaking ran before Stop: say so rather than count it as Stop-to-ready time.
+        record(StageRecord("Read", if (reusable != null) "${llm.name} (during recording)" else llm.name, result.compute, result.elapsedMs))
         if (parsed !is ParseResult.Ok) {
             fail("I couldn't make sense of that one. Please say it again.")
             return

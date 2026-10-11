@@ -56,6 +56,15 @@ class ResidentSherpaSpeechEngine(private val context: Context, private val start
         }
     }
 
+    /** Starts the worker now so the models are loaded before the first recording. Call through the accelerator lane. */
+    suspend fun warmUp() = withContext(Dispatchers.IO) {
+        try {
+            client.warmUp()
+        } catch (e: WorkerException) {
+            throw IllegalStateException(e.message, e)
+        }
+    }
+
     /** The app is done with speech: ask the worker to quit and release it. */
     fun release() = runBlocking { client.close() }
 

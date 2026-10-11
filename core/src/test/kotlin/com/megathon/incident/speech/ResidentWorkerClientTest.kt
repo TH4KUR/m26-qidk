@@ -184,4 +184,31 @@ class ResidentWorkerClientTest {
         assertTrue("non-protocol" in e.message.orEmpty(), e.message)
         assertTrue(made.single().destroyed)
     }
+
+    @Test
+    fun warmUpStartsTheWorkerOnceAndTheFirstRequestReusesIt() = runBlocking {
+        val (c, made) = client { FakeChannel(handler = ::ok) }
+        c.warmUp(); c.warmUp()
+        assertEquals(1, made.size)
+        assertEquals("hello", c.transcribe("/a.wav", "en").text)
+        assertEquals(1, made.size, "the models were loaded by the warm-up, not again by the first request")
+        c.close()
+    }
+
+    @Test
+    fun aStartLineWithAnUnreadableReadyFieldDoesNotLeakTheProcess() = runBlocking {
+        val (c, made) = client { FakeChannel(ready = """{"v":1,"ready":"yes"}""", handler = ::ok) }
+        assertFailsWith<WorkerException> { c.transcribe("/a.wav", "en") }
+        assertTrue(made.single().destroyed)
+    }
+
+    @Test
+    fun cancellingTheCallerWhileTheWorkerIsStartingDestroysTheProcess() = runBlocking {
+        val (c, made) = client(startupMs = 60_000) { FakeChannel(ready = null, handler = ::ok) }
+        val call = async(kotlinx.coroutines.Dispatchers.Default) { c.transcribe("/a.wav", "en") }
+        kotlinx.coroutines.withTimeout(5_000) { while (made.isEmpty()) kotlinx.coroutines.yield() }
+        call.cancel()
+        kotlinx.coroutines.withTimeout(5_000) { while (!made.single().destroyed) kotlinx.coroutines.yield() }
+        assertTrue(made.single().destroyed)
+    }
 }

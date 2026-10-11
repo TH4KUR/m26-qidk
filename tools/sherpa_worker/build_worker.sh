@@ -11,6 +11,8 @@ have="$(git -C "$src" rev-parse HEAD)"
 [ "$have" = "$PINNED" ] || echo "warning: checkout is $have, not the pinned $PINNED; re-verify the API before trusting the build" >&2
 cp "$here/worker.cc" "$src/sherpa-onnx/csrc/sherpa-onnx-offline-worker.cc"
 grep -q "sherpa-onnx-offline-worker" "$src/sherpa-onnx/csrc/CMakeLists.txt" || {
+  grep -q 'add_executable(sherpa-onnx-offline sherpa-onnx-offline.cc)' "$src/sherpa-onnx/csrc/CMakeLists.txt" \
+    || { echo "error: anchor line 'add_executable(sherpa-onnx-offline ...)' not found in CMakeLists.txt; add tools/sherpa_worker/CMakeLists.txt by hand" >&2; exit 1; }
   # Insert after the line that declares sherpa-onnx-offline, so it sits inside the same binary-building block.
   awk -v frag="$(cat "$here/CMakeLists.txt" | grep -v '^#')" '{print} /add_executable\(sherpa-onnx-offline sherpa-onnx-offline.cc\)/ {print frag}' \
     "$src/sherpa-onnx/csrc/CMakeLists.txt" > "$src/sherpa-onnx/csrc/CMakeLists.txt.new"
@@ -19,5 +21,6 @@ grep -q "sherpa-onnx-offline-worker" "$src/sherpa-onnx/csrc/CMakeLists.txt" || {
 cat <<MSG
 Worker source added to $src. Now build for the kit exactly as the CLI was built (QNN on, arm64):
   cd $src && export SHERPA_ONNX_ENABLE_QNN=ON && ./build-android-arm64-v8a.sh
-Then: app/scripts/speech_bundle.sh stage  (copies build-android-arm64-v8a/install/bin/sherpa-onnx-offline-worker as libsherpa_worker.so)
+Then copy build-android-arm64-v8a/install/bin/sherpa-onnx-offline-worker into the bundle directory next to sherpa-onnx-offline
+(\$HOME/sherpa-bundle/bundle by default) and run app/scripts/speech_bundle.sh stage, which packs it as libsherpa_worker.so.
 MSG
