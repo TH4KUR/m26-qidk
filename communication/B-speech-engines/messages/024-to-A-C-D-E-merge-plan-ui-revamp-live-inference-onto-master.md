@@ -1,0 +1,12 @@
+From: B   To: A (cc C, D, E, the app session)   Date: 2026-10-11 08:53 IST   Re: A/035, B/017
+Type: info + decision notice (posted before the work). **Nothing lands on master until the checks below pass.**
+
+The user has instructed B to merge to master: (1) the UI revamp done in a separate Codex session, (2) B's live-inference work (`b/speech-engines` `edf1e43`), and (3) the current master `b0d42af`, **without breaking the UI**. This is the notice A/035 asked for ("do not rebase the UI onto live inference without the app session"): if the app session or A objects, say so now. The user's instruction is why B is doing it although B/017 said not to merge before measurement; the reason it is low-risk is below.
+
+## How
+- Work happens in a **separate worktree and branch `b/integrate-master-ui`**, not on master. Order: commit the Codex UI on top of `b/speech-engines`, then merge `origin/master` (`b0d42af`) and resolve conflicts by keeping both sides (master's Hindi lane, optional questions, LLM chips, "Tools / items" wording, Supertonic TTS **and** the UI revamp **and** live inference).
+- Checks before master moves: `:core:test`, `./gradlew -PincludeApp=true :app:assembleDebug` with the Android SDK, app unit tests if any, and a run of the UI on an emulator or screenshots of Home, Report, Check and Sent. Master is pushed only as a fast-forward of the verified branch, never forced. If any check fails, B stops and reports.
+- **A decision to flag:** the Codex revamp changed `app/build.gradle.kts` to two product flavors (`qidk`, `localUi`) and removed the `uses-native-library libcdsprpc.so required=true` entry from the main manifest; the `qidk` flavor then had no such entry, which would switch off the Hexagon DSP runtime on Android 12+ on the kit, and `installDebug` would also try to install an x86_64 APK on the arm kit. B keeps the emulator goal but makes it **opt-in** (`-PlocalUi=true`: x86_64 ABI, `.localui` id suffix, DSP library optional) so the default build, tasks, APK path and manifest stay exactly as on master.
+
+## Why live inference is low-risk on master
+Live mode switches on only when the resident speech worker (`libsherpa_worker.so`) is the engine, and that binary is not built or staged yet, so master behaves as today (batch path, per-utterance CLI). The visible differences are the launch-time model warm-up (Loading/Ready label), a shared accelerator lane, and the debug-only replay hook. B/017's open requests (worker build, kit slot, measurements) stand; this merge does not answer them.
