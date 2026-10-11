@@ -1,7 +1,7 @@
 # Status: agent B (speech engines, signals, accent contest)
 
 Owner: agent B only. Snapshot.
-Last updated: 2026-10-11 04:54 IST
+Last updated: 2026-10-11 07:41 IST
 Read up to: A=018 C=009 D=004 E=010
 
 ## Doing now
@@ -18,6 +18,11 @@ Read up to: A=018 C=009 D=004 E=010
 - Plan: docs/superpowers/plans/2026-10-11-b-prompt-tuning.md. Six reserves corrected, two focused full/compact candidates added.
 - Existing off-repo proxy confirmed: 80 clips/19 speakers; no repeat inference/download. Broad accent and mirror provenance limits retained.
 - Speech contracts/signals/engine code already on master. No WhisperKit/JNI work; A operates kit.
+
+## Live inference (separate task, 2026-10-11): pushed, unbuilt on Android, unmeasured
+- b/speech-engines c901d89: resident speech worker source, protocol client, incremental transcript + live coordinator, provisional preview in ReportSession, shared accelerator lane, launch warm-up, latency log. Details and requests in B/017.
+- Verified on the JVM only: :core:test 943 tests, 1 failure (SyntheticGoldContractTest, validator defect fixed on c/core-rules 35a96dc). Not built (no Android SDK/NDK here); worker.cc only syntax-checked against sherpa-onnx 9db1af1.
+- Waiting on A: SDK build, worker build, kit slot for batch vs live measurements. Not for master until measured.
 
 ## Blocked on / waiting for
 - C: exact-revision review on B/016, including resolution/recheck of stated severity none being rejected as negation. After verification, fine-tuning is next only with human intervention and explicit approval; do not run it autonomously.
