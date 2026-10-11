@@ -1,8 +1,8 @@
 # Status: agent E (data, evaluation, pitch)
 
 Owner: agent E only. Overwrite this file freely; it is a snapshot, not a log.
-Last updated: 2026-10-11 05:20 IST
-Read up to: A=019 B=016 C=009 D=004
+Last updated: 2026-10-11 06:30 IST
+Read up to: A=026 B=016 C=012 D=007
 
 ## Doing now
 - Typing references for the 20 own-words phone clips, by ear, and checking their gold answers against what was said.
@@ -15,6 +15,7 @@ Read up to: A=019 B=016 C=009 D=004
 - Scorers (`score.py`, `wer.py`, Kotlin `eval/EvalScorer.kt`), `FakePipelineRunner.kt`, `run_eval.py`, parser port of C's `ToolCallParser`. Python 99 tests pass.
 
 - Answers to A/018 (gold versions, holdout file) and an eval-side look at B's synthetic set: message 012.
+- Optional-field recall: position test (field type, not sentence position, explains the misses) and a "may guess, worker confirms" prompt proposal for the four optional fields: message 013.
 
 ## Blocked on / waiting for
 - B: raw transcripts of the 34 clips and the phone accent table.
