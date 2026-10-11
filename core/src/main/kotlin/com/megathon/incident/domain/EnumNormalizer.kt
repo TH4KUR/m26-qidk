@@ -15,7 +15,7 @@ object EnumNormalizer {
         IncidentType.ELECTRICAL to listOf("electrical", "spark", "sparks", "short circuit", "shock", "exposed wire", "power outage", "power cut", "bijli", "करंट", "बिजली", "current laga"),
         IncidentType.WATER_LEAK_FLOOD to listOf("leak", "leaking", "flood", "flooding", "burst pipe", "water", "seepage", "paani", "pani", "पानी", "रिसाव"),
         IncidentType.INJURY to listOf("injury", "injured", "hurt", "cut", "bleeding", "fell", "fall", "slipped", "fracture", "chot", "chot lagi", "gir gaya", "gir gayi", "चोट", "घायल"),
-        IncidentType.ILLNESS to listOf("illness", "sick", "fainted", "unconscious", "vomiting", "chest pain", "behosh", "bimar", "बेहोश", "बीमार"),
+        IncidentType.ILLNESS to listOf("illness", "sick", "fainted", "unconscious", "lost consciousness", "passed out", "fever", "vomiting", "chest pain", "behosh", "bimar", "बेहोश", "बीमार"),
         IncidentType.SECURITY to listOf("security", "theft", "stolen", "robbery", "robber", "thief", "burglary", "intruder", "break-in", "assault", "chor", "chori", "चोर", "चोरी", "लूट"),
         IncidentType.NEAR_MISS to listOf("near miss", "near_miss", "almost", "nearly", "bal bal bacha", "बाल बाल"),
         IncidentType.EQUIPMENT_FAILURE to listOf("equipment failure", "breakdown", "broke down", "not working", "malfunction", "stopped working", "kharab", "खराब"),
@@ -44,6 +44,13 @@ object EnumNormalizer {
     fun statedTypeCues(type: IncidentType, transcript: String): List<String> {
         val t = normalize(transcript) ?: return emptyList()
         return TYPE_RULES.firstOrNull { it.first == type }?.second.orEmpty().filter { it !in WEAK_TYPE_CUES && containsPhrase(t, it) }
+    }
+
+    /** Every cue of [type], weak ones included, found in [text] (whole word or phrase). For locating where a type is said. */
+    fun typeCuesIn(type: IncidentType, text: String): List<String> {
+        val t = normalize(text) ?: return emptyList()
+        return TYPE_RULES.firstOrNull { it.first == type }?.second.orEmpty()
+            .filter { it != "other" && containsPhrase(t, it) }.sortedByDescending { it.length }
     }
 
     /** The first of [statedTypeCues], or null. */

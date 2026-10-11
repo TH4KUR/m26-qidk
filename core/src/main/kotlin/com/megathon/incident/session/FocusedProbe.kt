@@ -34,6 +34,7 @@ class FocusedProbe(
     private val sites: SiteDirectory? = runCatching { SiteDirectory.loadDefault() }.getOrNull(),
     private val itemPrompt: String = resource("/prompts/probe_item_v1.txt"),
     private val actionPrompt: String = resource("/prompts/probe_action_v1.txt"),
+    private val peoplePrompt: String = resource("/prompts/probe_people_v1.txt"),
 ) {
     /** The fields this probe looks at, in order. [skip] are fields something else already proposes a chip for. */
     suspend fun propose(report: IncidentReport, transcript: String, skip: Set<Field> = emptySet()): List<Suggestion> {
@@ -51,6 +52,63 @@ class FocusedProbe(
                 null
             } ?: continue
             chip(field, text, said, report)?.let(chips::add)
+        }
+        chips += peopleChips(report, said, skip)
+        return chips
+    }
+
+    /**
+     * Named people the first pass left out: one call for both people fields. A name has to be in the worker's own words,
+     * capitalised, not the worker, a role, a body part, a place or the location; a person who was hurt stays involved,
+     * anyone else present is a witness. One chip per field, and only for a field that is empty and nothing else proposes.
+     */
+    private suspend fun peopleChips(report: IncidentReport, said: String, skip: Set<Field>): List<Suggestion> {
+        val open = PEOPLE.filter { it !in skip && !report.isAnswered(it) }
+        if (open.isEmpty()) return emptyList()
+        val text = try {
+            withTimeoutOrNull(timeoutMs) { llm.complete(LlmRequest(peoplePrompt, "Worker: \"$said\"")).text }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        } ?: return emptyList()
+        val obj = parseObject(text) ?: return emptyList()
+        fun names(key: String): List<String> = when (val v = obj[key]) {
+            is kotlinx.serialization.json.JsonArray -> v.mapNotNull { it.string()?.trim()?.trimEnd('.', ',', ';') }
+            is JsonPrimitive -> listOfNotNull(v.string()?.trim()?.trimEnd('.', ',', ';'))
+            else -> emptyList()
+        }.filter { it.isNotEmpty() }
+        val place = report.value(Field.LOCATION).let { listOfNotNull(it.text, it.evidence) }.joinToString(" ").lowercase()
+        val taken = listOf(Field.PERSONS_INVOLVED, Field.WITNESSES).flatMap { f -> report.value(f).text.orEmpty().split(',') }
+            .map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+        fun usable(name: String): Boolean {
+            val words = name.split(Regex("\\s+"))
+            if (words.size > 3 || !name[0].isUpperCase()) return false
+            val lower = name.lowercase()
+            if (lower in taken || lower in NOT_PEOPLE || words.any { it.lowercase() in NOT_PEOPLE }) return false
+            if (!Regex("(?<![\\p{L}\\p{N}])" + Regex.escape(name) + "(?![\\p{L}\\p{N}])", RegexOption.IGNORE_CASE).containsMatchIn(said)) return false
+            if (place.isNotEmpty() && Regex("(?<![\\p{L}\\p{N}])" + Regex.escape(lower) + "(?![\\p{L}\\p{N}])").containsMatchIn(place)) return false
+            return !looksLikePlace(name)
+        }
+        val hurt = Regex("(?i)\\b(slip|slipped|fell|fall|tripped|hurt|injured|cut|burned|burnt|fainted|collapsed|hit|trapped|bleeding|got|caught)\\b")
+        fun involvedByWords(name: String) = said.split(Regex("(?<=[.!?;])\\s+")).any { it.contains(name, ignoreCase = true) && hurt.containsMatchIn(it) }
+        val involved = names("persons_involved").filter(::usable).distinct()
+        val witnesses = names("witnesses").filter(::usable).distinct()
+        // Present and hurt is involved; present and not hurt is a witness, never both.
+        val asWitness = witnesses.filter { !involvedByWords(it) && it !in involved }
+        val asInvolved = (involved + witnesses.filter { involvedByWords(it) }).distinct()
+        val chips = mutableListOf<Suggestion>()
+        if (Field.WITNESSES in open && asWitness.isNotEmpty()) {
+            chips += Suggestion(
+                Field.WITNESSES, "", asWitness.joinToString(", "),
+                "I may have missed it: ${asWitness.joinToString(" and ") { "\"$it\"" }} saw it or was there. Add as a witness?", Source.LLM,
+            )
+        }
+        if (Field.PERSONS_INVOLVED in open && asInvolved.isNotEmpty()) {
+            chips += Suggestion(
+                Field.PERSONS_INVOLVED, "", asInvolved.joinToString(", "),
+                "I may have missed it: ${asInvolved.joinToString(" and ") { "\"$it\"" }} is named as someone it happened to. Add as involved?", Source.LLM,
+            )
         }
         return chips
     }
@@ -94,6 +152,14 @@ class FocusedProbe(
 
     companion object {
         private val ORDER = listOf(Field.EQUIPMENT_ASSET, Field.IMMEDIATE_ACTIONS)
+        private val PEOPLE = listOf(Field.WITNESSES, Field.PERSONS_INVOLVED)
+        /** Never a name: the worker, pronouns, roles, body parts and question words. */
+        private val NOT_PEOPLE: Set<String> by lazy {
+            setOf(
+                "i", "me", "my", "we", "us", "our", "he", "she", "they", "him", "her", "them", "you", "someone", "somebody", "nobody",
+                "everyone", "friend", "friends", "colleague", "colleagues", "manager", "supervisor", "the", "a", "an", "none", "no", "one",
+            ) + NOT_ITEMS
+        }
         private const val MAX_CHARS = 1200
         private const val MAX_ITEM_WORDS = 4
         private val PLACE_NOUN = Regex("(?i)\\b(room|hall|block|floor|hostel|building|canteen|library|gate|corridor|lobby|campus|ground|office|lab)\\b(?:\\s*[\\w-]{1,3})?$")
