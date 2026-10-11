@@ -1,0 +1,12 @@
+rows 800; train 600 in 168 groups
+train rows with a near-copy (Jaccard >= 0.8) inside train: 317/600 (median nearest 0.81)
+                  full train (600) | validation nearest-train Jaccard median 0.55, >=0.8: 25/100, mean share of 4-grams seen in train 0.65, rows with >=80% shared 4-grams: 36
+                  full train (600) | test       nearest-train Jaccard median 0.59, >=0.8: 28/100, mean share of 4-grams seen in train 0.67, rows with >=80% shared 4-grams: 38
+train pruned at Jaccard<0.8 (401 rows) | validation nearest-train Jaccard median 0.54, >=0.8: 24/100, mean share of 4-grams seen in train 0.64, rows with >=80% shared 4-grams: 35
+train pruned at Jaccard<0.8 (401 rows) | test       nearest-train Jaccard median 0.59, >=0.8: 26/100, mean share of 4-grams seen in train 0.65, rows with >=80% shared 4-grams: 36
+train pruned at Jaccard<0.7 (296 rows) | validation nearest-train Jaccard median 0.54, >=0.8: 17/100, mean share of 4-grams seen in train 0.60, rows with >=80% shared 4-grams: 34
+train pruned at Jaccard<0.7 (296 rows) | test       nearest-train Jaccard median 0.59, >=0.8: 24/100, mean share of 4-grams seen in train 0.61, rows with >=80% shared 4-grams: 36
+train pruned at Jaccard<0.6 (223 rows) | validation nearest-train Jaccard median 0.54, >=0.8: 13/100, mean share of 4-grams seen in train 0.58, rows with >=80% shared 4-grams: 30
+train pruned at Jaccard<0.6 (223 rows) | test       nearest-train Jaccard median 0.56, >=0.8: 13/100, mean share of 4-grams seen in train 0.59, rows with >=80% shared 4-grams: 26
+train pruned at Jaccard<0.5 (152 rows) | validation nearest-train Jaccard median 0.51, >=0.8: 11/100, mean share of 4-grams seen in train 0.55, rows with >=80% shared 4-grams: 22
+train pruned at Jaccard<0.5 (152 rows) | test       nearest-train Jaccard median 0.50, >=0.8: 13/100, mean share of 4-grams seen in train 0.55, rows with >=80% shared 4-grams: 18
