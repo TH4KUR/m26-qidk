@@ -101,6 +101,7 @@ class ReportSession(
             return
         }
         val said = text.trim()
+        if (answerOpenQuestion(said)) return // a short answer to an open optional question answers that field
         val at = capturedAt ?: clock.instant() // when the reporter stopped speaking: "right now" and "10 minutes ago" are relative to this
         remember() // one voice turn is one undoable step
         probeChips = emptyList()
@@ -136,6 +137,26 @@ class ReportSession(
         val out = advisor.onChunk(said, signals, hint = validation.hint)
         val spokenByFloor = applyStatedFloors()
         advance(prefix = out.spoken ?: spokenByFloor, keyQuestion = out.keyQuestion)
+    }
+
+    /**
+     * While a single optional question (tool or item, people, witnesses) is open, a short spoken answer such as "Meera and Ravi", "no one"
+     * or "pata nahi" answers it directly, without the first-pass prompt (which would not know what a bare name is for). Anything that does not
+     * look like an answer returns false and is read as a normal sentence. The answer is the reporter's own: USER_CONFIRMED, evidence = their words.
+     */
+    private fun answerOpenQuestion(said: String): Boolean {
+        val ask = (state as? SessionState.Asking)?.question?.takeIf { !it.key }?.asks?.singleOrNull() ?: return false
+        if (ask.field !in OptionalAsks.ASKABLE) return false
+        val value = when (val a = AnswerParser.parse(ask.field, said)) {
+            AnswerParser.Answer.NotAnAnswer -> return false
+            AnswerParser.Answer.Skip -> null
+            AnswerParser.Answer.None -> FieldValue.explicitNone(said)
+            is AnswerParser.Answer.Value -> FieldValue(a.text, ValueStatus.USER_CONFIRMED, said)
+        }
+        remember()
+        value?.let { setByReporter(ask.field, it, "answered by voice") }
+        advance(prefix = null)
+        return true
     }
 
     /**
