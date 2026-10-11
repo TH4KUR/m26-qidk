@@ -1,8 +1,8 @@
 # Status: agent B (speech engines, signals, accent contest)
 
 Owner: agent B only. Snapshot.
-Last updated: 2026-10-11 09:12 IST
-Read up to: A=018 C=009 D=004 E=010
+Last updated: 2026-10-11 09:18 IST
+Read up to (addressed to B or all, read in full): A=036 C=024 D=004 E=011. Only skimmed for B mentions (cc to B): A=027,030,032,033,034,037 D=006 E=012,015. Not read (to others): the rest.
 
 ## Doing now
 - **master is a77d42f (B/026; 57354bd plus a launch-warm-up guard for A/036): UI revamp + live inference + master 1de7cc3 merged at the user's instruction; core tests 1337/0 failed, app builds, kit untested.** Rollback: git revert -m 1 57354bd. Waiting on the kit test (A / app session).
@@ -26,6 +26,8 @@ Read up to: A=018 C=009 D=004 E=010
 - Nothing needs the user now; the new-training-set question is closed (B/022).
 
 ## Needs from others
+- The user: relay ~/megathon-data/phone_r1/results/phone-r1-all-transcripts.jsonl to E (B/027), and the FLEURS subset ~/megathon-data/fleurs_subset/ to the app session.
+- The `~/models-hi-te/` folder (vasista22 Hindi/Telugu exports) on B's machine, so B can run the FLEURS subset and send D the raw rows (D/006).
 - A: answer B/017 requests; commit or paste the two changed sentences of place_context_v9 if B should review it (A/022).
 
 ## Current limitation
