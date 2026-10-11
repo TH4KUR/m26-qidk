@@ -58,7 +58,7 @@ def parse_selection(values: list[str]) -> dict[str, str]:
     return filters
 
 
-def load_manifest(path: Path, *, filters: dict[str, str] | None = None) -> list[Clip]:
+def load_manifest(path: Path, *, filters: dict[str, str] | None = None, allow_empty_reference: bool = False) -> list[Clip]:
     clips = []
     seen = set()
     for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
@@ -86,7 +86,7 @@ def load_manifest(path: Path, *, filters: dict[str, str] | None = None) -> list[
             raise ValueError(f"empty clip_id on line {line_number}")
         if clip_id in seen:
             raise ValueError(f"duplicate clip_id: {clip_id}")
-        if not isinstance(reference, str) or not normalize(reference):
+        if not isinstance(reference, str) or not (allow_empty_reference or normalize(reference)):
             raise ValueError(f"empty reference on line {line_number}: {clip_id}")
         if not wav.is_file():
             raise ValueError(f"missing WAV on line {line_number}: {wav}")
@@ -162,9 +162,11 @@ def resolve_model(model: str, models_dir: Path | None) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, required=True, help="JSONL rows: clip_id, wav, reference")
-    parser.add_argument("--output", type=Path, required=True, help="write Markdown table here")
+    parser.add_argument("--output", type=Path, help="write Markdown table here (required unless --transcripts-only)")
     parser.add_argument("--predictions", type=Path, help="optional JSONL output with per-clip predictions")
     parser.add_argument("--raw-transcripts", type=Path, help="optional JSONL output: clip_id, model, text")
+    parser.add_argument("--transcripts-only", action="store_true",
+                        help="only write --raw-transcripts: clips may have an empty reference, and no WER table or predictions file is written")
     parser.add_argument("--select", action="append", default=[], help="exact manifest metadata KEY=VALUE; repeatable")
     parser.add_argument("--model", action="append", dest="models", help="override the default four model IDs; repeatable")
     parser.add_argument("--models-dir", type=Path, help="directory containing locally downloaded model folders")
@@ -174,10 +176,17 @@ def main() -> None:
         filters = parse_selection(args.select)
     except ValueError as error:
         parser.error(str(error))
+    if args.transcripts_only:
+        if not args.raw_transcripts:
+            parser.error("--transcripts-only needs --raw-transcripts")
+        if args.output or args.predictions:
+            parser.error("--transcripts-only writes only --raw-transcripts (no --output or --predictions)")
+    elif not args.output:
+        parser.error("--output is required unless --transcripts-only")
     outputs = [path.resolve() for path in (args.output, args.predictions, args.raw_transcripts) if path]
     if len(set(outputs)) != len(outputs) or args.manifest.resolve() in outputs:
         parser.error("output paths must be distinct and must not overwrite the manifest")
-    clips = load_manifest(args.manifest, filters=filters)
+    clips = load_manifest(args.manifest, filters=filters, allow_empty_reference=args.transcripts_only)
     models = args.models or list(DEFAULT_MODELS)
     for model in models:
         resolve_model(model, args.models_dir)
@@ -200,6 +209,14 @@ def main() -> None:
             )
         return pipelines[model](str(wav))["text"].strip()
 
+    if args.transcripts_only:
+        # No reference, no WER: just what each model heard, for every clip, in E's wire format.
+        heard = [{"model": model, "clip_id": clip.clip_id, "reference": clip.reference, "prediction": transcribe(model, clip.wav)}
+                 for model in models for clip in clips]
+        args.raw_transcripts.parent.mkdir(parents=True, exist_ok=True)
+        args.raw_transcripts.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in raw_transcripts(heard)), encoding="utf-8")
+        print(f"wrote {len(heard)} raw transcripts for {len(clips)} clips and {len(models)} model(s) to {args.raw_transcripts}")
+        return
     rows, predictions = run_contest(clips, models, transcribe)
     table = render_table(rows)
     if args.dataset_label:
