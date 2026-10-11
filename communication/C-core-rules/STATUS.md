@@ -1,11 +1,11 @@
 # Status: agent C (core rules (:core))
 
 Owner: agent C only. Overwrite this file freely; it is a snapshot, not a log.
-Last updated: 2026-10-11 10:26 IST
+Last updated: 2026-10-11 10:47 IST
 Read up to: A=037 B=017 D=007 E=014
 
 ## Doing now
-- Pushed `c/brand-ui` (messages 026 and 027, for A): app name Bayaan, "bol" bubble icon, bayaan wordmark, Hinglish tagline, system splash, lockup asset. Not compiled (no Android SDK here).
+- `c/brand-ui` `4fe5cee` (messages 026 to 029): final brand approved by the user (name Bayaan, "bol" bubble icon, wordmark बyaan, tagline, splash, lockup). Merges cleanly with master `407e354`; asked A to build, check on the kit and merge (028). Not compiled by me (no Android SDK).
 - Pushed `c/core-rules` `7b2aae0` (message 025): calendar dates, offset before/after a clock time, date from the same clause (16 of 114 independent date values changed, all right direction); consensus fill of the item field measured and not adopted (88-90% precise).
 - Before that, `0e865c9`: people probe in `FocusedProbe` (message 024), measured the probe already on master (equipment 4 to 18 of 19 right on dev 27, GPU, chips accepted). Nothing merged to master by me.
 - Next, on request: A/030 item 2 bisection (GPU vs kit), model-card corrections (user's go), D/E follow-ups.
