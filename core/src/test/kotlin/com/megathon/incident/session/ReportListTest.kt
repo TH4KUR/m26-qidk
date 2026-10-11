@@ -52,4 +52,30 @@ class ReportListTest {
         val r = report("r3", 7, severity = null).with(Field.SEVERITY, FieldValue("minor", ValueStatus.SUGGESTED, null))
         assertEquals("Minor (suggested)", ReportList.row(r, today).severity)
     }
+
+    @Test
+    fun aRowCarriesTheRawValuesSoAScreenCanSayThemInAnotherLanguage() {
+        val row = ReportList.row(report("r4", 9), today)
+        assertEquals("water_leak_flood", row.typeWire)
+        assertEquals("moderate", row.severityWire)
+        assertEquals(false, row.severityIsSuggested)
+        assertEquals("2026-10-11 ≈10:00 (around 10 AM)", row.whenRaw)
+    }
+
+    @Test
+    fun aReportWithNothingSaidHasNoRawValues() {
+        val row = ReportList.row(IncidentReport.empty("r5", 1), today)
+        assertNull(row.typeWire)
+        assertNull(row.severityWire)
+        assertEquals(false, row.severityIsSuggested)
+        assertNull(row.whenRaw)
+    }
+
+    @Test
+    fun aSuggestedSeverityKeepsItsWireValueAndIsFlagged() {
+        val r = report("r6", 7, severity = null).with(Field.SEVERITY, FieldValue("minor", ValueStatus.SUGGESTED, null))
+        val row = ReportList.row(r, today)
+        assertEquals("minor", row.severityWire)
+        assertEquals(true, row.severityIsSuggested)
+    }
 }
