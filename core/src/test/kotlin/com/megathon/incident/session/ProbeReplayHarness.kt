@@ -1,6 +1,10 @@
 package com.megathon.incident.session
 
 import com.megathon.incident.domain.IncidentReport
+import com.megathon.incident.domain.ReportState
+import com.megathon.incident.suggest.MissedFieldRules
+import com.megathon.incident.tam.TamCueLists
+import com.megathon.incident.tam.TamDetector
 import com.megathon.incident.llm.LlmEngine
 import com.megathon.incident.llm.LlmRequest
 import com.megathon.incident.llm.LlmResult
@@ -40,6 +44,7 @@ class ProbeReplayHarness {
                 LlmResult(byRequest[unix(request.system) to request.user] ?: "{}", 0, Compute.SIMULATED)
         }
         val probe = FocusedProbe(engine)
+        val rules = MissedFieldRules(TamDetector(TamCueLists.loadDefault()))
         val transcripts = replies.associate {
             it["id"]!!.jsonPrimitive.content to it["user"]!!.jsonPrimitive.content.removePrefix("Worker: \"").removeSuffix("\"")
         }
@@ -48,8 +53,12 @@ class ProbeReplayHarness {
                 val id = row["gold_id"]!!.jsonPrimitive.content
                 val report = Json { ignoreUnknownKeys = true }.decodeFromJsonElement(IncidentReport.serializer(), row["report"]!!)
                 val chips = runBlocking { probe.propose(report, transcripts[id].orEmpty()) }
+                val ruleChips = rules.chips(ReportState(report, emptyList()), transcripts[id].orEmpty())
                 add(buildJsonObject {
                     put("id", id)
+                    put("rules", buildJsonArray {
+                        ruleChips.forEach { c -> add(buildJsonObject { put("field", c.field.name); put("proposed", c.proposed) }) }
+                    })
                     put("chips", buildJsonArray {
                         chips.forEach { c -> add(buildJsonObject { put("field", c.field.name); put("proposed", c.proposed); put("reason", c.reason) }) }
                     })
