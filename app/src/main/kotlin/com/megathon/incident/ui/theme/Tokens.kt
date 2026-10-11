@@ -94,3 +94,35 @@ val DarkColors = IncidentColors(
     infoContainer = Color(0xFF203238), onInfo = Color(0xFFB6DCE2),
     isDark = true,
 )
+
+/*
+ * The Hindi palette: burgundy in place of the English teal. Every IncidentColors role is defined again, light and dark,
+ * and tools/theme_contrast_check.py parses the hex values in this file and fails if any text or control pair drops below WCAG 2.1 AA.
+ * Burgundy is the brand of this palette (accent, primary button, confirmed pill). Danger is vermilion, a different hue and a much
+ * lighter tone than burgundy, and simulated is violet, so neither can be read as "the accent" (they also always carry an icon and a word).
+ * The amber evidence band (BrandMark, colours.xml) is not a palette role and is untouched.
+ * Details and the measured table: docs/ui/theme-burgundy.md.
+ */
+val HindiLightColors = IncidentColors(
+    canvas = Color(0xFFF8F2F1), surface = Color(0xFFFDFAF9),
+    ink = Color(0xFF1F1519), ink2 = Color(0xFF54464C), ink3 = Color(0xFF6A5A61), line = Color(0xFFDAC9CD),
+    accent = Color(0xFF7A1F3D), onAccent = Color(0xFFFFF7F9),
+    accentContainer = Color(0xFFF4DDE5), onAccentContainer = Color(0xFF5A1229),
+    attentionContainer = Color(0xFFF8E7C8), onAttention = Color(0xFF7A4300),
+    dangerContainer = Color(0xFFFBE1D6), onDanger = Color(0xFF953000), danger = Color(0xFFB03A00),
+    simulatedContainer = Color(0xFFE9E0F7), onSimulated = Color(0xFF4A1D8F), simulated = Color(0xFF5B2AA8),
+    infoContainer = Color(0xFFE3EEF7), onInfo = Color(0xFF12476F),
+    isDark = false,
+)
+
+val HindiDarkColors = IncidentColors(
+    canvas = Color(0xFF1A0F13), surface = Color(0xFF2A1A20),
+    ink = Color(0xFFF7EFF1), ink2 = Color(0xFFD4C2C8), ink3 = Color(0xFFAE9AA2), line = Color(0xFF4B343B),
+    accent = Color(0xFFF2B8C8), onAccent = Color(0xFF3B0A1D),
+    accentContainer = Color(0xFF4D1B2D), onAccentContainer = Color(0xFFF8D5E0),
+    attentionContainer = Color(0xFF352D20), onAttention = Color(0xFFECCB8D),
+    dangerContainer = Color(0xFF3E1D12), onDanger = Color(0xFFFFC9B3), danger = Color(0xFFFF8040),
+    simulatedContainer = Color(0xFF2E2346), onSimulated = Color(0xFFD9CCFF), simulated = Color(0xFFC3A8FF),
+    infoContainer = Color(0xFF1F2D3D), onInfo = Color(0xFFB9D7F2),
+    isDark = true,
+)
