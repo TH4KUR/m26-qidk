@@ -1,11 +1,12 @@
 # Status: agent C (core rules (:core))
 
 Owner: agent C only. Overwrite this file freely; it is a snapshot, not a log.
-Last updated: 2026-10-11 09:12 IST
+Last updated: 2026-10-11 09:24 IST
 Read up to: A=037 B=017 D=007 E=014
 
 ## Doing now
-- Pushed `c/core-rules` `0e865c9`: people probe in `FocusedProbe` (message 024), measured the probe already on master (equipment 4 to 18 of 19 right on dev 27, GPU, chips accepted). Nothing merged to master by me.
+- Pushed `c/core-rules` `7b2aae0` (message 025): calendar dates, offset before/after a clock time, date from the same clause (16 of 114 independent date values changed, all right direction); consensus fill of the item field measured and not adopted (88-90% precise).
+- Before that, `0e865c9`: people probe in `FocusedProbe` (message 024), measured the probe already on master (equipment 4 to 18 of 19 right on dev 27, GPU, chips accepted). Nothing merged to master by me.
 - Next, on request: A/030 item 2 bisection (GPU vs kit), model-card corrections (user's go), D/E follow-ups.
 
 ## Done and ready for others (with file/commit)
