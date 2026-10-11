@@ -8,12 +8,12 @@ import com.megathon.incident.domain.ValueStatus
 /**
  * Cross-questioning about the optional fields the model is weakest on: tools or items, people involved, witnesses.
  * Runs only after the four mandatory answers are in, never in an urgent lane (the caller checks), one question at a
- * time, at most [MAX_PER_REPORT] per report, and a field is never asked twice. Every question can be skipped with one tap.
+ * time, at most [MAX_PER_REPORT] per report, and a field is never asked twice. Every question has a one-tap "Not sure" (the dock's own "Skip" means check and send, so this one is not called Skip).
  * What gets asked depends on what was said: an injury asks who was hurt, a "colleague" is asked for by role, a tool or item the
  * chips already found becomes a yes or no. Deterministic and cheap: no model call, so it cannot slow a turn or invent a name.
  */
 internal object OptionalAsks {
-    private val ASKABLE = setOf(Field.PERSONS_INVOLVED, Field.EQUIPMENT_ASSET, Field.WITNESSES)
+    val ASKABLE = setOf(Field.PERSONS_INVOLVED, Field.EQUIPMENT_ASSET, Field.WITNESSES)
     private const val MAX_PER_REPORT = 2
 
     private val ROLE = Regex(
@@ -63,5 +63,5 @@ internal object OptionalAsks {
     }
 
     private fun none(field: Field, label: String) = QuickReply(label, field, QuickReply.NONE)
-    private fun skip(field: Field) = QuickReply("Skip", field, QuickReply.SKIP)
+    private fun skip(field: Field) = QuickReply("Not sure", field, QuickReply.SKIP)
 }

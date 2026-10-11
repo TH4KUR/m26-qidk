@@ -41,7 +41,7 @@ class OptionalAsksTest {
         val q = ask(done("injury"))!!
         assertEquals(listOf(Field.PERSONS_INVOLVED), q.asks.map { it.field })
         assertEquals("Who was hurt?", q.spoken)
-        assertEquals(listOf("No one", "Skip"), q.asks.single().replies.map { it.label })
+        assertEquals(listOf("No one", "Not sure"), q.asks.single().replies.map { it.label })
         assertEquals(listOf(QuickReply.NONE, QuickReply.SKIP), q.asks.single().replies.map { it.value })
     }
 
@@ -62,7 +62,7 @@ class OptionalAsksTest {
         val q = ask(done("fire_smoke"))!!
         assertEquals(listOf(Field.EQUIPMENT_ASSET), q.asks.map { it.field })
         assertEquals("Which tool, machine or item was involved?", q.spoken)
-        assertEquals(listOf("None", "Skip"), q.asks.single().replies.map { it.label })
+        assertEquals(listOf("None", "Not sure"), q.asks.single().replies.map { it.label })
     }
 
     @Test fun `an illness is never asked about a tool or item`() {
@@ -86,7 +86,7 @@ class OptionalAsksTest {
         val q = ask(r)!!
         assertEquals(listOf(Field.WITNESSES), q.asks.map { it.field })
         assertEquals("Did anyone see it happen?", q.spoken)
-        assertEquals(listOf("No one", "Skip"), q.asks.single().replies.map { it.label })
+        assertEquals(listOf("No one", "Not sure"), q.asks.single().replies.map { it.label })
     }
 
     @Test fun `at most two optional questions are asked in one report`() {
