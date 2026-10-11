@@ -34,8 +34,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.megathon.incident.domain.Field
+import com.megathon.incident.session.HindiLabels
+import com.megathon.incident.session.HindiUiText
+import com.megathon.incident.session.QuickReply
 import com.megathon.incident.session.UiStatus
 import com.megathon.incident.testing.Compute
+import com.megathon.incident.ui.i18n.isHindi
+import com.megathon.incident.ui.i18n.tr
 import com.megathon.incident.ui.theme.Size
 import com.megathon.incident.ui.theme.Space
 import com.megathon.incident.ui.theme.Theme
@@ -128,15 +134,59 @@ fun Pill(text: String, container: Color, content: Color, modifier: Modifier = Mo
 @Composable
 fun StatusChip(status: UiStatus, modifier: Modifier = Modifier) {
     val c = Theme.colors
+    val word = statusLabel(status) ?: return
     when (status) {
-        UiStatus.HEARD -> Pill("Heard", c.accentContainer, c.onAccentContainer, modifier, glyph = { MicGlyph(c.onAccentContainer, size = 14.dp) })
-        UiStatus.CONFIRMED -> Pill("Confirmed", c.accent, c.onAccent, modifier, icon = Icons.Rounded.Check)
-        UiStatus.SUGGESTED -> Pill("Suggested", c.attentionContainer, c.onAttention, modifier, icon = Icons.Rounded.Info)
-        UiStatus.NEEDED -> Pill("Needed", c.dangerContainer, c.onDanger, modifier, icon = Icons.Rounded.Warning)
-        UiStatus.UNKNOWN -> Pill("Not sure", c.infoContainer, c.onInfo, modifier, icon = Icons.Rounded.Info)
-        UiStatus.NONE -> Pill("None", c.line.copy(alpha = 0.55f), c.ink, modifier)
+        UiStatus.HEARD -> Pill(word, c.accentContainer, c.onAccentContainer, modifier, glyph = { MicGlyph(c.onAccentContainer, size = 14.dp) })
+        UiStatus.CONFIRMED -> Pill(word, c.accent, c.onAccent, modifier, icon = Icons.Rounded.Check)
+        UiStatus.SUGGESTED -> Pill(word, c.attentionContainer, c.onAttention, modifier, icon = Icons.Rounded.Info)
+        UiStatus.NEEDED -> Pill(word, c.dangerContainer, c.onDanger, modifier, icon = Icons.Rounded.Warning)
+        UiStatus.UNKNOWN -> Pill(word, c.infoContainer, c.onInfo, modifier, icon = Icons.Rounded.Info)
+        UiStatus.NONE -> Pill(word, c.line.copy(alpha = 0.55f), c.ink, modifier)
         UiStatus.EMPTY -> Unit
     }
+}
+
+/** The status word in the app language: the English pill word, or [HindiLabels.status] when the app is in Hindi. Null for EMPTY. */
+@Composable
+fun statusLabel(s: UiStatus): String? = if (isHindi()) HindiLabels.status(s) else when (s) {
+    UiStatus.HEARD -> "Heard"
+    UiStatus.CONFIRMED -> "Confirmed"
+    UiStatus.SUGGESTED -> "Suggested"
+    UiStatus.NEEDED -> "Needed"
+    UiStatus.UNKNOWN -> "Not sure"
+    UiStatus.NONE -> "None"
+    UiStatus.EMPTY -> null
+}
+
+/**
+ * A sentence the core wrote (a question, a reason, a hint, a message), in the app language: the English as given, or its Hindi
+ * from [HindiUiText] (the same table the spoken line uses, so what is shown equals what is heard). With no Hindi yet it stays
+ * English, as a whole element.
+ */
+@Composable
+fun coreText(english: String): String = if (isHindi()) HindiUiText.of(english) else english
+
+/** A count as the current language writes it: Devanagari digits in Hindi (as the dates are), plain digits in English. */
+@Composable
+fun num(n: Int): String =
+    if (isHindi()) n.toString().map { if (it in '0'..'9') '\u0966' + (it - '0') else it }.joinToString("") else n.toString()
+
+/**
+ * What a ready answer says in the app language. An incident type or a severity goes through [HindiLabels] by its stored value;
+ * any other answer (Today, Yesterday, None, Skip, a name) through [com.megathon.incident.session.HindiUiText], so it reads
+ * the same as the spoken question. English is the label as given.
+ */
+@Composable
+fun replyLabel(r: QuickReply): String {
+    if (!isHindi()) return r.label
+    if (!r.value.startsWith("@")) {
+        when (r.field) {
+            Field.INCIDENT_TYPE -> return HindiLabels.type(r.value)
+            Field.SEVERITY -> return HindiLabels.severity(r.value)
+            else -> Unit
+        }
+    }
+    return HindiUiText.of(r.label)
 }
 
 /** Where a stage really ran. SIMULATED is loud on purpose. */
@@ -161,9 +211,10 @@ fun Hairline(modifier: Modifier = Modifier) {
 @Composable
 fun VoiceButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     val c = Theme.colors
+    val description = tr("Add or correct by voice", "बोलकर जोड़ें या सुधारें")
     androidx.compose.material3.OutlinedIconButton(
         onClick = onClick,
-        modifier = modifier.size(Size.primaryButton).semantics { contentDescription = "Add or correct by voice" },
+        modifier = modifier.size(Size.primaryButton).semantics { contentDescription = description },
         shape = androidx.compose.foundation.shape.CircleShape,
         border = BorderStroke(1.5.dp, c.ink3),
     ) { MicGlyph(c.ink, size = 26.dp) }

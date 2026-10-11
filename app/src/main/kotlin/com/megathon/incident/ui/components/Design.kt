@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.megathon.incident.ui.i18n.tr
 import com.megathon.incident.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlin.math.cos
@@ -57,11 +58,13 @@ fun Reveal(modifier: Modifier = Modifier, delayMillis: Int = 0, content: @Compos
 @Composable
 fun StageTrack(stage: Int, modifier: Modifier = Modifier) {
     val c = Theme.colors
-    Row(modifier.fillMaxWidth().semantics { contentDescription = "Step ${stage + 1} of 3: ${listOf("Capture", "Shape", "Review")[stage]}" }, verticalAlignment = Alignment.CenterVertically) {
-        listOf("Capture", "Shape", "Review").forEachIndexed { index, label ->
+    val names = listOf(tr("Capture", "रिकॉर्ड"), tr("Shape", "तैयार"), tr("Review", "जाँच"))
+    val description = tr("Step ${stage + 1} of 3: ${names[stage]}", "चरण ${num(stage + 1)} / ${num(3)}: ${names[stage]}")
+    Row(modifier.fillMaxWidth().semantics { contentDescription = description }, verticalAlignment = Alignment.CenterVertically) {
+        names.forEachIndexed { index, label ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 Box(Modifier.size(22.dp).background(if (index <= stage) c.accentContainer else c.surface, CircleShape), contentAlignment = Alignment.Center) {
-                    Text(if (index < stage) "✓" else "${index + 1}", style = MaterialTheme.typography.labelSmall, color = if (index <= stage) c.accent else c.ink3)
+                    Text(if (index < stage) "✓" else num(index + 1), style = MaterialTheme.typography.labelSmall, color = if (index <= stage) c.accent else c.ink3)
                 }
                 Text(label, style = MaterialTheme.typography.labelSmall, color = if (index == stage) c.ink else c.ink3)
             }

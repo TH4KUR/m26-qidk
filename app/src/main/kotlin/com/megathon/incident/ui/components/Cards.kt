@@ -57,7 +57,15 @@ import com.megathon.incident.domain.PriorityAdvice
 import com.megathon.incident.priority.Deescalation
 import com.megathon.incident.priority.KeyAnswer
 import com.megathon.incident.session.Question
+import com.megathon.incident.session.HindiLabels
 import com.megathon.incident.session.QuickReply
+import com.megathon.incident.session.UiStatus
+import com.megathon.incident.domain.Field
+import com.megathon.incident.domain.IncidentType
+import com.megathon.incident.domain.Severity
+import com.megathon.incident.session.Labels
+import com.megathon.incident.ui.i18n.isHindi
+import com.megathon.incident.ui.i18n.tr
 import com.megathon.incident.ui.theme.LocalReduceMotion
 import com.megathon.incident.ui.theme.Motion
 import com.megathon.incident.ui.theme.Size
@@ -85,14 +93,16 @@ fun TranscriptCard(
     heardNow: String?,
     reading: Boolean,
     modifier: Modifier = Modifier,
-    readingLabel: String = "Working on your report…",
+    readingLabel: String? = null,
     /** One short line shown when the transcript is in a different script from the labels and replies; null shows nothing. */
     scriptNote: String? = null,
 ) {
     val c = Theme.colors
+    val readingText = readingLabel?.let { coreText(it) } ?: tr("Working on your report…", "आपकी रिपोर्ट पर काम हो रहा है…")
+    val note = scriptNote?.let { coreText(it) }
     Card(modifier) {
         Column(Modifier.padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
-            Text("What I heard", style = MaterialTheme.typography.labelMedium, color = c.ink2, modifier = Modifier.semantics { heading() })
+            Text(tr("What I heard", "मैंने जो सुना"), style = MaterialTheme.typography.labelMedium, color = c.ink2, modifier = Modifier.semantics { heading() })
             val all = buildList { addAll(transcripts); if (heardNow != null && heardNow !in transcripts.takeLast(1)) add(heardNow) }
             all.forEachIndexed { i, t ->
                 val latest = i == all.lastIndex
@@ -102,12 +112,12 @@ fun TranscriptCard(
                     color = if (latest) c.ink else c.ink2,
                 )
             }
-            if (all.isEmpty() && !reading) Text("Nothing yet.", style = MaterialTheme.typography.bodyLarge, color = c.ink3)
-            if (scriptNote != null) Text(scriptNote, style = MaterialTheme.typography.bodyMedium, color = c.ink2)
+            if (all.isEmpty() && !reading) Text(tr("Nothing yet.", "अभी कुछ नहीं।"), style = MaterialTheme.typography.bodyLarge, color = c.ink3)
+            if (note != null) Text(note, style = MaterialTheme.typography.bodyMedium, color = c.ink2)
             if (reading) {
                 Row(Modifier.semantics { liveRegion = LiveRegionMode.Polite }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
                     WorkingBar(width = 40.dp)
-                    Text(readingLabel, style = MaterialTheme.typography.bodyMedium, color = c.ink2)
+                    Text(readingText, style = MaterialTheme.typography.bodyMedium, color = c.ink2)
                 }
             }
         }
@@ -126,17 +136,35 @@ fun ProvisionalCard(preview: com.megathon.incident.session.ProvisionalPreview?, 
     Card(modifier) {
         Column(Modifier.padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                Text("Filling in as you speak", style = MaterialTheme.typography.labelMedium, color = c.ink2, modifier = Modifier.semantics { heading() })
-                Pill("Provisional", c.accentContainer, c.onAccentContainer)
+                Text(tr("Filling in as you speak", "बोलते-बोलते भरा जा रहा है"), style = MaterialTheme.typography.labelMedium, color = c.ink2, modifier = Modifier.semantics { heading() })
+                Pill(tr("Provisional", "अस्थायी"), c.accentContainer, c.onAccentContainer)
             }
             shown.forEach { f ->
                 Column {
-                    Text(f.label, style = MaterialTheme.typography.labelMedium, color = c.ink2)
-                    Text(f.value.orEmpty(), style = MaterialTheme.typography.bodyLarge, color = c.ink)
+                    Text(if (isHindi()) HindiLabels.field(f.field) else f.label, style = MaterialTheme.typography.labelMedium, color = c.ink2)
+                    Text(provisionalValue(f), style = MaterialTheme.typography.bodyLarge, color = c.ink)
                 }
             }
-            Text("Not saved yet. I'll check everything when you tap done.", style = MaterialTheme.typography.bodyMedium, color = c.ink3)
+            Text(tr("Not saved yet. I'll check everything when you tap done.", "अभी सेव नहीं हुआ है। रिकॉर्डिंग रोकते ही सब जाँचा जाएगा।"), style = MaterialTheme.typography.bodyMedium, color = c.ink3)
         }
+    }
+}
+
+/**
+ * A provisional value in the app language. The card only has the English display of the value (not the stored text), so a
+ * type or a severity is found again by name; "Don't know" and "None" are the app's own words. Anything else, a date included,
+ * stays as it is shown: a whole element in English rather than a guess.
+ */
+@Composable
+private fun provisionalValue(f: com.megathon.incident.session.ProvisionalField): String {
+    val shown = f.value.orEmpty()
+    if (!isHindi()) return shown
+    return when {
+        f.status == UiStatus.UNKNOWN -> "पता नहीं"
+        f.status == UiStatus.NONE -> HindiLabels.status(UiStatus.NONE) ?: shown
+        f.field == Field.INCIDENT_TYPE -> IncidentType.entries.firstOrNull { Labels.type(it.wire) == shown }?.let { HindiLabels.type(it.wire) } ?: shown
+        f.field == Field.SEVERITY -> Severity.entries.firstOrNull { Labels.severity(it.wire) == shown }?.let { HindiLabels.severity(it.wire) } ?: shown
+        else -> shown
     }
 }
 
@@ -179,17 +207,17 @@ fun QuestionDock(
     ) {
         Hairline()
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("LET’S FILL ONE DETAIL", style = MaterialTheme.typography.labelSmall, color = c.accent, modifier = Modifier.weight(1f).semantics { heading() })
-            if (speaking) TextAction("Stop speaking", onStopSpeaking, color = c.onAccentContainer)
+            Text(tr("LET’S FILL ONE DETAIL", "एक जानकारी भरें"), style = MaterialTheme.typography.labelSmall, color = c.accent, modifier = Modifier.weight(1f).semantics { heading() })
+            if (speaking) TextAction(tr("Stop speaking", "बोलना रोकें"), onStopSpeaking, color = c.onAccentContainer)
         }
         if (question.key) {
             // The advisor's one dispatch-style question: no field behind it, answered Yes / No / Not sure.
             Column(verticalArrangement = Arrangement.spacedBy(Space.s2), modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
-                Text(question.spoken, style = if (inline) MaterialTheme.typography.titleMedium else MaterialTheme.typography.headlineSmall, color = c.onAccentContainer)
+                Text(coreText(question.spoken), style = if (inline) MaterialTheme.typography.titleMedium else MaterialTheme.typography.headlineSmall, color = c.onAccentContainer)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.s2), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
-                    OutlinedChoiceChip("Yes", onClick = { onKeyAnswer(KeyAnswer.YES) })
-                    OutlinedChoiceChip("No", onClick = { onKeyAnswer(KeyAnswer.NO) })
-                    OutlinedChoiceChip("Not sure", onClick = { onKeyAnswer(KeyAnswer.UNSURE) })
+                    OutlinedChoiceChip(tr("Yes", "हाँ"), onClick = { onKeyAnswer(KeyAnswer.YES) })
+                    OutlinedChoiceChip(tr("No", "नहीं"), onClick = { onKeyAnswer(KeyAnswer.NO) })
+                    OutlinedChoiceChip(statusLabel(UiStatus.UNKNOWN).orEmpty(), onClick = { onKeyAnswer(KeyAnswer.UNSURE) })
                 }
             }
         }
@@ -198,11 +226,11 @@ fun QuestionDock(
         }, label = "next question") { ask ->
             if (ask != null)
             Column(verticalArrangement = Arrangement.spacedBy(Space.s2), modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
-                Text(ask.prompt, style = if (inline) MaterialTheme.typography.titleMedium else MaterialTheme.typography.headlineSmall, color = c.onAccentContainer)
+                Text(coreText(ask.prompt), style = if (inline) MaterialTheme.typography.titleMedium else MaterialTheme.typography.headlineSmall, color = c.onAccentContainer)
                 if (ask.replies.isNotEmpty()) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.s2), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
                         ask.replies.forEach { r ->
-                            OutlinedChoiceChip(r.label, onClick = { onReply(r) }, note = if (r.suggested) "suggested" else null, emphasis = r.suggested)
+                            OutlinedChoiceChip(replyLabel(r), onClick = { onReply(r) }, note = if (r.suggested) statusLabel(UiStatus.SUGGESTED)?.let { if (isHindi()) it else it.lowercase() } else null, emphasis = r.suggested)
                         }
                     }
                 }
@@ -211,9 +239,9 @@ fun QuestionDock(
         if (!inline) Row(horizontalArrangement = Arrangement.spacedBy(Space.s2), verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
                 MicGlyph(c.accent, size = 20.dp)
-                TextAction("Answer by voice", onVoice, flush = true)
+                TextAction(tr("Answer by voice", "बोलकर जवाब दें"), onVoice, flush = true)
             }
-            TextAction("Review", onSkip, color = c.ink2)
+            TextAction(tr("Review", "जाँचें"), onSkip, color = c.ink2)
         }
     }
 }
@@ -235,11 +263,11 @@ fun PriorityBanner(
     var open by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     val title = when (advice.level) {
-        Priority.URGENT -> "Urgent"
-        Priority.HIGH -> "High priority"
-        Priority.MEDIUM -> "Medium priority"
-        Priority.LOW -> "Routine"
-    } + if (advice.overriddenByUser) " (set by you)" else ""
+        Priority.URGENT -> tr("Urgent", "अत्यावश्यक")
+        Priority.HIGH -> tr("High priority", "उच्च प्राथमिकता")
+        Priority.MEDIUM -> tr("Medium priority", "मध्यम प्राथमिकता")
+        Priority.LOW -> tr("Routine", "सामान्य")
+    } + if (advice.overriddenByUser) tr(" (set by you)", " (आपने तय किया)") else ""
     Card(modifier, container = container) {
         Column(Modifier.padding(start = Space.s4, end = Space.s2, top = Space.s3, bottom = Space.s1), verticalArrangement = Arrangement.spacedBy(Space.s1)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
@@ -247,19 +275,23 @@ fun PriorityBanner(
                 Text(title, style = MaterialTheme.typography.titleMedium, color = onC, modifier = Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite })
             }
             if (advice.level == Priority.URGENT) {
-                Text("If anyone is in danger, call 112.", style = MaterialTheme.typography.headlineSmall, color = onC)
+                Text(tr("If anyone is in danger, call 112.", "अगर कोई खतरे में है, तो अभी 112 पर कॉल करें।"), style = MaterialTheme.typography.headlineSmall, color = onC)
             }
             if (deescalation != null) {
                 // Offered, never applied by itself: one tap lowers the level, anything else leaves it as it is.
-                Text(deescalation.reason.replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.bodyMedium, color = onC)
-                OutlinedChoiceChip("Lower to LOW?", onClick = onLower)
+                val reason = coreText(deescalation.reason)
+                Text(if (reason == deescalation.reason) reason.replaceFirstChar { it.uppercase() } else reason, style = MaterialTheme.typography.bodyMedium, color = onC)
+                OutlinedChoiceChip(tr("Lower to LOW?", "प्राथमिकता सामान्य करें?"), onClick = onLower)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextAction(if (open) "Hide why" else "Why?", { open = !open }, color = onC)
+                TextAction(if (open) tr("Hide why", "कारण छिपाएँ") else tr("Why?", "क्यों?"), { open = !open }, color = onC)
                 androidx.compose.foundation.layout.Box {
-                    TextAction("Change", { menu = true }, color = onC)
+                    TextAction(tr("Change", "बदलें"), { menu = true }, color = onC)
                     DropdownMenu(menu, { menu = false }) {
-                        listOf(Priority.LOW to "Routine", Priority.MEDIUM to "Medium", Priority.HIGH to "High", Priority.URGENT to "Urgent").forEach { (p, label) ->
+                        listOf(
+                            Priority.LOW to tr("Routine", "सामान्य"), Priority.MEDIUM to tr("Medium", "मध्यम"),
+                            Priority.HIGH to tr("High", "उच्च"), Priority.URGENT to tr("Urgent", "अत्यावश्यक"),
+                        ).forEach { (p, label) ->
                             DropdownMenuItem(text = { Text(label) }, onClick = { menu = false; onOverride(p) })
                         }
                     }
@@ -271,8 +303,8 @@ fun PriorityBanner(
                 exit = shrinkVertically(tween(Motion.quick, easing = Motion.exit)),
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(Space.s1)) {
-                    advice.reasons.forEach { Text("• $it", style = MaterialTheme.typography.bodyMedium, color = onC) }
-                    if (advice.reasons.isEmpty()) Text("No specific signals.", style = MaterialTheme.typography.bodyMedium, color = onC)
+                    advice.reasons.forEach { Text("• ${coreText(it)}", style = MaterialTheme.typography.bodyMedium, color = onC) }
+                    if (advice.reasons.isEmpty()) Text(tr("No specific signals.", "कोई खास संकेत नहीं।"), style = MaterialTheme.typography.bodyMedium, color = onC)
                 }
             }
         }
@@ -285,6 +317,7 @@ fun MessageCard(text: String, onDismiss: () -> Unit, modifier: Modifier = Modifi
     val c = Theme.colors
     val container = if (danger) c.dangerContainer else c.attentionContainer
     val onC = if (danger) c.onDanger else c.onAttention
+    val dismissLabel = tr("Dismiss message", "संदेश हटाएँ")
     Row(
         modifier.fillMaxWidth().background(container, RoundedCornerShape(16.dp)).padding(start = Space.s4, top = Space.s2, bottom = Space.s2, end = Space.s1)
             .semantics { liveRegion = LiveRegionMode.Polite },
@@ -292,7 +325,7 @@ fun MessageCard(text: String, onDismiss: () -> Unit, modifier: Modifier = Modifi
         horizontalArrangement = Arrangement.spacedBy(Space.s3),
     ) {
         Icon(Icons.Rounded.Warning, contentDescription = null, tint = onC, modifier = Modifier.size(20.dp))
-        Text(text, style = MaterialTheme.typography.bodyLarge, color = onC, modifier = Modifier.weight(1f))
-        IconButton(onDismiss, Modifier.size(Size.touch)) { Icon(Icons.Rounded.Close, contentDescription = "Dismiss message", tint = onC) }
+        Text(coreText(text), style = MaterialTheme.typography.bodyLarge, color = onC, modifier = Modifier.weight(1f))
+        IconButton(onDismiss, Modifier.size(Size.touch)) { Icon(Icons.Rounded.Close, contentDescription = dismissLabel, tint = onC) }
     }
 }
