@@ -38,7 +38,9 @@ import com.megathon.incident.speech.PreviewScheduler
 import com.megathon.incident.speech.Speculative
 import com.megathon.incident.speech.GenieXLlmEngine
 import com.megathon.incident.speech.SenseVoiceSignalEngine
+import com.megathon.incident.speech.ResidentSherpaSpeechEngine
 import com.megathon.incident.speech.SherpaCliSpeechEngine
+import com.megathon.incident.speech.SpeechBundle
 import com.megathon.incident.speech.SignalReading
 import com.megathon.incident.speech.SystemTtsSpeaker
 import com.megathon.incident.testing.Compute
@@ -126,7 +128,13 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     private val demoSpeech = DemoSpeechEngine()
     private val factory = EngineFactory(
         isDebug = Engines.isDebuggable(app),
-        speechProviders = mapOf(SpeechKind.FAKE to { demoSpeech }, SpeechKind.SHERPA_QNN to { SherpaCliSpeechEngine(app) }),
+        speechProviders = mapOf(
+            SpeechKind.FAKE to { demoSpeech },
+            // The resident worker when it is staged in the APK (models load once); otherwise the per-utterance CLI, which stays the baseline.
+            SpeechKind.SHERPA_QNN to {
+                if (!ResidentSherpaSpeechEngine.preferCliBaseline && SpeechBundle(app).worker.exists()) ResidentSherpaSpeechEngine(app) else SherpaCliSpeechEngine(app)
+            },
+        ),
         llmProviders = mapOf(LlmKind.FAKE to { FakeLlmEngine(name = "DEMO REPLIES") }, LlmKind.GENIEX to { GenieXLlmEngine(app) }),
     )
     private val recorder = MicRecorder(app)
@@ -573,6 +581,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
 
     override fun onCleared() {
         live?.let(::abandon)
+        (speech as? ResidentSherpaSpeechEngine)?.release()
         recorder.cancel()
         speaker.shutdown()
     }

@@ -19,6 +19,8 @@ class SpeechBundle(context: Context) {
     val whisperDir = File(root, "whisper-small")
     /** The CLI is packed as a native library so Android extracts it where an app may execute it. */
     val cli = File(context.applicationInfo.nativeLibraryDir, "libsherpa_offline.so")
+    /** The resident worker (tools/sherpa_worker), packed the same way. Optional: without it the per-utterance CLI is used. */
+    val worker = File(context.applicationInfo.nativeLibraryDir, "libsherpa_worker.so")
     val nativeDir: String = context.applicationInfo.nativeLibraryDir
 
     fun missing(): List<String> = buildList {

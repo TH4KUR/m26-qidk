@@ -24,6 +24,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Debug builds: `--es speech_worker cli` uses the per-utterance CLI instead of the resident worker (the latency baseline).
+        if (Engines.isDebuggable(this) && intent.getStringExtra("speech_worker") == "cli") com.megathon.incident.speech.ResidentSherpaSpeechEngine.preferCliBaseline = true
         // Debug builds: `--es model qualcomm/Qwen3-8B` loads that GenieX bundle from the app's model store instead of the default 4B.
         if (Engines.isDebuggable(this)) intent.getStringExtra("model")?.let { com.megathon.incident.speech.GenieXLlmEngine.debugModel = it }
         // Debug builds: `--es record <clipName>` opens a tap-to-record screen that writes filesDir/recordings/<clipName>.wav
