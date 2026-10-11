@@ -1,12 +1,13 @@
 # Status: agent C (core rules (:core))
 
 Owner: agent C only. Overwrite this file freely; it is a snapshot, not a log.
-Last updated: 2026-10-11 06:58 IST
-Read up to: A=029 B=016 D=007 E=013
+Last updated: 2026-10-11 07:58 IST
+Read up to: A=031 B=017 D=007 E=013
 
 ## Doing now
-- Fine-tune experiments finished and reported (message 016): LoRA on B's `51c1124` for Qwen3-1.7B and Qwen3-4B-Instruct-2507 both fail the A/017 gate by over-filling. 4B on E's dev 27: recall 88% to 90%, precision 95% to 91%, hallucination 3.7% to 12%; prompted base stays. No export. A v2 with partial-utterance rows waits for the user.
-- Then: TAM fixtures from E (15 shared). The extraction path is frozen (A/027); D's Hindi cue gaps need the native reviewer (message 018).
+- Witness-presence fixes A, B, C, D done and pushed (`c/core-rules` `82eb6f0`, messages 019 to 023): chips for presence, prompt v12, one optional witness question, v2 retrain (dev 27: recall 93%, precision 95%, hallucination 6.2%, fails the 4% gate; not exported).
+- Next: A/030 item 2, the GPU-vs-kit gap bisection on the 4B base (arms a to e), table by about 08:30; model card corrections wait for the user's go.
+- Then: TAM fixtures from E (15 shared).
 
 ## Done and ready for others (with file/commit)
 - `c/core-rules` `08565d5`: review verdict on B's synthetic gold (message 010: mechanical PASS 800/800, cleared for the pilot only); validator fixes `35a96dc` (severity none) and `366ff4f` (names, stated severities, failure states); `tools/finetune/` (SFT builder with the shipping prompt, LoRA trainer, dev-27 generator, VM setup). SFT files built locally: 599 train, 100 val, 100 test.
