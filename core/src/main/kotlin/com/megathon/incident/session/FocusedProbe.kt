@@ -70,6 +70,10 @@ class FocusedProbe(
                 if (value.split(Regex("\\s+")).size > MAX_ITEM_WORDS || lower in INCIDENT_WORDS) return null
                 if (lower == report.value(Field.LOCATION).text?.lowercase()) return null
                 if (looksLikePlace(value)) return null
+                // Seen on every set the same way (kit, synthetic, phone): a name, a role or a body part named as the thing involved.
+                val named = listOf(Field.PERSONS_INVOLVED, Field.WITNESSES).flatMap { report.value(it).text.orEmpty().split(',') }
+                    .map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+                if (lower in named || named.any { n -> n in lower.split(' ') } || lower in NOT_ITEMS) return null
                 Suggestion(field, "", value, "I may have missed it: you said \"$quote\". Add \"$value\" as a tool or item?", Source.LLM)
             }
             else -> Suggestion(field, "", value, "I may have missed it: you said \"$quote\". Add \"$value\" as an action taken?", Source.LLM)
@@ -93,6 +97,12 @@ class FocusedProbe(
         private const val MAX_CHARS = 1200
         private const val MAX_ITEM_WORDS = 4
         private val PLACE_NOUN = Regex("(?i)\\b(room|hall|block|floor|hostel|building|canteen|library|gate|corridor|lobby|campus|ground|office|lab)\\b(?:\\s*[\\w-]{1,3})?$")
+        /** Roles and body parts are who or where it hurt, never the tool or item involved. */
+        private val NOT_ITEMS = setOf(
+            "guard", "security guard", "security", "nurse", "doctor", "student", "colleague", "coworker", "visitor", "worker", "staff", "driver",
+            "person", "man", "woman", "boy", "girl", "people", "someone", "somebody", "head", "hand", "hands", "arm", "leg", "finger", "fingers",
+            "eye", "eyes", "ankle", "foot", "feet", "knee", "back", "shoulder", "neck", "face", "wrist", "chest",
+        )
         private val INCIDENT_WORDS = setOf(
             "leak", "water leak", "fire", "smoke", "spill", "fall", "accident", "incident", "injury", "flood", "sparks", "spark", "sparked",
         )

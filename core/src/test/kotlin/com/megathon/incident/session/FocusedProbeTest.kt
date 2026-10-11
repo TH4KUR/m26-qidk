@@ -80,6 +80,22 @@ class FocusedProbeTest {
         }
     }
 
+    @Test fun `a person, a role or a body part is never proposed as a tool or item`() {
+        val withPeople = empty
+            .with(Field.PERSONS_INVOLVED, FieldValue("Priya", ValueStatus.REPORTED, "Priya"))
+            .with(Field.WITNESSES, FieldValue("Rahul, Meera", ValueStatus.REPORTED, "Rahul and Meera"))
+        listOf("Priya", "rahul", "Meera").forEach { name ->
+            val chips = propose(ProbeLlm(item = """{"item":"$name","quote":"$name was near the lab"}"""), report = withPeople, transcript = "$name was near the lab and the lights went out")
+            assertTrue(chips.none { it.field == Field.EQUIPMENT_ASSET }, "$name -> $chips")
+        }
+        listOf("ankle", "head", "security guard", "nurse", "colleague").forEach { word ->
+            val chips = propose(ProbeLlm(item = """{"item":"$word","quote":"the $word was hurt"}"""), transcript = "Someone said the $word was hurt near the lab")
+            assertTrue(chips.none { it.field == Field.EQUIPMENT_ASSET }, "$word -> $chips")
+        }
+        // A real item next to the same people is still proposed.
+        assertTrue(propose(ProbeLlm(item = """{"item":"ladder","quote":"Priya fell off the ladder"}"""), report = withPeople, transcript = "Priya fell off the ladder").any { it.proposed == "ladder" })
+    }
+
     @Test fun `nothing, junk, a failing engine and a slow engine all give no chips and never throw`() {
         assertTrue(propose(ProbeLlm()).isEmpty())
         assertTrue(propose(ProbeLlm(item = "Sure! The item is a drill.", action = "no idea")).isEmpty())
