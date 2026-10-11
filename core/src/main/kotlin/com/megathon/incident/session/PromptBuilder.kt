@@ -54,9 +54,9 @@ class PromptBuilder(private val system: String) {
 
     companion object {
         fun default(): PromptBuilder {
-            val text = PromptBuilder::class.java.getResourceAsStream("/prompts/extract_v8.txt")
+            val text = PromptBuilder::class.java.getResourceAsStream("/prompts/extract_v11.txt")
                 ?.bufferedReader()?.use { it.readText() }
-                ?: error("missing resource /prompts/extract_v8.txt")
+                ?: error("missing resource /prompts/extract_v11.txt")
             return PromptBuilder(text.trim())
         }
     }
