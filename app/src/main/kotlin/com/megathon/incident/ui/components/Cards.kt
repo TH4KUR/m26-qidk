@@ -75,7 +75,15 @@ fun Card(modifier: Modifier = Modifier, container: androidx.compose.ui.graphics.
  * and the worker's answer to "why did it write that?". While the model is still reading, says so.
  */
 @Composable
-fun TranscriptCard(transcripts: List<String>, highlight: String?, heardNow: String?, reading: Boolean, modifier: Modifier = Modifier) {
+fun TranscriptCard(
+    transcripts: List<String>,
+    highlight: String?,
+    heardNow: String?,
+    reading: Boolean,
+    modifier: Modifier = Modifier,
+    /** One short line shown when the transcript is in a different script from the labels and replies; null shows nothing. */
+    scriptNote: String? = null,
+) {
     val c = Theme.colors
     Card(modifier) {
         Column(Modifier.padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
@@ -90,6 +98,7 @@ fun TranscriptCard(transcripts: List<String>, highlight: String?, heardNow: Stri
                 )
             }
             if (all.isEmpty() && !reading) Text("Nothing yet.", style = MaterialTheme.typography.bodyLarge, color = c.ink3)
+            if (scriptNote != null) Text(scriptNote, style = MaterialTheme.typography.bodyMedium, color = c.ink2)
             if (reading) {
                 Row(Modifier.semantics { liveRegion = LiveRegionMode.Polite }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
                     LinearProgressIndicator(modifier = Modifier.size(width = 40.dp, height = 3.dp), color = c.accent, trackColor = c.line)

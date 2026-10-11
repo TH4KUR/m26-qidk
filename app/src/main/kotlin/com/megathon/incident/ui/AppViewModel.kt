@@ -33,13 +33,19 @@ import com.megathon.incident.tam.TamHedgeDetector
 import com.megathon.incident.speech.DemoSpeechEngine
 import com.megathon.incident.speech.GenieXLlmEngine
 import com.megathon.incident.speech.SenseVoiceSignalEngine
+import com.megathon.incident.speech.NemotronHindiSpeechEngine
+import com.megathon.incident.speech.RecognitionEngine
 import com.megathon.incident.speech.SherpaCliSpeechEngine
+import com.megathon.incident.speech.SpeechLane
+import com.megathon.incident.speech.SpeechLanes
+import com.megathon.incident.speech.TranscriptScriptNote
 import com.megathon.incident.speech.SignalReading
 import com.megathon.incident.speech.AndroidTtsBackend
 import com.megathon.incident.speech.PiperSpeaker
 import com.megathon.incident.speech.SystemTtsSpeaker
 import com.megathon.incident.testing.Compute
 import com.megathon.incident.testing.FakeLlmEngine
+import com.megathon.incident.testing.SpeechEngine
 import com.megathon.incident.tts.RoutingSpeaker
 import com.megathon.incident.tts.TtsKind
 import kotlinx.coroutines.Job
@@ -90,6 +96,10 @@ data class AppUi(
     val voiceTags: SignalReading? = null,
     /** Why there are no voice tags, in words (the bundle is missing, or the last read failed); null when not a failure. */
     val voiceTagsNote: String? = null,
+    /** True while the EXPERIMENTAL Hindi recognition lane is switched on (default off). */
+    val hindiLane: Boolean = false,
+    /** One short line when a transcript in Devanagari sits next to English labels and replies; null otherwise. */
+    val scriptNote: String? = null,
 )
 
 private data class Local(
@@ -112,6 +122,7 @@ private data class Local(
     val needsMicPermission: Boolean = false,
     val voiceTags: SignalReading? = null,
     val voiceTagsNote: String? = null,
+    val hindi: Boolean = false,
 )
 
 class AppViewModel(app: Application, private val selection: EngineSelection) : AndroidViewModel(app) {
@@ -151,7 +162,24 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     )
     private val session: ReportSession = Pipeline.newSession(llm ?: FakeLlmEngine(), FileReportStore(app), suggestions = suggestionEngine)
 
-    private val local = MutableStateFlow(Local(network = meter.read()))
+    // The recognition lane. English is the default and the only lane unless Hindi is asked for (`--es lang hi` or the Home
+    // switch). Telugu and unknown codes resolve to English with a note. Hindi needs the real speech engine: with the
+    // scripted demo engine there is nothing to recognise, so the lane stays off and says why.
+    private val requestedLane = SpeechLanes.select(selection.language)
+    private val laneNote: String? = when {
+        requestedLane.engine == RecognitionEngine.NEMOTRON_HINDI && selection.speech == SpeechKind.FAKE ->
+            "The Hindi lane needs the real speech engine. This run uses the scripted demo, so English is used."
+        else -> requestedLane.notice
+    }
+    private var hindiEngine: NemotronHindiSpeechEngine? = null
+
+    private val local = MutableStateFlow(
+        Local(
+            network = meter.read(),
+            hindi = requestedLane.engine == RecognitionEngine.NEMOTRON_HINDI && selection.speech != SpeechKind.FAKE,
+            message = laneNote,
+        ),
+    )
     private var timer: Job? = null
     private var clearFilled: Job? = null
     private var clearUndo: Job? = null
@@ -165,15 +193,23 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             network = l.network, showProof = l.showProof, ttsOffline = l.ttsOffline, ttsNote = l.ttsNote, undoLabel = l.undoLabel,
             needsMicPermission = l.needsMicPermission,
             voiceTags = l.voiceTags, voiceTagsNote = l.voiceTagsNote,
+            hindiLane = l.hindi,
+            scriptNote = TranscriptScriptNote.forTexts(s.transcripts + listOfNotNull(l.heardNow)),
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, AppUi(
         screen = Screen.HOME, listening = false, processing = false, elapsedMs = 0, levels = emptyList(), session = session.ui.value,
         selected = null, editing = null, justFilled = emptySet(), heardNow = null, speaking = false, message = null, blocked = blocked,
         simulatedNote = simulatedNote(), network = local.value.network, showProof = false, ttsOffline = null, undoLabel = null,
-        needsMicPermission = false,
+        needsMicPermission = false, hindiLane = local.value.hindi,
     ))
 
     init {
+        android.util.Log.i(
+            TAG,
+            "speech lane: requested=${selection.language} -> language=${if (local.value.hindi) "hi" else SpeechLane.ENGLISH.language} " +
+                "engine=${if (local.value.hindi) RecognitionEngine.NEMOTRON_HINDI else RecognitionEngine.WHISPER_SMALL}" +
+                (laneNote?.let { " note=\"$it\"" } ?: ""),
+        )
         // Speak whatever the session wants said (questions, the emergency line, the summary), one at a time.
         viewModelScope.launch {
             session.ui.map { it.say }.filterNotNull().distinctUntilChangedBy { it.id }.collect { say ->
@@ -235,11 +271,21 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     private suspend fun process(pcm: ShortArray, capturedAt: java.time.Instant = java.time.Instant.now()) {
         mutex.withLock {
             local.update { it.copy(listening = false, processing = true, heardNow = null, message = null) }
-            val engine = speech ?: return@withLock
+            val lane = currentLane()
+            val engine: SpeechEngine = if (lane.engine == RecognitionEngine.NEMOTRON_HINDI) {
+                // Hindi lane: the experimental engine, opened on first use. If its files are not on the device, say so.
+                openHindiEngine().getOrElse {
+                    android.util.Log.w(TAG, "hindi lane unavailable: ${it.message}")
+                    finishTurn(session.ui.value.fields, session.ui.value.journal.size, "I couldn't hear that: ${explain(it)}")
+                    return@withLock
+                }
+            } else {
+                speech ?: return@withLock
+            }
             val before = session.ui.value.fields
             val journalBefore = session.ui.value.journal.size
             val heard = try {
-                engine.transcribe(pcm, "en")
+                engine.transcribe(pcm, lane.language)
             } catch (e: Exception) {
                 // Say why, in words and in the log: a real engine that fails must never be silent.
                 android.util.Log.e(TAG, "speech engine failed", e)
@@ -514,7 +560,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         speaker.stop()
         session.reset()
         demoSpeech.restart()
-        local.update { Local(network = meter.read(), ttsOffline = it.ttsOffline, ttsNote = it.ttsNote) }
+        local.update { Local(network = meter.read(), ttsOffline = it.ttsOffline, ttsNote = it.ttsNote, hindi = it.hindi) }
     }
 
     fun openProof() = local.update { it.copy(showProof = true, network = meter.read()) }
@@ -524,10 +570,44 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     // ---- helpers -------------------------------------------------------------------------------------------------
 
     /**
-     * The language the voice should speak. The app's recognition call is fixed to English in this build (the EN/HI/TE
-     * toggle is not in this branch), so this is English too. When the toggle lands, return its value here.
+     * The language the VOICE speaks, which is English in every lane: follow-up questions and spoken replies stay English
+     * even when the reporter's speech was recognised as Hindi (the Piper voice is chosen from this, so it must not follow
+     * the recognition lane or an English sentence would be read by the Hindi voice). What the RECOGNISER is asked for is
+     * [currentLane]'s language.
      */
     private fun speechLanguage(): String = "en"
+
+    /** The lane this turn's recognition runs in. English is exactly the lane the app had before the Hindi lane existed. */
+    private fun currentLane(): SpeechLane =
+        if (local.value.hindi) SpeechLanes.select("hi") else SpeechLane.ENGLISH
+
+    private fun openHindiEngine(): Result<SpeechEngine> = runCatching {
+        hindiEngine ?: NemotronHindiSpeechEngine(getApplication<Application>()).also { hindiEngine = it }
+    }
+
+    /**
+     * The Home switch for the experimental Hindi lane. Turning it on checks that the Hindi files are on the device first
+     * (a cheap size check, no model load) and says plainly if they are not, leaving the lane off. Not while listening.
+     */
+    fun setHindiLane(on: Boolean) {
+        if (local.value.listening || local.value.processing) return
+        if (!on) {
+            local.update { it.copy(hindi = false, message = null) }
+            android.util.Log.i(TAG, "speech lane: english (Hindi switched off)")
+            return
+        }
+        if (selection.speech == SpeechKind.FAKE) {
+            say("The Hindi lane needs the real speech engine. This run uses the scripted demo.")
+            return
+        }
+        openHindiEngine().onFailure {
+            android.util.Log.w(TAG, "hindi lane unavailable: ${it.message}")
+            say(explain(it))
+            return
+        }
+        local.update { it.copy(hindi = true, message = null) }
+        android.util.Log.i(TAG, "speech lane: hindi (experimental), engine=${RecognitionEngine.NEMOTRON_HINDI}")
+    }
 
     /** Debug builds only: speak [text] with the selected engine and log which engine spoke, on what, and how long it took. */
     fun debugSay(text: String) {
