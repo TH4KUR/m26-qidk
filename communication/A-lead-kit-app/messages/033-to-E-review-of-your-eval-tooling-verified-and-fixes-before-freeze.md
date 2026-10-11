@@ -1,0 +1,27 @@
+From: A (lead)   To: E   cc: B, D   Date: 2026-10-11 08:4x IST (laptop clock)   Re: your eval tooling, gold and the two unmerged commits
+Type: review result (an independent read-only run, offline, dev split only; no held-out row used) + what to fix before the 09:30 freeze
+
+## Verified: you can rely on these for the final tables
+- Python: `pytest tools/laptop_eval` 99 passed on master. Your two unmerged commits (`243f010`, `5fda164`, phone manifests carry the split): every row's split equals the gold's split for its gold_id (34 and 14 rows, 0 mismatches), nothing else changed, the merge only pulls older master. `test_phone_manifest.py` 4 passed (3 on master + your new one).
+- Kotlin: `*Eval*` tests 24 run, 0 failures (EvalScorerTest 8/8).
+- **Parity on real data (dev 27, the kit run `mg-v11-control`):** `score.py` gives 101 / 135 correct, 0 hallucinations of 81, mandatory 78/86; the Kotlin `EvalScorer` fed the SAME predictions gives the same totals and **216 of 216 slot outcomes agree** with Python. `build_gold.py` regenerates the gold byte-identically (sha256 starts `e1f1c009fd00a3d4`, 40 rows, 27 dev + 13 held-out). Your baseline doc's four runs reproduce from the committed predictions and match the saved `summary.json`.
+- Probes that behaved correctly: SUGGESTED never counts as filled; EXPLICIT_NONE vs a value is a hallucination and vs EXPLICIT_NONE is correct_empty; a value for a gold-empty slot is a hallucination; list order and case; "about fifteen minutes ago" resolved to a time scores correct (+-1 min, also across midnight); Dice exactly 0.8 passes, 0.727 fails.
+
+## Defects and risks, ranked (file:line from the review)
+1. **`wer.py:22` `[^\w\s]` mangles Hindi and Telugu**: Python's `\w` drops vowel signs, so words split into single consonants. Repro: `wer_counts("అవుతోంది","అవుతుంది")` returns 0 errors; a deleted Hindi word is counted at consonant level. `score_transcripts` (wer.py:57-71) always reports WER for hi/te and never CER, although `cer()` is correct. **Do not quote hi/te WER from this tool.** English is fine. `tools/` is mirrored into the submission, so please fix it before the final snapshot: strip punctuation by Unicode category (keep letters and marks `\p{L}\p{M}`, digits), and report CER for hi/te.
+2. **`score.py:143` (Kotlin `EvalScorer.kt:156`) the Dice threshold is loose at 5-6 content tokens**: one differing token passes, so "Hostel Block 7 Room 12" scores correct against "... Room 13" and "third floor server room South Block" against "... North Block". On the real run exactly one slot moves the headline: g08's location passes at exactly 0.80 through an alt (**100/135 without it**). Either require digit tokens to match exactly (a small, safe tightening) or put the caveat in every table.
+3. `score.py:30` (Kotlin :46): number words stop at twenty ("thirty"/"twenty five" vs 30/25 score wrong; affects the raw date_time text match and free text).
+4. `score.py:73` (Kotlin :90): the name split is case-sensitive ("Ravi AND Meera" wrong). Low impact.
+5. Python/Kotlin divergences on odd inputs only (none on real data): `raw:"false"` is truthy in Python (score.py:135); `parts: {}` handled differently (score.py:81 and :129 vs Kotlin :97 and :141); a captured_at without an offset works in Python but throws in Kotlin (:119, :125).
+6. **Held-out guard exists only in Kotlin (`HoldoutGuard`).** `run_eval.py:101,111` offers `--split holdout|all` unguarded and `build_gold.py:452-458` overwrites the gold unconditionally. The held-out is spent (v11 and v8 are on the ledger): please make both refuse unless an explicit CONFIRM flag is given.
+7. Doc `E-20261011-fictional-gold-baseline.md:21` says grammar hallucinations are "mostly persons and witnesses"; the saved summary shows severity 6, persons 4, witnesses 3, equipment 2, location 1, date_time 1 (17 total). Please correct the sentence.
+
+## Before the 09:30 freeze, in this order
+(a) fix 1 (wer.py hi/te), (b) fix 2 or its caveat, (c) 6 and 3, (d) 7. Items 4 and 5 can wait. Run `tools/blindcheck.sh` on anything you touch.
+
+## Blind-check findings (0 hits in everything you changed, `tools/laptop_eval`, the manifests, the gold, your baseline doc)
+Real campus names exist in docs outside the mirrored dirs (they are not mirrored, but keep them out of any zip): `docs/experiments/D-20261010-site-gazetteer`, `D-20261011-snapper`, `B-20261011-synthetic-inference-smoke`, and your `E-20261011-homophones-and-schema` (lines 27-37). Please replace the names in yours with the fictional ones. The commit author metadata on `e/data-eval` matches the words file; that only matters if history is ever published.
+
+## For your results tables (from the logs only)
+Label every table with build, gold sha and "dev 27, prompt chosen on this split". New logged results you can cite: hyp1 (tools/items prompt wording) **not supported**: control 101/135, equipment 3/19; v12a 94/135, equipment 2/19; v12b 98/135, equipment 2/19 (`~/runs-A/2026-10-11-session2/hyp1/`). Probe run probe1 (a second look at empty tool/item and action fields, chips only, build `0ead889`): first pass identical to the control (101/135); 24 chips; the scoring against the gate I fixed beforehand is in my next report. Do NOT re-run the held-out scorer: use the app session's per-item prediction files; the gold's held-out rows are spent for v11 and v8.
+I will bring `243f010` and `5fda164` into master with the final merge if the user agrees; nothing of yours is blocked on that.
