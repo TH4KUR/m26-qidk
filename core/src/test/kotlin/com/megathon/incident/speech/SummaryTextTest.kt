@@ -26,7 +26,7 @@ class SummaryTextTest {
     @Test
     fun summaryForSlideExample() {
         val text = SummaryText.of(slideExample)
-        assertTrue(text.startsWith("Report ready. water leak flood at Conference Room 2"), text)
+        assertTrue(text.startsWith("Report ready. Water leak or flood at Conference Room 2"), text)
         assertTrue("Severity minor." in text, text)
         assertTrue("Actions taken: put a bucket under it." in text, text)
     }
@@ -34,7 +34,7 @@ class SummaryTextTest {
     @Test
     fun summarySkipsMissingFields() {
         val text = SummaryText.of(report(Field.INCIDENT_TYPE to heard("fire_smoke")))
-        assertEquals("Report ready. fire smoke.", text)
+        assertEquals("Report ready. Fire or smoke.", text)
         assertFalse("null" in text)
         assertFalse("Severity" in text)
     }
@@ -58,21 +58,21 @@ class SummaryTextTest {
                 Field.LOCATION to heard("Conference Room 2"),
             ),
         )
-        assertTrue(text.startsWith("Here is the report so far."), text)
-        assertTrue("Incident type: water leak flood." in text, text)
-        assertTrue("Location: Conference Room 2." in text, text)
-        assertTrue(text.endsWith("Still missing: date and time and severity."), text)
+        assertTrue(text.startsWith("Here's what I have so far."), text)
+        assertTrue("What happened: Water leak or flood." in text, text)
+        assertTrue("Where: Conference Room 2." in text, text)
+        assertTrue(text.endsWith("I still need to know when and how severe it is."), text)
     }
 
     @Test
     fun readBackOfACompleteReportHasNoMissingList() {
         val text = SummaryText.readBack(slideExample)
-        assertFalse("Still missing" in text, text)
+        assertFalse("still need" in text, text)
     }
 
     @Test
     fun readBackOfAnEmptyReportSaysSo() {
-        assertEquals("The report is empty so far. Still missing: incident type, location, date and time and severity.",
+        assertEquals("There is nothing in the report yet. I still need to know what happened, where, when, and how severe it is.",
             SummaryText.readBack(IncidentReport.empty("r1", 0L)))
     }
 

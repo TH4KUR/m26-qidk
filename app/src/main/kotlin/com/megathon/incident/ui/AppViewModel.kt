@@ -35,9 +35,13 @@ import com.megathon.incident.speech.GenieXLlmEngine
 import com.megathon.incident.speech.SenseVoiceSignalEngine
 import com.megathon.incident.speech.SherpaCliSpeechEngine
 import com.megathon.incident.speech.SignalReading
+import com.megathon.incident.speech.AndroidTtsBackend
+import com.megathon.incident.speech.PiperSpeaker
 import com.megathon.incident.speech.SystemTtsSpeaker
 import com.megathon.incident.testing.Compute
 import com.megathon.incident.testing.FakeLlmEngine
+import com.megathon.incident.tts.RoutingSpeaker
+import com.megathon.incident.tts.TtsKind
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -80,6 +84,8 @@ data class AppUi(
     val ttsOffline: Boolean?,
     val undoLabel: String?,
     val needsMicPermission: Boolean,
+    /** Why the Piper voice was asked for but not heard (files missing, library failed), in words; null when not applicable. */
+    val ttsNote: String? = null,
     /** The latest voice tags (emotion, sound event) SenseVoice read from the audio; null when none were read. */
     val voiceTags: SignalReading? = null,
     /** Why there are no voice tags, in words (the bundle is missing, or the last read failed); null when not a failure. */
@@ -101,6 +107,7 @@ private data class Local(
     val network: NetworkProof = NetworkProof(false, false, null),
     val showProof: Boolean = false,
     val ttsOffline: Boolean? = null,
+    val ttsNote: String? = null,
     val undoLabel: String? = null,
     val needsMicPermission: Boolean = false,
     val voiceTags: SignalReading? = null,
@@ -113,9 +120,20 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         isDebug = Engines.isDebuggable(app),
         speechProviders = mapOf(SpeechKind.FAKE to { demoSpeech }, SpeechKind.SHERPA_QNN to { SherpaCliSpeechEngine(app) }),
         llmProviders = mapOf(LlmKind.FAKE to { FakeLlmEngine(name = "DEMO REPLIES") }, LlmKind.GENIEX to { GenieXLlmEngine(app) }),
+        ttsProviders = mapOf(
+            TtsKind.ANDROID to { AndroidTtsBackend(SystemTtsSpeaker(app)) },
+            // Built only when PIPER is selected, and it loads nothing until it first speaks (the native library is lazy).
+            TtsKind.PIPER to { PiperSpeaker(app, requireVerified = !Engines.isDebuggable(app), language = { speechLanguage() }) },
+        ),
     )
     private val recorder = MicRecorder(app)
-    private val speaker = SystemTtsSpeaker(app)
+    // Speech output: the Android voice always exists (it is the fallback); Piper only when asked for with `--es tts PIPER`.
+    // The label on the proof strip comes from the engine that really spoke (RoutingSpeaker.last), never from the request.
+    private val speaker = RoutingSpeaker(
+        primary = if (selection.tts == TtsKind.PIPER) runCatching { factory.tts(TtsKind.PIPER) }.getOrNull() else null,
+        fallback = factory.tts(TtsKind.ANDROID),
+        language = { speechLanguage() },
+    )
     private val meter = NetworkMeter(app)
     private val mutex = Mutex()
 
@@ -144,7 +162,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             session = s, selected = l.selected, editing = l.editing, justFilled = l.justFilled, heardNow = l.heardNow,
             speaking = l.speaking, message = l.message, blocked = blocked,
             simulatedNote = simulatedNote(),
-            network = l.network, showProof = l.showProof, ttsOffline = l.ttsOffline, undoLabel = l.undoLabel,
+            network = l.network, showProof = l.showProof, ttsOffline = l.ttsOffline, ttsNote = l.ttsNote, undoLabel = l.undoLabel,
             needsMicPermission = l.needsMicPermission,
             voiceTags = l.voiceTags, voiceTagsNote = l.voiceTagsNote,
         )
@@ -163,8 +181,11 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
                 local.update { it.copy(speaking = true) }
                 val started = System.nanoTime()
                 speaker.speak(say.text)
-                local.update { it.copy(speaking = false, ttsOffline = speaker.offline) }
-                session.recordStage(StageRecord("Speak", "Android TTS (system voice)", Compute.CPU, (System.nanoTime() - started) / 1_000_000))
+                val used = speaker.last
+                local.update { it.copy(speaking = false, ttsOffline = used?.offline, ttsNote = used?.note()) }
+                used?.note()?.let { android.util.Log.w(TAG, "tts fallback: $it") }
+                val ms = (System.nanoTime() - started) / 1_000_000
+                session.recordStage(used?.toStage(ms) ?: StageRecord("Speak", AndroidTtsBackend.LABEL, Compute.CPU, ms))
             }
         }
     }
@@ -264,6 +285,84 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             android.util.Log.e(TAG, "voice tags failed", e)
             local.update { it.copy(voiceTags = null, voiceTagsNote = "The last read failed: ${e.message?.take(120) ?: "unknown error"}") }
             null
+        }
+    }
+
+    private val preloadStarted = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /**
+     * Loads the language model in the background as soon as the screen is up, so the first turn does not pay the 9 to 13 s
+     * model load. Only a real model has anything to load (the demo engine is not [Warmable]); models load one after the
+     * other. A failure is logged with its reason and changes nothing else: the first real turn tries again and fails
+     * visibly exactly as it did before. Started once per view model, never on a debug eval, coexist or WAV launch (those
+     * time the load themselves).
+     */
+    fun preloadModels() {
+        if (blocked != null || !preloadStarted.compareAndSet(false, true)) return
+        val steps = listOfNotNull((llm as? com.megathon.incident.llm.Warmable)?.let { "language model" to it })
+        if (steps.isEmpty()) return
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val t0 = System.nanoTime()
+            com.megathon.incident.llm.ModelPreloader().run(steps).forEach {
+                when (it) {
+                    is com.megathon.incident.llm.PreloadOutcome.Loaded ->
+                        android.util.Log.i(TAG, "preload ${it.name}: ready after ${(System.nanoTime() - t0) / 1_000_000} ms (load ${it.ms} ms)")
+                    is com.megathon.incident.llm.PreloadOutcome.Failed ->
+                        android.util.Log.w(TAG, "preload ${it.name} failed: ${it.reason}")
+                }
+            }
+        }
+    }
+
+    /**
+     * Debug builds only: the one way to run the held-out items. `--es holdout CONFIRM --es gold <file> --es run <name>`
+     * [`--es prompt <file>`]; never together with `--es eval`, and a second run of the same prompt on the same build is refused
+     * unless `--es holdout_again CONFIRM_AGAIN` is also given. The decision, the prompt hash, the build (APK hash), the gold
+     * hash and the item ids are logged (tag Incident, prefix "holdout") and the run is written to the ledger before the first
+     * model call, so an interrupted run still counts. Always the whole held-out set: no `only` filter.
+     */
+    fun debugHoldout(gold: String?, promptFile: String?, runName: String, holdout: String?, again: String?, devRequested: Boolean) {
+        if (!Engines.isDebuggable(getApplication())) return
+        val engine = llm ?: return
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val app = getApplication<Application>()
+            val promptBytes = promptFile?.let { java.io.File(it).readBytes() } ?: com.megathon.incident.session.PromptBuilder.defaultSourceBytes()
+            val promptHash = com.megathon.incident.eval.ShortHash.of(promptBytes)
+            val build = runCatching { com.megathon.incident.eval.ShortHash.of(java.io.File(app.applicationInfo.sourceDir).inputStream()) }.getOrDefault("unknown")
+            val ledgerFile = java.io.File(app.filesDir, "eval/holdout-ledger.jsonl")
+            val ledger = com.megathon.incident.eval.HoldoutLedger.parse(if (ledgerFile.exists()) ledgerFile.readText() else "")
+            val decision = com.megathon.incident.eval.HoldoutGuard.decide(holdout, again, devRequested, promptHash, build, ledger)
+            when (decision) {
+                is com.megathon.incident.eval.HoldoutDecision.NotRequested -> return@launch
+                is com.megathon.incident.eval.HoldoutDecision.Refused -> {
+                    android.util.Log.e(TAG, "holdout REFUSED: ${decision.reason}")
+                    return@launch
+                }
+                is com.megathon.incident.eval.HoldoutDecision.Allowed -> Unit
+            }
+            val goldFile = gold?.let { java.io.File(it) }
+            if (goldFile == null || !goldFile.isFile) {
+                android.util.Log.e(TAG, "holdout REFUSED: --es gold <file> is missing or not a file")
+                return@launch
+            }
+            val goldHash = com.megathon.incident.eval.ShortHash.of(goldFile.readBytes())
+            val repeat = (decision as com.megathon.incident.eval.HoldoutDecision.Allowed).repeat
+            android.util.Log.i(TAG, "holdout run $runName starting: prompt=$promptHash build=$build gold=$goldHash repeat=$repeat")
+            val prompts = promptFile?.let { com.megathon.incident.session.PromptBuilder(String(promptBytes, Charsets.UTF_8).trim()) }
+                ?: com.megathon.incident.session.PromptBuilder.default()
+            val warm: suspend () -> Long = { (engine as? GenieXLlmEngine)?.warmUp() ?: 0L }
+            val out = runCatching {
+                com.megathon.incident.eval.EvalRunner(app.filesDir, engine, warm).run(
+                    goldFile, prompts, runName, only = null, split = com.megathon.incident.eval.EvalSplit.HOLDOUT,
+                    onSelected = { ids ->
+                        android.util.Log.i(TAG, "holdout run $runName items (${ids.size}): ${ids.joinToString(",")}")
+                        ledgerFile.parentFile?.mkdirs()
+                        ledgerFile.appendText(com.megathon.incident.eval.HoldoutRun(promptHash, build, goldHash, ids, System.currentTimeMillis()).toLine() + "\n")
+                    },
+                )
+            }
+            out.onSuccess { android.util.Log.i(TAG, "holdout run $runName done: ${it.path}") }
+                .onFailure { android.util.Log.e(TAG, "holdout run $runName failed", it) }
         }
     }
 
@@ -415,7 +514,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         speaker.stop()
         session.reset()
         demoSpeech.restart()
-        local.update { Local(network = meter.read(), ttsOffline = it.ttsOffline) }
+        local.update { Local(network = meter.read(), ttsOffline = it.ttsOffline, ttsNote = it.ttsNote) }
     }
 
     fun openProof() = local.update { it.copy(showProof = true, network = meter.read()) }
@@ -423,6 +522,27 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     fun dismissMessage() = local.update { it.copy(message = null) }
 
     // ---- helpers -------------------------------------------------------------------------------------------------
+
+    /**
+     * The language the voice should speak. The app's recognition call is fixed to English in this build (the EN/HI/TE
+     * toggle is not in this branch), so this is English too. When the toggle lands, return its value here.
+     */
+    private fun speechLanguage(): String = "en"
+
+    /** Debug builds only: speak [text] with the selected engine and log which engine spoke, on what, and how long it took. */
+    fun debugSay(text: String) {
+        if (!Engines.isDebuggable(getApplication())) return
+        viewModelScope.launch {
+            val t0 = System.nanoTime()
+            speaker.speak(text)
+            val used = speaker.last
+            android.util.Log.i(
+                TAG,
+                "tts say engine=${used?.engine} compute=${used?.compute} offline=${used?.offline} " +
+                    "ms=${(System.nanoTime() - t0) / 1_000_000} fallback=${used?.fallbackReason ?: "none"}",
+            )
+        }
+    }
 
     private fun say(message: String) = local.update { it.copy(message = message) }
 

@@ -8,7 +8,7 @@ import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** The default prompt is the one measured best on the kit (docs/experiments/A-20261011-llm-on-kit.md, prompt v8). */
+/** The default prompt is v11, the one that passed the pre-registered dev gate on the kit (see DefaultPromptTest). v8 stays in the tree as the reference. */
 class PromptBuilderTest {
     private val system = PromptBuilder.default().build("There was a leak.", IncidentReport.empty("r1", 0)).system
 

@@ -7,23 +7,28 @@ import com.megathon.incident.domain.Suggestion
 import com.megathon.incident.domain.ValueStatus
 import com.megathon.incident.testing.Compute
 import com.megathon.incident.tam.HedgeDetector
+import com.megathon.incident.tam.TamCueLists
+import com.megathon.incident.tam.TamDetector
 import java.time.Clock
 
 /**
  * The real suggestion engine (spec D16): rules on the CPU, no model. It runs after the LLM on the
  * values already in the report, and only proposes; the report keeps what was heard until the user taps.
- * Values the user already confirmed or typed are never second-guessed.
+ * Values the user already confirmed or typed are never second-guessed. Equipment and actions the model
+ * did not emit at all get a chip from [MissedFieldRules] (needs [tam]; the default reads the bundled cue lists).
  */
 class RuleSuggestionEngine(
     site: SiteDirectory,
     homophones: HomophoneTable,
     private val hedges: HedgeDetector,
     clock: Clock,
+    tam: TamDetector = TamDetector(TamCueLists.loadDefault()),
 ) : SuggestionEngine {
 
     private val snapper = GazetteerSnapper(site, homophones)
     private val hedgeChips = HedgeChips(hedges)
     private val decisions = ChipDecisions(clock)
+    private val missed = MissedFieldRules(tam)
 
     override val compute = Compute.CPU
 
@@ -39,6 +44,7 @@ class RuleSuggestionEngine(
         chips += RoleRules.chips(state, transcript)
         chips += hedgeChips.chips(state, transcript)
         chips += NearMissChips.chips(state)
+        chips += missed.chips(state, transcript)
         return chips.filterNot { state.hasDecided(it) }
     }
 
