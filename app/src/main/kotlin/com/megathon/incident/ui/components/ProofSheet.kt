@@ -57,6 +57,7 @@ import com.megathon.incident.session.ToolLogEntry
 import com.megathon.incident.speech.HindiLaneNotice
 import com.megathon.incident.testing.Compute
 import com.megathon.incident.ui.AppUi
+import com.megathon.incident.ui.i18n.isHindi
 import com.megathon.incident.ui.i18n.tr
 import com.megathon.incident.ui.theme.Size
 import com.megathon.incident.ui.theme.Space
@@ -275,10 +276,10 @@ private fun LazyListScope.allSessionsView(ui: AppUi) {
 private fun RecentHeader() {
     val c = Theme.colors
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-        Text(tr("When", "कब"), Modifier.weight(1.3f), style = MaterialTheme.typography.labelMedium, color = c.ink2)
-        Text(tr("Audio", "ऑडियो"), Modifier.weight(0.7f), style = MaterialTheme.typography.labelMedium, color = c.ink2)
-        Text(tr("Speech · Model", "वाणी · मॉडल"), Modifier.weight(1.5f), style = MaterialTheme.typography.labelMedium, color = c.ink2)
-        Text(tr("Ran on", "कहाँ चला"), Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, color = c.ink2)
+        Text(tr("When", "कब"), Modifier.weight(1.4f), style = MaterialTheme.typography.labelMedium, color = c.ink2)
+        Text(tr("Audio", "ऑडियो"), Modifier.weight(0.6f), style = MaterialTheme.typography.labelMedium, color = c.ink2)
+        Text(tr("Speech · Model", "वाणी · मॉडल"), Modifier.weight(1.4f), style = MaterialTheme.typography.labelMedium, color = c.ink2)
+        Text(tr("Ran on", "कहाँ चला"), Modifier.weight(1.3f), style = MaterialTheme.typography.labelMedium, color = c.ink2)
     }
 }
 
@@ -286,8 +287,11 @@ private fun RecentHeader() {
 @Composable
 private fun RecentLine(r: RecentRow) {
     val c = Theme.colors
-    val whenText = remember(r.atEpochMs) {
-        java.time.format.DateTimeFormatter.ofPattern("d MMM HH:mm")
+    val hindi = isHindi()
+    val whenText = remember(r.atEpochMs, hindi) {
+        // Hindi month names and Devanagari numerals on a Hindi screen; the English line is unchanged.
+        if (hindi) com.megathon.incident.session.HindiSavedAt.format(r.atEpochMs)
+        else java.time.format.DateTimeFormatter.ofPattern("d MMM HH:mm")
             .format(java.time.Instant.ofEpochMilli(r.atEpochMs).atZone(java.time.ZoneId.systemDefault()))
     }
     val num = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum")
@@ -295,10 +299,11 @@ private fun RecentLine(r: RecentRow) {
         Modifier.fillMaxWidth().background(c.surface, RoundedCornerShape(12.dp)).padding(horizontal = Space.s3, vertical = Space.s2),
         horizontalArrangement = Arrangement.spacedBy(Space.s2), verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(whenText, Modifier.weight(1.3f), style = num)
-        Text(r.audioScore?.toString() ?: "–", Modifier.weight(0.7f), style = num)
-        Text("${formatMs(r.hearMs)} · ${formatMs(r.readMs)}", Modifier.weight(1.5f), style = num)
-        Text(r.compute.ifEmpty { "–" }, Modifier.weight(1f), style = num)
+        Text(whenText, Modifier.weight(1.4f), style = num)
+        Text(r.audioScore?.toString() ?: "–", Modifier.weight(0.6f), style = num)
+        Text("${formatMs(r.hearMs)} · ${formatMs(r.readMs)}", Modifier.weight(1.4f), style = num)
+        // One line: "NPU+CPU" must never break in the middle of a word.
+        Text(r.compute.ifEmpty { "–" }, Modifier.weight(1.3f), style = num, maxLines = 1, softWrap = false)
     }
 }
 
