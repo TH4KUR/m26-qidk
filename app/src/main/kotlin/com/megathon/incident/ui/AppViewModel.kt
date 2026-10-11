@@ -143,6 +143,13 @@ data class AppUi(
     val savedReports: List<ReportListRow> = emptyList(),
     /** The saved report open for reading; null otherwise. Read-only: nothing on that screen changes it. */
     val openedReport: IncidentReport? = null,
+    // --- audio score and the on-device log (shown in "How this ran") ---
+    /** How the latest spoken turn of this report was scored; null before any audio. A heuristic, written out term by term. */
+    val audioScore: com.megathon.incident.scoring.AudioScore? = null,
+    /** How many spoken turns of this report have been scored. */
+    val audioTurns: Int = 0,
+    /** Every saved report on this device, aggregated from the log; null while it is being read. */
+    val globalLog: com.megathon.incident.scoring.GlobalSummary? = null,
 )
 
 private data class Local(
@@ -171,6 +178,11 @@ private data class Local(
     val summaryAudio: SummaryAudio? = null,
     val savedReports: List<ReportListRow> = emptyList(),
     val openedReport: IncidentReport? = null,
+    val audioScore: com.megathon.incident.scoring.AudioScore? = null,
+    val audioScores: List<com.megathon.incident.scoring.AudioScore> = emptyList(),
+    /** Every voice tag heard so far in this report: the rule replay in the score sees what the priority advisor saw. */
+    val audioSignals: List<com.megathon.incident.domain.Signal> = emptyList(),
+    val globalLog: com.megathon.incident.scoring.GlobalSummary? = null,
 )
 
 class AppViewModel(app: Application, private val selection: EngineSelection) : AndroidViewModel(app) {
@@ -261,6 +273,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             needsMicPermission = l.needsMicPermission,
             voiceTags = l.voiceTags, voiceTagsNote = l.voiceTagsNote, liveText = l.liveText, readiness = l.readiness,
             hindiLane = l.hindi,
+            audioScore = l.audioScore, audioTurns = l.audioScores.size, globalLog = l.globalLog,
             summaryAudio = l.summaryAudio,
             savedReports = l.savedReports, openedReport = l.openedReport,
             scriptNote = TranscriptScriptNote.forTexts(s.transcripts + listOfNotNull(l.heardNow)),
@@ -452,6 +465,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             val stage = heard.compute?.let { StageRecord("Hear", "${engine.name} (live windows)", it, heard.decodeMs) }
             session.onUtterance(heard.text, stage, tags?.signals.orEmpty(), capturedAt, recording = l.id)
             if (heard.text.isBlank()) session.cancelRecording(l.id)
+            scoreTurn(heard.pcm, heard.text, "${engine.name} (live windows)", heard.compute, heard.decodeMs, tags?.signals.orEmpty())
             finishTurn(before, journalBefore, null)
             probeMissingAfterTurn()
         }
@@ -504,6 +518,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             val tags = if (said.text.isBlank()) null else readVoiceTags(pcm)
             tags?.let { session.recordStage(StageRecord("Tags", "SenseVoice (sherpa-onnx, QNN)", it.compute, it.elapsedMs)) }
             session.onUtterance(said.text, StageRecord("Hear", engine.name, said.compute, said.elapsedMs), tags?.signals.orEmpty(), capturedAt)
+            scoreTurn(pcm, said.text, engine.name, said.compute, said.elapsedMs, tags?.signals.orEmpty())
             finishTurn(before, journalBefore, null)
             probeMissingAfterTurn()
         }
@@ -708,6 +723,58 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         }
     }
 
+    // ---- audio score and the on-device log of saved reports ---------------------------------------------------------------------
+
+    private val scoreExplainer by lazy { com.megathon.incident.scoring.PriorityExplainer.default() }
+    private val logStore = com.megathon.incident.data.SessionLogStore(app)
+
+    /**
+     * Scores one spoken turn, once. The clip's own samples give the capture quality; the engine's own result gives where it
+     * ran and how long it took (a simulated engine's time is not a measurement, so it is left out); the rule replay shows
+     * what the words and every voice tag heard so far fed the priority. A failure here costs the score, never the turn.
+     */
+    private suspend fun scoreTurn(
+        pcm: ShortArray, heardText: String, engine: String?, compute: Compute?, ms: Long?,
+        newSignals: List<com.megathon.incident.domain.Signal>,
+    ) {
+        try {
+            val signals = local.value.audioSignals + newSignals
+            val transcript = session.ui.value.transcripts.joinToString(" ")
+            val score = withContext(Dispatchers.Default) {
+                com.megathon.incident.scoring.AudioScore.of(
+                    pcm, MicRecorder.SAMPLE_RATE,
+                    com.megathon.incident.scoring.RecognitionInput(engine, compute, ms.takeUnless { compute == Compute.SIMULATED }, heardText),
+                    scoreExplainer.explain(transcript, signals),
+                )
+            }
+            local.update { it.copy(audioScore = score, audioScores = it.audioScores + score, audioSignals = signals) }
+            // Numbers, engine and compute only: never the transcript.
+            val l = score.toLine()
+            android.util.Log.i(TAG, "audio score capture=${l.capture} engine=${l.engine} compute=${l.compute} ms=${l.processingMs} rtf=${l.realTimeFactor} words=${l.words} rules=${l.wordsOnlyScore}->${l.rulesScore}")
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "audio score failed", e)
+        }
+    }
+
+    /** One line in `filesDir/logs/sessions.jsonl` for the report that was just saved. Appended, never edited. */
+    private suspend fun logSavedReport() {
+        val s = session.ui.value
+        val id = (s.state as? SessionState.Submitted)?.reportId ?: return
+        val record = com.megathon.incident.scoring.SessionLogRecord.of(id, System.currentTimeMillis(), s.stages, local.value.audioScores)
+        runCatching { logStore.append(record) }.onFailure { android.util.Log.w(TAG, "session log not written", it) }
+    }
+
+    private fun refreshGlobalLog() {
+        viewModelScope.launch {
+            val summary = runCatching {
+                withContext(Dispatchers.IO) { com.megathon.incident.scoring.SessionLogAggregator.aggregate(logStore.readAll()) }
+            }.getOrNull() ?: return@launch
+            local.update { it.copy(globalLog = summary) }
+        }
+    }
+
     private fun readWav(file: java.io.File): ShortArray {
         val b = file.readBytes()
         var i = 12
@@ -822,6 +889,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         viewModelScope.launch {
             speaker.stop()
             session.submit()
+            logSavedReport()
             local.update { it.copy(screen = Screen.SENT, network = meter.read()) }
         }
     }
@@ -924,7 +992,10 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         local.update { Local(network = meter.read(), ttsOffline = it.ttsOffline, ttsNote = it.ttsNote, hindi = it.hindi, readiness = it.readiness) }
     }
 
-    fun openProof() = local.update { it.copy(showProof = true, network = meter.read()) }
+    fun openProof() {
+        local.update { it.copy(showProof = true, network = meter.read()) }
+        refreshGlobalLog()
+    }
     fun closeProof() = local.update { it.copy(showProof = false) }
     fun dismissMessage() = local.update { it.copy(message = null) }
 
