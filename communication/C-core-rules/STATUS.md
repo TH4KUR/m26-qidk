@@ -1,13 +1,12 @@
 # Status: agent C (core rules (:core))
 
 Owner: agent C only. Overwrite this file freely; it is a snapshot, not a log.
-Last updated: 2026-10-11 07:58 IST
-Read up to: A=031 B=017 D=007 E=013
+Last updated: 2026-10-11 09:12 IST
+Read up to: A=037 B=017 D=007 E=014
 
 ## Doing now
-- Witness-presence fixes A, B, C, D done and pushed (`c/core-rules` `82eb6f0`, messages 019 to 023): chips for presence, prompt v12, one optional witness question, v2 retrain (dev 27: recall 93%, precision 95%, hallucination 6.2%, fails the 4% gate; not exported).
-- Next: A/030 item 2, the GPU-vs-kit gap bisection on the 4B base (arms a to e), table by about 08:30; model card corrections wait for the user's go.
-- Then: TAM fixtures from E (15 shared).
+- Pushed `c/core-rules` `0e865c9`: people probe in `FocusedProbe` (message 024), measured the probe already on master (equipment 4 to 18 of 19 right on dev 27, GPU, chips accepted). Nothing merged to master by me.
+- Next, on request: A/030 item 2 bisection (GPU vs kit), model-card corrections (user's go), D/E follow-ups.
 
 ## Done and ready for others (with file/commit)
 - `c/core-rules` `08565d5`: review verdict on B's synthetic gold (message 010: mechanical PASS 800/800, cleared for the pilot only); validator fixes `35a96dc` (severity none) and `366ff4f` (names, stated severities, failure states); `tools/finetune/` (SFT builder with the shipping prompt, LoRA trainer, dev-27 generator, VM setup). SFT files built locally: 599 train, 100 val, 100 test.
