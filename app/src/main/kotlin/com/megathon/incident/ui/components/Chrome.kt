@@ -46,27 +46,32 @@ import com.megathon.incident.ui.theme.Theme
 fun AppTopBar(title: String, onProof: (() -> Unit)?, onBack: (() -> Unit)? = null, brand: Boolean = false, simulatedNote: String? = null) {
     val c = Theme.colors
     Column(Modifier.fillMaxWidth().background(c.canvas).windowInsetsPadding(WindowInsets.statusBars)) {
-        Row(
-            Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(start = if (onBack != null) Space.s1 else Size.gutter, end = Space.s1),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (onBack != null) IconButton(onBack, Modifier.size(Size.touch)) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = c.ink) }
-            if (brand) Box(Modifier.padding(end = Space.s2).size(10.dp).background(c.accent, CircleShape))
-            Text(
-                title, style = MaterialTheme.typography.titleMedium, color = c.ink,
-                modifier = Modifier.weight(1f).padding(vertical = Space.s2).semantics { heading() },
-            )
-            if (onProof != null) IconButton(onProof, Modifier.size(Size.touch)) { Icon(Icons.Rounded.Info, contentDescription = "How this ran", tint = c.ink) }
+        Row(Modifier.fillMaxWidth().heightIn(min = 72.dp).padding(start = if (onBack != null) Space.s1 else Size.gutter, end = Space.s2), verticalAlignment = Alignment.CenterVertically) {
+            if (onBack != null) IconButton(onBack, Modifier.size(Size.touch)) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = c.ink) }
+            Box(Modifier.size(34.dp).background(c.accentContainer, androidx.compose.foundation.shape.RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+                androidx.compose.foundation.Canvas(Modifier.size(20.dp)) {
+                    val ink = c.accent
+                    repeat(3) { i ->
+                        val x = size.width * (.2f + .3f * i)
+                        val h = size.height * if (i == 1) .9f else .5f
+                        drawLine(ink, androidx.compose.ui.geometry.Offset(x, (size.height-h)/2), androidx.compose.ui.geometry.Offset(x, (size.height+h)/2), 3.dp.toPx(), androidx.compose.ui.graphics.StrokeCap.Round)
+                    }
+                }
+            }
+            Column(Modifier.weight(1f).padding(start = Space.s3, top = Space.s2, bottom = Space.s2)) {
+                Text("incident", style = MaterialTheme.typography.titleMedium, color = c.ink)
+                Text(title, style = MaterialTheme.typography.labelSmall, color = c.ink3)
+            }
+            if (onProof != null) IconButton(onProof, Modifier.size(Size.touch).background(c.surface, CircleShape)) { Icon(Icons.Rounded.Info, "How this ran", tint = c.ink2, modifier = Modifier.size(20.dp)) }
         }
         if (simulatedNote != null) {
-            Row(
-                Modifier.fillMaxWidth().background(c.simulatedContainer).padding(horizontal = Size.gutter, vertical = Space.s2)
-                    .semantics(mergeDescendants = true) { contentDescription = "Simulated. $simulatedNote." },
-                horizontalArrangement = Arrangement.spacedBy(Space.s2), verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Rounded.Warning, contentDescription = null, tint = c.onSimulated, modifier = Modifier.size(16.dp))
-                Text("SIMULATED · $simulatedNote", style = MaterialTheme.typography.labelMedium, color = c.onSimulated)
+            Row(Modifier.fillMaxWidth().padding(horizontal = Size.gutter).background(c.simulatedContainer, androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+                .padding(horizontal = Space.s3, vertical = 6.dp).semantics(mergeDescendants = true) { contentDescription = "Simulated. $simulatedNote." },
+                horizontalArrangement = Arrangement.spacedBy(Space.s2), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Warning, null, tint = c.onSimulated, modifier = Modifier.size(14.dp))
+                Text("SIMULATED · $simulatedNote", style = MaterialTheme.typography.labelSmall, color = c.onSimulated)
             }
+            androidx.compose.foundation.layout.Spacer(Modifier.heightIn(min = Space.s2))
         }
     }
 }
@@ -82,7 +87,7 @@ fun PrivacyLine(network: NetworkProof, modifier: Modifier = Modifier) {
             network.bytesSent != null -> "${formatBytes(network.bytesSent)} sent"
             else -> "Network on"
         }
-        Text("Stays on this device · $net", style = MaterialTheme.typography.bodyMedium, color = c.ink2)
+        Text("On-device · $net", style = MaterialTheme.typography.bodyMedium, color = c.ink2)
     }
 }
 

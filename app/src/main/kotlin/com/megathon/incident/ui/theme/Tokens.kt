@@ -24,18 +24,27 @@ object Size {
     val gutter = 20.dp
 }
 
-/** Motion: 120 to 250 ms, ease-out entering, ease-in leaving, transform and opacity only. */
+/** Fixed colours for the capture panel, whose dark surface is part of the app's visual identity in both themes. */
+object CapturePalette {
+    val panel = Color(0xFF142720)
+    val content = Color(0xFFF3F1E8)
+    val muted = Color(0xFFB7C9BD)
+    val signal = Color(0xFF91E2C8)
+    val trace = Color(0xFF49645A)
+    val outline = Color(0xFF39564B)
+}
+
+/** Brief, finite motion. Audio reactions use their own shorter duration. */
 object Motion {
-    const val quick = 120
-    const val standard = 200
-    const val slow = 250
+    const val quick = 160
+    const val standard = 280
+    const val slow = 420
     val enter = CubicBezierEasing(0f, 0f, 0.2f, 1f)
     val exit = CubicBezierEasing(0.4f, 0f, 1f, 1f)
 }
 
 /**
- * Palette (docs/ui/ui-design.md section 4). Every text pair is 4.5:1 or better; interactive outlines use [ink3] (3:1+);
- * [line] is decorative only. No pure black or white, no gradients.
+ * Shared semantic palette. [line] is decorative; interactive borders use [ink3].
  */
 @Immutable
 data class IncidentColors(
@@ -75,13 +84,13 @@ val LightColors = IncidentColors(
 )
 
 val DarkColors = IncidentColors(
-    canvas = Color(0xFF101214), surface = Color(0xFF181B1E),
-    ink = Color(0xFFECEAE6), ink2 = Color(0xFFB8BCC2), ink3 = Color(0xFF969CA5), line = Color(0xFF3A4047),
-    accent = Color(0xFF58C4B7), onAccent = Color(0xFF06201D),
-    accentContainer = Color(0xFF163B37), onAccentContainer = Color(0xFFA9E6DE),
-    attentionContainer = Color(0xFF3A2A12), onAttention = Color(0xFFF2BE72),
-    dangerContainer = Color(0xFF3F1512), onDanger = Color(0xFFFFB4AB), danger = Color(0xFFFF8A80),
-    simulatedContainer = Color(0xFF3F1226), onSimulated = Color(0xFFFFB1CC), simulated = Color(0xFFFF6FA3),
-    infoContainer = Color(0xFF14324A), onInfo = Color(0xFFA9D2F2),
+    canvas = Color(0xFF0E1719), surface = Color(0xFF172426),
+    ink = Color(0xFFF2F5EE), ink2 = Color(0xFFB9C8C5), ink3 = Color(0xFF91A7A2), line = Color(0xFF344849),
+    accent = Color(0xFFC3EFCB), onAccent = Color(0xFF14271C),
+    accentContainer = Color(0xFF243D32), onAccentContainer = Color(0xFFD0F3D6),
+    attentionContainer = Color(0xFF352D20), onAttention = Color(0xFFECCB8D),
+    dangerContainer = Color(0xFF3B2423), onDanger = Color(0xFFFFC4B8), danger = Color(0xFFFFA18C),
+    simulatedContainer = Color(0xFF272B23), onSimulated = Color(0xFFD6C8A0), simulated = Color(0xFFECCB8D),
+    infoContainer = Color(0xFF203238), onInfo = Color(0xFFB6DCE2),
     isDark = true,
 )

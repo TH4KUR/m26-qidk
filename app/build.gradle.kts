@@ -17,7 +17,17 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
-        ndk { abiFilters.add("arm64-v8a") } // the kit is arm64 only
+        // Production default, unchanged: the kit is arm64 only and needs the Hexagon DSP runtime (see AndroidManifest.xml).
+        // `-PlocalUi=true` builds a separate x86_64 app (`.localui` id, DSP library optional) so the Compose UI can run on a desktop
+        // emulator with the fake engines; it is opt-in so `assembleDebug` / `installDebug` for the kit behave exactly as before.
+        val localUi = providers.gradleProperty("localUi").orNull == "true"
+        if (localUi) {
+            applicationId = "com.megathon.incident.localui"
+            ndk { abiFilters.add("x86_64") }
+        } else {
+            ndk { abiFilters.add("arm64-v8a") }
+        }
+        manifestPlaceholders["dspRuntimeRequired"] = (!localUi).toString()
     }
 
     compileOptions {

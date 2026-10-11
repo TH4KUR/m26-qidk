@@ -25,6 +25,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -38,7 +40,7 @@ import com.megathon.incident.ui.theme.Size
 import com.megathon.incident.ui.theme.Space
 import com.megathon.incident.ui.theme.Theme
 
-private val ButtonShape = RoundedCornerShape(16.dp)
+private val ButtonShape = RoundedCornerShape(20.dp)
 
 /** The one filled button on a screen. 56 dp tall. */
 @Composable
@@ -50,9 +52,11 @@ fun PrimaryButton(
     leading: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val c = Theme.colors
+    val interaction = remember { MutableInteractionSource() }
     Button(
+        interactionSource = interaction,
         onClick = onClick,
-        modifier = modifier.defaultMinSize(minHeight = Size.primaryButton),
+        modifier = modifier.pressMotion(interaction).defaultMinSize(minHeight = Size.primaryButton),
         enabled = enabled,
         shape = ButtonShape,
         colors = ButtonDefaults.buttonColors(
@@ -76,9 +80,11 @@ fun SecondaryButton(
     leading: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val c = Theme.colors
+    val interaction = remember { MutableInteractionSource() }
     OutlinedButton(
+        interactionSource = interaction,
         onClick = onClick,
-        modifier = modifier.defaultMinSize(minHeight = Size.primaryButton),
+        modifier = modifier.pressMotion(interaction).defaultMinSize(minHeight = Size.primaryButton),
         enabled = enabled,
         shape = ButtonShape,
         border = BorderStroke(1.5.dp, if (enabled) c.ink3 else c.line),
@@ -117,14 +123,29 @@ fun Pill(text: String, container: Color, content: Color, modifier: Modifier = Mo
 @Composable
 fun StatusChip(status: UiStatus, modifier: Modifier = Modifier) {
     val c = Theme.colors
-    when (status) {
-        UiStatus.HEARD -> Pill("Heard", c.infoContainer, c.onInfo, modifier, glyph = { MicGlyph(c.onInfo, size = 14.dp) })
-        UiStatus.CONFIRMED -> Pill("Confirmed", c.accentContainer, c.onAccentContainer, modifier, icon = Icons.Rounded.Check)
-        UiStatus.SUGGESTED -> Pill("Suggested", c.attentionContainer, c.onAttention, modifier, icon = Icons.Rounded.Info)
-        UiStatus.NEEDED -> Pill("Needed", c.attentionContainer, c.onAttention, modifier, icon = Icons.Rounded.Warning)
-        UiStatus.NONE -> Pill("None", c.line.copy(alpha = 0.5f), c.ink2, modifier)
-        UiStatus.UNKNOWN -> Pill("Not sure", c.line.copy(alpha = 0.5f), c.ink2, modifier)
-        UiStatus.EMPTY -> Unit
+    val label = when (status) {
+        UiStatus.HEARD -> "Heard"
+        UiStatus.CONFIRMED -> "Confirmed"
+        UiStatus.SUGGESTED -> "Suggested"
+        UiStatus.NEEDED -> "Needed"
+        UiStatus.NONE -> "None"
+        UiStatus.UNKNOWN -> "Not sure"
+        UiStatus.EMPTY -> return
+    }
+    val color = when (status) {
+        UiStatus.CONFIRMED -> c.accent
+        UiStatus.SUGGESTED, UiStatus.NEEDED -> c.onAttention
+        else -> c.ink3
+    }
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s1)) {
+        when (status) {
+            UiStatus.CONFIRMED -> Icon(Icons.Rounded.Check, null, tint = color, modifier = Modifier.size(14.dp))
+            UiStatus.SUGGESTED -> Icon(Icons.Rounded.Info, null, tint = color, modifier = Modifier.size(14.dp))
+            UiStatus.NEEDED -> Icon(Icons.Rounded.Warning, null, tint = color, modifier = Modifier.size(14.dp))
+            UiStatus.HEARD -> MicGlyph(color, size = 14.dp)
+            else -> Unit
+        }
+        Text(label, style = MaterialTheme.typography.labelSmall, color = color)
     }
 }
 

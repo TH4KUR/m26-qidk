@@ -31,11 +31,15 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.megathon.incident.session.FieldView
 import com.megathon.incident.session.SessionState
 import com.megathon.incident.session.UiStatus
 import com.megathon.incident.ui.AppUi
 import com.megathon.incident.ui.AppViewModel
+import com.megathon.incident.ui.components.StageTrack
+import com.megathon.incident.ui.components.Reveal
+import com.megathon.incident.ui.components.RecorderAura
 import com.megathon.incident.ui.components.AppTopBar
 import com.megathon.incident.ui.components.Card
 import com.megathon.incident.ui.components.Hairline
@@ -50,43 +54,71 @@ import com.megathon.incident.ui.theme.Size
 import com.megathon.incident.ui.theme.Space
 import com.megathon.incident.ui.theme.Theme
 
-/** The human-in-the-loop gate: a read-only summary where the assistant's own writing is labelled before anything is sent. */
+/** Read-only review before saving; assistant-written fields stay explicitly labelled. */
 @Composable
 fun CheckScreen(ui: AppUi, vm: AppViewModel) {
     val c = Theme.colors
     val missing = ui.session.fields.filter { it.mandatory && it.status == UiStatus.NEEDED }
     Scaffold(
         containerColor = c.canvas,
-        topBar = { AppTopBar("Check report", onProof = vm::openProof, onBack = vm::backToReport, simulatedNote = ui.simulatedNote) },
+        topBar = { AppTopBar("Review your report", onProof = vm::openProof, onBack = vm::backToReport, simulatedNote = ui.simulatedNote) },
         bottomBar = {
             Column(Modifier.fillMaxWidth().background(c.canvas).navigationBarsPadding()) {
                 Hairline()
                 if (isWide()) {
                     Row(Modifier.padding(horizontal = Size.gutter, vertical = Space.s3), horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
-                        SecondaryButton("Back to edit", vm::backToReport, Modifier.weight(1f))
-                        PrimaryButton(if (missing.isEmpty()) "Send report" else "Send anyway", vm::send, Modifier.weight(1f))
+                        SecondaryButton("Keep editing", vm::backToReport, Modifier.weight(1f))
+                        PrimaryButton(if (missing.isEmpty()) "Save report" else "Save with missing details", vm::send, Modifier.weight(1f))
                     }
                 } else Column(Modifier.padding(horizontal = Size.gutter, vertical = Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
-                    PrimaryButton(if (missing.isEmpty()) "Send report" else "Send anyway", vm::send, Modifier.fillMaxWidth())
-                    SecondaryButton("Back to edit", vm::backToReport, Modifier.fillMaxWidth())
+                    PrimaryButton(if (missing.isEmpty()) "Save report" else "Save with missing details", vm::send, Modifier.fillMaxWidth())
+                    SecondaryButton("Keep editing", vm::backToReport, Modifier.fillMaxWidth())
                 }
             }
         },
     ) { pad ->
+        if (isWide()) {
+            Row(Modifier.fillMaxSize().padding(pad).padding(horizontal = Size.gutter, vertical = Space.s2), horizontalArrangement = Arrangement.spacedBy(Space.s6)) {
+                Column(Modifier.weight(.4f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
+                    StageTrack(2)
+                    Text("One last look.", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
+                    Text("Your report stays on this device. Check the details before saving.", style = MaterialTheme.typography.bodyMedium, color = c.ink2)
+                    Text("Assistant-written details are labelled.", style = MaterialTheme.typography.labelSmall, color = c.ink3)
+                }
+                LazyColumn(Modifier.weight(.6f), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
+                    if (missing.isNotEmpty()) item {
+                        Text("Still missing: " + missing.joinToString(", ") { it.label.lowercase() }, style = MaterialTheme.typography.bodyMedium, color = c.onAttention)
+                    }
+                    item {
+                        ui.session.fields.forEachIndexed { index, field ->
+                            if (index > 0) Hairline()
+                            SummaryRow(field)
+                        }
+                    }
+                }
+            }
+        } else {
         LazyColumn(
             Modifier.fillMaxSize().padding(pad).padding(horizontal = Size.gutter),
             verticalArrangement = Arrangement.spacedBy(Space.s4),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = Space.s4),
         ) {
             item {
+                Column(verticalArrangement = Arrangement.spacedBy(Space.s4)) {
+                    StageTrack(2)
+                    Text("One last look.", style = MaterialTheme.typography.displayMedium, modifier = Modifier.semantics { heading() })
+                    Text("Your report stays on this device. You decide when it’s ready.", style = MaterialTheme.typography.bodyLarge, color = c.ink2)
+                }
+            }
+            item {
                 Row(
-                    Modifier.fillMaxWidth().background(c.infoContainer, RoundedCornerShape(16.dp)).padding(Space.s4),
+                    Modifier.fillMaxWidth().padding(Space.s4),
                     horizontalArrangement = Arrangement.spacedBy(Space.s3), verticalAlignment = Alignment.Top,
                 ) {
                     Icon(Icons.Rounded.Info, contentDescription = null, tint = c.onInfo, modifier = Modifier.size(20.dp))
                     Text(
-                        "The assistant filled some of these from your voice. Check them before sending.",
-                        style = MaterialTheme.typography.bodyLarge, color = c.onInfo,
+                        "Built from your words. Check the details before saving.",
+                        style = MaterialTheme.typography.bodyLarge, color = c.ink2,
                     )
                 }
             }
@@ -95,7 +127,7 @@ fun CheckScreen(ui: AppUi, vm: AppViewModel) {
                     Column(Modifier.fillMaxWidth().background(c.attentionContainer, RoundedCornerShape(16.dp)).padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s1)) {
                         Text("Still missing", style = MaterialTheme.typography.titleMedium, color = c.onAttention)
                         Text(
-                            missing.joinToString(", ") { it.label.lowercase() } + ". You can send without it, or go back and add it.",
+                            missing.joinToString(", ") { it.label.lowercase() } + ". You can save without it, or go back and add it.",
                             style = MaterialTheme.typography.bodyLarge, color = c.onAttention,
                         )
                     }
@@ -108,6 +140,7 @@ fun CheckScreen(ui: AppUi, vm: AppViewModel) {
             }
             item { Spacer(Modifier.height(Space.s4)) }
         }
+        }
     }
 }
 
@@ -117,7 +150,7 @@ private fun SummaryRow(v: FieldView) {
     Column(Modifier.fillMaxWidth().padding(horizontal = Space.s4, vertical = Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s1)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(v.label, style = MaterialTheme.typography.labelMedium, color = c.ink2, modifier = Modifier.weight(1f))
-            if (v.writtenByAssistant) Pill("Written by the assistant", c.attentionContainer, c.onAttention) else StatusChip(v.status)
+            if (v.writtenByAssistant) Text("Assistant-written", style = MaterialTheme.typography.labelSmall, color = c.onAttention) else StatusChip(v.status)
         }
         Text(
             v.value ?: if (v.status == UiStatus.NEEDED) "Needed" else "Not mentioned",
@@ -132,20 +165,27 @@ private fun SummaryRow(v: FieldView) {
 fun SentScreen(ui: AppUi, vm: AppViewModel) {
     val c = Theme.colors
     val sent = ui.session.state as? SessionState.Submitted
-    Scaffold(containerColor = c.canvas, topBar = { AppTopBar("Sent", onProof = vm::openProof, simulatedNote = ui.simulatedNote) }) { pad ->
+    Scaffold(containerColor = c.canvas, topBar = { AppTopBar("Complete", onProof = vm::openProof, simulatedNote = ui.simulatedNote) }) { pad ->
         Column(Modifier.fillMaxSize().padding(pad)) {
             Column(
                 Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Size.gutter),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Spacer(Modifier.height(Space.s8))
-                Box(Modifier.size(96.dp).background(c.accent, CircleShape), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.Check, contentDescription = null, tint = c.onAccent, modifier = Modifier.size(48.dp))
+                Spacer(Modifier.height(Space.s6))
+                Reveal {
+                    Box(Modifier.size(112.dp).background(c.accentContainer, CircleShape), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(80.dp).background(c.accent, CircleShape), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Rounded.Check, null, tint = c.onAccent, modifier = Modifier.size(48.dp))
+                        }
+                    }
                 }
                 Spacer(Modifier.height(Space.s6))
-                Text("Report saved", style = MaterialTheme.typography.displayMedium, textAlign = TextAlign.Center, modifier = Modifier.semantics { heading() })
-                Spacer(Modifier.height(Space.s2))
-                Text("Saved on this device. Nothing was sent anywhere.", style = MaterialTheme.typography.bodyLarge, color = c.ink2, textAlign = TextAlign.Center)
+                Reveal(delayMillis = 120) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s3)) {
+                        Text("All set.\nReport saved.", style = MaterialTheme.typography.displayMedium.copy(fontSize = 36.sp, lineHeight = 40.sp), textAlign = TextAlign.Center, modifier = Modifier.semantics { heading() })
+                        Text("Saved on this device. Nothing was sent anywhere.", style = MaterialTheme.typography.bodyLarge, color = c.ink2, textAlign = TextAlign.Center)
+                    }
+                }
                 Spacer(Modifier.height(Space.s6))
                 Card {
                     ui.session.fields.filter { it.mandatory }.forEachIndexed { i, v -> if (i > 0) Hairline(); SummaryRow(v) }

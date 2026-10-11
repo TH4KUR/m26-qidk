@@ -1,5 +1,6 @@
 package com.megathon.incident.ui.theme
 
+import android.app.Activity
 import android.content.Context
 import android.provider.Settings
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -9,6 +10,9 @@ import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
@@ -23,7 +27,7 @@ import androidx.compose.ui.unit.sp
 
 private val LocalColors = staticCompositionLocalOf { LightColors }
 
-/** True when the user turned animations off in system settings: the pulse and the sweep go static. */
+/** System animator scale zero disables all app motion. Read when the activity is composed. */
 val LocalReduceMotion = compositionLocalOf { false }
 
 object Theme {
@@ -31,13 +35,13 @@ object Theme {
         @Composable @ReadOnlyComposable get() = LocalColors.current
 }
 
-/** System font, hierarchy from weight and colour first, size second (brief section 4). Body is 17 sp: read under stress. */
+/** System typography: generous headings and compact, readable report details. */
 private val AppTypography = Typography(
-    displayMedium = TextStyle(fontSize = 32.sp, lineHeight = 40.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.2).sp),
-    headlineSmall = TextStyle(fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold),
+    displayMedium = TextStyle(fontSize = 44.sp, lineHeight = 48.sp, fontWeight = FontWeight.Medium, letterSpacing = (-1.5).sp),
+    headlineSmall = TextStyle(fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.SemiBold),
     titleMedium = TextStyle(fontSize = 17.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold),
-    bodyLarge = TextStyle(fontSize = 17.sp, lineHeight = 26.sp, fontWeight = FontWeight.Normal),
-    bodyMedium = TextStyle(fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Normal),
+    bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.Normal),
+    bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 21.sp, fontWeight = FontWeight.Normal),
     labelLarge = TextStyle(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium),
     labelMedium = TextStyle(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium),
     labelSmall = TextStyle(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.2.sp),
@@ -51,7 +55,7 @@ private val AppShapes = Shapes(
 )
 
 @Composable
-fun IncidentTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
+fun IncidentTheme(darkTheme: Boolean = true, content: @Composable () -> Unit) {
     val c = if (darkTheme) DarkColors else LightColors
     val scheme = if (darkTheme) {
         darkColorScheme(
@@ -69,6 +73,16 @@ fun IncidentTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composab
             errorContainer = c.dangerContainer, onErrorContainer = c.onDanger,
             surfaceContainer = c.surface, surfaceContainerHigh = c.surface, surfaceContainerHighest = c.surface,
         )
+    }
+    val view = LocalView.current
+    val activity = LocalContext.current as? Activity
+    SideEffect {
+        activity?.let {
+            WindowCompat.getInsetsController(it.window, view).apply {
+                isAppearanceLightStatusBars = !darkTheme
+                isAppearanceLightNavigationBars = !darkTheme
+            }
+        }
     }
     val context = LocalContext.current
     val reduce = remember { animationsOff(context) }
