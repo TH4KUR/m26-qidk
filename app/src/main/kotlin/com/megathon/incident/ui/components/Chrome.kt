@@ -29,10 +29,12 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.megathon.incident.R
 import com.megathon.incident.device.NetworkProof
 import com.megathon.incident.session.HindiSavedAt
@@ -55,9 +57,14 @@ fun AppTopBar(title: String, onProof: (() -> Unit)?, onBack: (() -> Unit)? = nul
         Row(Modifier.fillMaxWidth().heightIn(min = 72.dp).padding(start = if (onBack != null) Space.s1 else Size.gutter, end = Space.s2), verticalAlignment = Alignment.CenterVertically) {
             if (onBack != null) IconButton(onBack, Modifier.size(Size.touch)) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, tr("Back", "वापस"), tint = c.ink) }
             BrandMark(34.dp)
-            Column(Modifier.weight(1f).padding(start = Space.s3, top = Space.s2, bottom = Space.s2)) {
+            Column(
+                Modifier.weight(1f).padding(start = Space.s3, top = Space.s2, bottom = Space.s2),
+                verticalArrangement = Arrangement.spacedBy(Space.s1),
+            ) {
                 val appName = stringResource(R.string.app_name)
-                BrandWordmark(c.ink, height = 20.dp, modifier = Modifier.semantics { contentDescription = appName; heading() })
+                // The wordmark is sized in sp, so it grows with the text size and the line under it can never sit on it.
+                val wordmarkHeight = with(LocalDensity.current) { 20.sp.toDp() }
+                BrandWordmark(c.ink, height = wordmarkHeight, modifier = Modifier.semantics { contentDescription = appName; heading() })
                 Text(title, style = MaterialTheme.typography.labelSmall, color = c.ink3)
             }
             if (onProof != null) IconButton(onProof, Modifier.size(Size.touch).background(c.surface, CircleShape)) { Icon(Icons.Rounded.Info, tr("How this ran", "यह कैसे चला"), tint = c.ink2, modifier = Modifier.size(20.dp)) }

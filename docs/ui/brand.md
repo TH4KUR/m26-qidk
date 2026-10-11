@@ -77,6 +77,13 @@ If a held, named splash is still wanted for the demo, it is one composable in fr
 | `ui/components/Chrome.kt` | top bar: the mark and the wordmark (named "Bayaan" for a screen reader) instead of the three bars and the word "incident" |
 | `ui/screens/HomeScreen.kt` | the top bar line under the name is `app_tagline` (was "Your voice. A clear report.") |
 
+## Text size
+
+The top-bar wordmark is sized in sp (20 sp), not dp, so it grows with the system font size and keeps its proportion to the
+line under it; the two sit in one column with a 4 dp gap. The kit showed the wordmark overlapping the subtitle on the
+"Shape your report" screen at 200% text size (A/041) when the wordmark was a fixed 20 dp; this layout removes the fixed
+height. It has not been looked at on the device since the change.
+
 ## Not verified
 
 There is no Android SDK on the machine this was written on, so nothing here was compiled or run on a device. The XML files parse;
