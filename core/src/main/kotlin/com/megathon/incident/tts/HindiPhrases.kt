@@ -43,6 +43,12 @@ object HindiPhrases {
         Regex("""^(.+)\.$""").matchEntire(sentence)?.let { m ->
             TYPE[m.groupValues[1].lowercase()]?.let { return listOf(hi("$it।")) }
         }
+        Regex("""^What is (your|the) (.+)'s name\?$""").matchEntire(sentence)?.let { m ->
+            ROLE[m.groupValues[2].lowercase()]?.let { role ->
+                return listOf(hi("${if (m.groupValues[1] == "your") "आपके" else "उस"} $role का नाम क्या है?"))
+            }
+        }
+        Regex("""^Was it the (.+)\?$""").matchEntire(sentence)?.let { m -> return spokenItem("क्या यह", m.groupValues[1], "था?") }
         // Not a sentence the app builds. Text already in Devanagari is for the Hindi voice; anything else stays English.
         return listOf(SpokenSegment(sentence, if (sentence.any { it.code in 0x0900..0x097F }) "hi" else "en"))
     }
@@ -51,6 +57,12 @@ object HindiPhrases {
     private fun place(value: String, tail: String): List<SpokenSegment> {
         val latinOnly = value.any { it in 'A'..'Z' || it in 'a'..'z' } && value.none { it.code in 0x0900..0x097F }
         return if (latinOnly) listOf(SpokenSegment(value, "en"), hi(tail)) else listOf(hi("$value $tail"))
+    }
+
+    /** "<before> <item> <after>": a Latin-letter item name is its own `en` segment, so the Hindi voice is not asked to read it. */
+    private fun spokenItem(before: String, value: String, after: String): List<SpokenSegment> {
+        val latinOnly = value.any { it in 'A'..'Z' || it in 'a'..'z' } && value.none { it.code in 0x0900..0x097F }
+        return if (latinOnly) listOf(hi(before), SpokenSegment(value, "en"), hi(after)) else listOf(hi("$before $value $after"))
     }
 
     /** The words after "That was": [day] [part of day] [about] [clock], or null when a part cannot be said correctly. */
@@ -117,6 +129,12 @@ object HindiPhrases {
         "When was that?" to "यह कब हुआ था?",
         "How bad is it?" to "यह कितना गंभीर है?",
         "Can you tell me more?" to "क्या आप कुछ और बता सकते हैं?",
+        // The cross-questions asked after the four mandatory answers (OptionalAsks). Model-authored Hindi: a native speaker should review it.
+        "Did anyone see it happen?" to "क्या किसी ने इसे होते हुए देखा?",
+        "Who was hurt?" to "किसे चोट लगी?",
+        "Who is unwell?" to "कौन बीमार है?",
+        "Do you know who it was?" to "क्या आप जानते हैं कि यह कौन था?",
+        "Which tool, machine or item was involved?" to "इसमें कौन सा औज़ार, मशीन या सामान शामिल था?",
         "Is anyone hurt or in danger right now?" to "क्या अभी कोई घायल है या खतरे में है?",
         // The number is said one digit at a time, as the English line does (see TtsTextNormalizer's emergency numbers).
         "If anyone is in danger, call 112 now." to "अगर कोई खतरे में है, तो अभी एक एक दो पर कॉल करें।",
@@ -144,6 +162,14 @@ object HindiPhrases {
         "security issue" to "सुरक्षा संबंधी समस्या",
         "environmental issue" to "पर्यावरण संबंधी समस्या",
         "something else" to "कुछ और",
+    )
+
+    /** Who a "What is your <role>'s name?" question is about. */
+    private val ROLE = mapOf(
+        "colleague" to "सहकर्मी", "coworker" to "सहकर्मी", "co-worker" to "सहकर्मी", "student" to "छात्र", "visitor" to "आगंतुक",
+        "patient" to "मरीज़", "guest" to "मेहमान", "customer" to "ग्राहक", "worker" to "कर्मचारी", "staff member" to "कर्मचारी",
+        "professor" to "प्रोफेसर", "teacher" to "शिक्षक", "driver" to "ड्राइवर", "technician" to "तकनीशियन", "cleaner" to "सफाईकर्मी",
+        "person" to "व्यक्ति",
     )
 
     private val SEVERITY = mapOf("minor" to "मामूली", "moderate" to "मध्यम", "severe" to "गंभीर", "critical" to "अत्यंत गंभीर")
