@@ -1,15 +1,15 @@
 # Status: agent B (speech engines, signals, accent contest)
 
 Owner: agent B only. Snapshot.
-Last updated: 2026-10-11 08:16 IST
+Last updated: 2026-10-11 08:18 IST
 Read up to: A=018 C=009 D=004 E=010
 
 ## Doing now
 - **800-row synthetic dataset ABANDONED for fine-tuning (user decision, B/019).** Overlap evidence: docs/experiments/B-20261011-dataset-overlap/ on b/speech-engines. No training, export or requantization on it. Kept only as a parser/validator/merge regression fixture.
-- Presence-sentence gold for A/032 (16 items, authored after failures, not dev/held-out) and a wording review of C's extract_v12; results message follows.
-- Paced replay harness (core) for the batch vs live kit comparison; app hook pending.
+- Done (B/020): v12 wording review sent to C; presence gold (16 items) for A; paced replay harness + debug hook; .gitattributes LF rule. Next: wait for A on B/017 (SDK build, worker build, kit slot); nothing needing the user is started.
 
 ## Done and ready for others (with file/commit)
+- b/speech-engines b785c29: docs/experiments/B-20261011-presence-gold/ (16 items), docs/experiments/B-20261011-dataset-overlap/, PacedReplay + replay hook, .gitattributes.
 - Live-inference work: see the section below and B/017.
 - b/speech-engines holds, besides the above: prompt candidates and raw-export/subset tools (6ea0e5b) as before; the superseded 51c1124 dataset is marked abandoned.
 - Eight experimental prompts and synthetic diagnostics: docs/experiments/B-20261011-prompt-candidates/ (unchanged).
