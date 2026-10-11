@@ -38,14 +38,28 @@ import com.megathon.incident.speech.PacedReplay
 import com.megathon.incident.speech.PreviewScheduler
 import com.megathon.incident.speech.Speculative
 import com.megathon.incident.speech.GenieXLlmEngine
+import com.megathon.incident.speech.HindiTranscript
 import com.megathon.incident.speech.SenseVoiceSignalEngine
+import com.megathon.incident.speech.NemotronHindiSpeechEngine
+import com.megathon.incident.speech.RecognitionEngine
 import com.megathon.incident.speech.ResidentSherpaSpeechEngine
 import com.megathon.incident.speech.SherpaCliSpeechEngine
 import com.megathon.incident.speech.SpeechBundle
+import com.megathon.incident.speech.SupertonicSpeaker
+import com.megathon.incident.speech.SpeechLane
+import com.megathon.incident.speech.SpeechLanes
+import com.megathon.incident.speech.TranscriptScriptNote
 import com.megathon.incident.speech.SignalReading
+import com.megathon.incident.speech.AndroidTtsBackend
+import com.megathon.incident.speech.PiperSpeaker
 import com.megathon.incident.speech.SystemTtsSpeaker
 import com.megathon.incident.testing.Compute
 import com.megathon.incident.testing.FakeLlmEngine
+import com.megathon.incident.testing.SpeechEngine
+import com.megathon.incident.tts.HindiPhrases
+import com.megathon.incident.tts.RoutingSpeaker
+import com.megathon.incident.tts.TtsBackend
+import com.megathon.incident.tts.TtsKind
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -94,6 +108,8 @@ data class AppUi(
     val ttsOffline: Boolean?,
     val undoLabel: String?,
     val needsMicPermission: Boolean,
+    /** Why the Piper voice was asked for but not heard (files missing, library failed), in words; null when not applicable. */
+    val ttsNote: String? = null,
     /** The latest voice tags (emotion, sound event) SenseVoice read from the audio; null when none were read. */
     val voiceTags: SignalReading? = null,
     /** Why there are no voice tags, in words (the bundle is missing, or the last read failed); null when not a failure. */
@@ -101,6 +117,10 @@ data class AppUi(
     /** The transcript so far while recording is still going on (live windows); null otherwise. */
     val liveText: String? = null,
     val readiness: Readiness = Readiness.NOT_NEEDED,
+    /** True while the EXPERIMENTAL Hindi recognition lane is switched on (default off). */
+    val hindiLane: Boolean = false,
+    /** One short line when a transcript in Devanagari sits next to English labels and replies; null otherwise. */
+    val scriptNote: String? = null,
 )
 
 private data class Local(
@@ -118,12 +138,14 @@ private data class Local(
     val network: NetworkProof = NetworkProof(false, false, null),
     val showProof: Boolean = false,
     val ttsOffline: Boolean? = null,
+    val ttsNote: String? = null,
     val undoLabel: String? = null,
     val needsMicPermission: Boolean = false,
     val voiceTags: SignalReading? = null,
     val voiceTagsNote: String? = null,
     val liveText: String? = null,
     val readiness: Readiness = Readiness.NOT_NEEDED,
+    val hindi: Boolean = false,
 )
 
 class AppViewModel(app: Application, private val selection: EngineSelection) : AndroidViewModel(app) {
@@ -138,13 +160,35 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             },
         ),
         llmProviders = mapOf(LlmKind.FAKE to { FakeLlmEngine(name = "DEMO REPLIES") }, LlmKind.GENIEX to { GenieXLlmEngine(app) }),
+        ttsProviders = mapOf(
+            TtsKind.ANDROID to { AndroidTtsBackend(SystemTtsSpeaker(app)) },
+            // Built only when PIPER is selected, and it loads nothing until it first speaks (the native library is lazy).
+            TtsKind.PIPER to { PiperSpeaker(app, requireVerified = !Engines.isDebuggable(app), language = { speechLanguage() }) },
+            // One model for Hindi and English; the language is chosen per call (see speakAloud).
+            TtsKind.SUPERTONIC to { SupertonicSpeaker(app, requireVerified = !Engines.isDebuggable(app), sid = selection.ttsVoice) },
+        ),
     )
     private val recorder = MicRecorder(app)
-    private val speaker = SystemTtsSpeaker(app)
+    // Speech output: the Android voice always exists (it is the fallback); Piper only when asked for with `--es tts PIPER`.
+    // The label on the proof strip comes from the engine that really spoke (RoutingSpeaker.last), never from the request.
+    private val configuredVoice: TtsBackend? =
+        if (selection.tts != TtsKind.ANDROID) runCatching { factory.tts(selection.tts) }.getOrNull() else null
+    // The Hindi lane speaks with Supertonic whenever its model is on the device, however the app was started (the Home switch
+    // changes the lane, not the launch extras). One instance: the launch extra's, when that was already Supertonic.
+    private val hindiVoice: TtsBackend? by lazy {
+        if (selection.tts == TtsKind.SUPERTONIC) configuredVoice else runCatching { factory.tts(TtsKind.SUPERTONIC) }.getOrNull()
+    }
+    /** Why the Hindi voice was not used on the last Hindi-lane utterance (shown with the proof note); null when it was used. */
+    @Volatile private var hindiVoiceNote: String? = null
+    private val speaker = RoutingSpeaker(
+        primary = configuredVoice,
+        fallback = factory.tts(TtsKind.ANDROID),
+        language = { speechLanguage() },
+    )
     private val meter = NetworkMeter(app)
     private val mutex = Mutex()
     /** Speech, the language model and the tag model take turns here: separate processes do not mean separate NPUs. */
-    private val lane = AcceleratorLane()
+    private val accelerator = AcceleratorLane()
 
     // Voice tags are optional: a missing SenseVoice bundle is noticed once and then not retried every turn.
     private var tagEngine: SenseVoiceSignalEngine? = null
@@ -158,9 +202,26 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     private val suggestionEngine = RuleSuggestionEngine(
         siteLoad.site, Homophones.default, TamHedgeDetector(TamCueLists.loadDefault()), java.time.Clock.systemDefaultZone(),
     )
-    private val session: ReportSession = Pipeline.newSession(LaneLlmEngine(llm ?: FakeLlmEngine(), lane), FileReportStore(app), suggestions = suggestionEngine)
+    private val session: ReportSession = Pipeline.newSession(LaneLlmEngine(llm ?: FakeLlmEngine(), accelerator), FileReportStore(app), suggestions = suggestionEngine)
 
-    private val local = MutableStateFlow(Local(network = meter.read()))
+    // The recognition lane. English is the default and the only lane unless Hindi is asked for (`--es lang hi` or the Home
+    // switch). Telugu and unknown codes resolve to English with a note. Hindi needs the real speech engine: with the
+    // scripted demo engine there is nothing to recognise, so the lane stays off and says why.
+    private val requestedLane = SpeechLanes.select(selection.language)
+    private val laneNote: String? = when {
+        requestedLane.engine == RecognitionEngine.NEMOTRON_HINDI && selection.speech == SpeechKind.FAKE ->
+            "The Hindi lane needs the real speech engine. This run uses the scripted demo, so English is used."
+        else -> requestedLane.notice
+    }
+    private var hindiEngine: NemotronHindiSpeechEngine? = null
+
+    private val local = MutableStateFlow(
+        Local(
+            network = meter.read(),
+            hindi = requestedLane.engine == RecognitionEngine.NEMOTRON_HINDI && selection.speech != SpeechKind.FAKE,
+            message = laneNote,
+        ),
+    )
     private var timer: Job? = null
     private var clearFilled: Job? = null
     private var clearUndo: Job? = null
@@ -171,15 +232,17 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             session = s, selected = l.selected, editing = l.editing, justFilled = l.justFilled, heardNow = l.heardNow,
             speaking = l.speaking, message = l.message, blocked = blocked,
             simulatedNote = simulatedNote(),
-            network = l.network, showProof = l.showProof, ttsOffline = l.ttsOffline, undoLabel = l.undoLabel,
+            network = l.network, showProof = l.showProof, ttsOffline = l.ttsOffline, ttsNote = l.ttsNote, undoLabel = l.undoLabel,
             needsMicPermission = l.needsMicPermission,
             voiceTags = l.voiceTags, voiceTagsNote = l.voiceTagsNote, liveText = l.liveText, readiness = l.readiness,
+            hindiLane = l.hindi,
+            scriptNote = TranscriptScriptNote.forTexts(s.transcripts + listOfNotNull(l.heardNow)),
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, AppUi(
         screen = Screen.HOME, listening = false, processing = false, elapsedMs = 0, levels = emptyList(), session = session.ui.value,
         selected = null, editing = null, justFilled = emptySet(), heardNow = null, speaking = false, message = null, blocked = blocked,
         simulatedNote = simulatedNote(), network = local.value.network, showProof = false, ttsOffline = null, undoLabel = null,
-        needsMicPermission = false,
+        needsMicPermission = false, hindiLane = local.value.hindi,
     ))
 
     /** Debug switch (`--es live off`): transcribe and extract only after Stop, as before, for a reproducible comparison. */
@@ -201,15 +264,24 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
 
     init {
         warmUpModels()
+        android.util.Log.i(
+            TAG,
+            "speech lane: requested=${selection.language} -> language=${if (local.value.hindi) "hi" else SpeechLane.ENGLISH.language} " +
+                "engine=${if (local.value.hindi) RecognitionEngine.NEMOTRON_HINDI else RecognitionEngine.WHISPER_SMALL}" +
+                (laneNote?.let { " note=\"$it\"" } ?: ""),
+        )
         // Speak whatever the session wants said (questions, the emergency line, the summary), one at a time.
         viewModelScope.launch {
             session.ui.map { it.say }.filterNotNull().distinctUntilChangedBy { it.id }.collect { say ->
                 if (local.value.listening || replaying) return@collect
                 local.update { it.copy(speaking = true) }
                 val started = System.nanoTime()
-                speaker.speak(say.text)
-                local.update { it.copy(speaking = false, ttsOffline = speaker.offline) }
-                session.recordStage(StageRecord("Speak", "Android TTS (system voice)", Compute.CPU, (System.nanoTime() - started) / 1_000_000))
+                speakAloud(say.text)
+                val used = speaker.last
+                local.update { it.copy(speaking = false, ttsOffline = used?.offline, ttsNote = used?.note() ?: hindiVoiceNote) }
+                used?.note()?.let { android.util.Log.w(TAG, "tts fallback: $it") }
+                val ms = (System.nanoTime() - started) / 1_000_000
+                session.recordStage(used?.toStage(ms) ?: StageRecord("Speak", AndroidTtsBackend.LABEL, Compute.CPU, ms))
             }
         }
     }
@@ -229,8 +301,8 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             val started = System.nanoTime()
             try {
                 // One after the other on the shared lane: two accelerator initialisations at once is not something to test at launch.
-                lane.run { worker?.warmUp() }
-                lane.run { genie?.warmUp() }
+                accelerator.run { worker?.warmUp() }
+                accelerator.run { genie?.warmUp() }
                 android.util.Log.i(TAG, "models ready after ${(System.nanoTime() - started) / 1_000_000} ms (launch-time load)")
                 local.update { it.copy(readiness = Readiness.READY) }
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -296,11 +368,13 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     private fun beginLive(): Live? {
         val engine = speech ?: return null
         if (!liveInference) return null
-        lane.startSpeculation()
+        // Live windows are English-lane only: the Hindi lane has its own experimental engine and normalisation (process() below).
+        if (currentLane().engine != RecognitionEngine.WHISPER_SMALL) return null
+        accelerator.startSpeculation()
         val id = session.beginRecording()
         // Extraction runs on the session's own (main) dispatcher: the session is not thread-safe, only the model call waits.
         val scheduler = PreviewScheduler(viewModelScope) { text -> withContext(Speculative) { session.previewRecording(id, text) } }
-        val coordinator = LiveInferenceCoordinator(engine, "en", lane = lane.lock, onSnapshot = snapshot@{ s ->
+        val coordinator = LiveInferenceCoordinator(engine, currentLane().language, lane = accelerator.lock, onSnapshot = snapshot@{ s ->
             if (!local.value.listening) return@snapshot // a decode that ended after Stop: the final transcript replaces it
             val text = listOf(s.stable, s.tail).filter { it.isNotBlank() }.joinToString(" ")
             local.update { it.copy(liveText = text) }
@@ -323,7 +397,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
      */
     private suspend fun processLive(l: Live, capturedAt: java.time.Instant) {
         l.scheduler.stop()
-        lane.stopSpeculation()
+        accelerator.stopSpeculation()
         mutex.withLock {
             local.update { it.copy(listening = false, processing = true, heardNow = null, message = null) }
             val engine = speech ?: return@withLock
@@ -349,6 +423,21 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             session.onUtterance(heard.text, stage, tags?.signals.orEmpty(), capturedAt, recording = l.id)
             if (heard.text.isBlank()) session.cancelRecording(l.id)
             finishTurn(before, journalBefore, null)
+            probeMissingAfterTurn()
+        }
+    }
+
+    /**
+     * The focused second look at empty tool/item and action fields: after the turn is on screen, while the reply is spoken, holding the
+     * model lock so a new turn simply waits for it. Failure costs the chips, never the turn. Shared by the batch and the live path.
+     */
+    private suspend fun probeMissingAfterTurn() {
+        try {
+            session.probeMissing()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "probe failed", e)
         }
     }
 
@@ -356,24 +445,37 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     private suspend fun process(pcm: ShortArray, capturedAt: java.time.Instant = java.time.Instant.now()) {
         mutex.withLock {
             local.update { it.copy(listening = false, processing = true, heardNow = null, message = null) }
-            val engine = speech ?: return@withLock
+            val lane = currentLane()
+            val engine: SpeechEngine = if (lane.engine == RecognitionEngine.NEMOTRON_HINDI) {
+                // Hindi lane: the experimental engine, opened on first use. If its files are not on the device, say so.
+                openHindiEngine().getOrElse {
+                    android.util.Log.w(TAG, "hindi lane unavailable: ${it.message}")
+                    finishTurn(session.ui.value.fields, session.ui.value.journal.size, "I couldn't hear that: ${explain(it)}")
+                    return@withLock
+                }
+            } else {
+                speech ?: return@withLock
+            }
             val before = session.ui.value.fields
             val journalBefore = session.ui.value.journal.size
             val heard = try {
-                lane.run { engine.transcribe(pcm, "en") }
+                accelerator.run { engine.transcribe(pcm, lane.language) }
             } catch (e: Exception) {
                 // Say why, in words and in the log: a real engine that fails must never be silent.
                 android.util.Log.e(TAG, "speech engine failed", e)
                 finishTurn(before, journalBefore, "I couldn't hear that: ${e.message?.take(160) ?: "the speech engine failed"}")
                 return@withLock
             }
-            android.util.Log.i(TAG, "heard [${heard.compute}] in ${heard.elapsedMs} ms: ${heard.text}")
+            // Hindi: hour words become digits ("दस बजे" to "10 बजे") so the time logic can read them. English is untouched.
+            val said = if (lane.engine == RecognitionEngine.NEMOTRON_HINDI) heard.copy(text = HindiTranscript.normalize(heard.text)) else heard
+            android.util.Log.i(TAG, "heard [${said.compute}] in ${said.elapsedMs} ms: ${said.text}")
             runCatching { factory.checkResult(heard.compute) }.onFailure { blocked = explain(it) }
-            local.update { it.copy(heardNow = heard.text.ifBlank { null }) }
-            val tags = if (heard.text.isBlank()) null else readVoiceTags(pcm)
+            local.update { it.copy(heardNow = said.text.ifBlank { null }) }
+            val tags = if (said.text.isBlank()) null else readVoiceTags(pcm)
             tags?.let { session.recordStage(StageRecord("Tags", "SenseVoice (sherpa-onnx, QNN)", it.compute, it.elapsedMs)) }
-            session.onUtterance(heard.text, StageRecord("Hear", engine.name, heard.compute, heard.elapsedMs), tags?.signals.orEmpty(), capturedAt)
+            session.onUtterance(said.text, StageRecord("Hear", engine.name, said.compute, said.elapsedMs), tags?.signals.orEmpty(), capturedAt)
             finishTurn(before, journalBefore, null)
+            probeMissingAfterTurn()
         }
     }
 
@@ -396,7 +498,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             return null
         }
         return try {
-            lane.run { engine.read(pcm) }.also { r ->
+            accelerator.run { engine.read(pcm) }.also { r ->
                 android.util.Log.i(TAG, "tags [${r.compute}] in ${r.elapsedMs} ms: emotion=${r.reading?.emotion} event=${r.reading?.event} -> ${r.signals.map { it.label }}")
                 local.update { it.copy(voiceTags = r, voiceTagsNote = null) }
             }
@@ -409,8 +511,86 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         }
     }
 
+    private val preloadStarted = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /**
+     * Loads the language model in the background as soon as the screen is up, so the first turn does not pay the 9 to 13 s
+     * model load. Only a real model has anything to load (the demo engine is not [Warmable]); models load one after the
+     * other. A failure is logged with its reason and changes nothing else: the first real turn tries again and fails
+     * visibly exactly as it did before. Started once per view model, never on a debug eval, coexist or WAV launch (those
+     * time the load themselves).
+     */
+    fun preloadModels() {
+        if (blocked != null || !preloadStarted.compareAndSet(false, true)) return
+        val steps = listOfNotNull((llm as? com.megathon.incident.llm.Warmable)?.let { "language model" to it })
+        if (steps.isEmpty()) return
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val t0 = System.nanoTime()
+            com.megathon.incident.llm.ModelPreloader().run(steps).forEach {
+                when (it) {
+                    is com.megathon.incident.llm.PreloadOutcome.Loaded ->
+                        android.util.Log.i(TAG, "preload ${it.name}: ready after ${(System.nanoTime() - t0) / 1_000_000} ms (load ${it.ms} ms)")
+                    is com.megathon.incident.llm.PreloadOutcome.Failed ->
+                        android.util.Log.w(TAG, "preload ${it.name} failed: ${it.reason}")
+                }
+            }
+        }
+    }
+
+    /**
+     * Debug builds only: the one way to run the held-out items. `--es holdout CONFIRM --es gold <file> --es run <name>`
+     * [`--es prompt <file>`]; never together with `--es eval`, and a second run of the same prompt on the same build is refused
+     * unless `--es holdout_again CONFIRM_AGAIN` is also given. The decision, the prompt hash, the build (APK hash), the gold
+     * hash and the item ids are logged (tag Incident, prefix "holdout") and the run is written to the ledger before the first
+     * model call, so an interrupted run still counts. Always the whole held-out set: no `only` filter.
+     */
+    fun debugHoldout(gold: String?, promptFile: String?, runName: String, holdout: String?, again: String?, devRequested: Boolean) {
+        if (!Engines.isDebuggable(getApplication())) return
+        val engine = llm ?: return
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val app = getApplication<Application>()
+            val promptBytes = promptFile?.let { java.io.File(it).readBytes() } ?: com.megathon.incident.session.PromptBuilder.defaultSourceBytes()
+            val promptHash = com.megathon.incident.eval.ShortHash.of(promptBytes)
+            val build = runCatching { com.megathon.incident.eval.ShortHash.of(java.io.File(app.applicationInfo.sourceDir).inputStream()) }.getOrDefault("unknown")
+            val ledgerFile = java.io.File(app.filesDir, "eval/holdout-ledger.jsonl")
+            val ledger = com.megathon.incident.eval.HoldoutLedger.parse(if (ledgerFile.exists()) ledgerFile.readText() else "")
+            val decision = com.megathon.incident.eval.HoldoutGuard.decide(holdout, again, devRequested, promptHash, build, ledger)
+            when (decision) {
+                is com.megathon.incident.eval.HoldoutDecision.NotRequested -> return@launch
+                is com.megathon.incident.eval.HoldoutDecision.Refused -> {
+                    android.util.Log.e(TAG, "holdout REFUSED: ${decision.reason}")
+                    return@launch
+                }
+                is com.megathon.incident.eval.HoldoutDecision.Allowed -> Unit
+            }
+            val goldFile = gold?.let { java.io.File(it) }
+            if (goldFile == null || !goldFile.isFile) {
+                android.util.Log.e(TAG, "holdout REFUSED: --es gold <file> is missing or not a file")
+                return@launch
+            }
+            val goldHash = com.megathon.incident.eval.ShortHash.of(goldFile.readBytes())
+            val repeat = (decision as com.megathon.incident.eval.HoldoutDecision.Allowed).repeat
+            android.util.Log.i(TAG, "holdout run $runName starting: prompt=$promptHash build=$build gold=$goldHash repeat=$repeat")
+            val prompts = promptFile?.let { com.megathon.incident.session.PromptBuilder(String(promptBytes, Charsets.UTF_8).trim()) }
+                ?: com.megathon.incident.session.PromptBuilder.default()
+            val warm: suspend () -> Long = { (engine as? GenieXLlmEngine)?.warmUp() ?: 0L }
+            val out = runCatching {
+                com.megathon.incident.eval.EvalRunner(app.filesDir, engine, warm).run(
+                    goldFile, prompts, runName, only = null, split = com.megathon.incident.eval.EvalSplit.HOLDOUT,
+                    onSelected = { ids ->
+                        android.util.Log.i(TAG, "holdout run $runName items (${ids.size}): ${ids.joinToString(",")}")
+                        ledgerFile.parentFile?.mkdirs()
+                        ledgerFile.appendText(com.megathon.incident.eval.HoldoutRun(promptHash, build, goldHash, ids, System.currentTimeMillis()).toLine() + "\n")
+                    },
+                )
+            }
+            out.onSuccess { android.util.Log.i(TAG, "holdout run $runName done: ${it.path}") }
+                .onFailure { android.util.Log.e(TAG, "holdout run $runName failed", it) }
+        }
+    }
+
     /** Debug builds only: run E's gold dev split through the real pipeline and write predictions for E's scorer. */
-    fun debugEval(gold: String, promptFile: String?, runName: String, only: Set<String>?) {
+    fun debugEval(gold: String, promptFile: String?, runName: String, only: Set<String>?, probe: Boolean = false) {
         if (!Engines.isDebuggable(getApplication())) return
         val engine = llm ?: return
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -419,7 +599,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             val warm: suspend () -> Long = { (engine as? GenieXLlmEngine)?.warmUp() ?: 0L }
             android.util.Log.i(TAG, "eval $runName starting")
             val out = runCatching {
-                com.megathon.incident.eval.EvalRunner(getApplication<Application>().filesDir, engine, warm).run(java.io.File(gold), prompts, runName, only)
+                com.megathon.incident.eval.EvalRunner(getApplication<Application>().filesDir, engine, warm).run(java.io.File(gold), prompts, runName, only, probe = probe)
             }
             out.onSuccess { android.util.Log.i(TAG, "eval $runName done: ${it.path}") }
                 .onFailure { android.util.Log.e(TAG, "eval $runName failed", it) }
@@ -477,13 +657,20 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
      */
     fun debugCoexist(path: String, loops: Int) {
         if (!Engines.isDebuggable(getApplication())) return
-        val stt = speech
+        // The lane decides which recogniser takes turns with the model: Whisper for English, the experimental Nemotron
+        // child for Hindi (`--es lang hi`). The language handed to it is the lane's, so a Hindi run never feeds Whisper.
+        val lane = currentLane()
+        val stt: SpeechEngine? = if (lane.engine == RecognitionEngine.NEMOTRON_HINDI) {
+            openHindiEngine().onFailure { android.util.Log.e(TAG, "coexist: hindi lane unavailable: ${it.message}") }.getOrNull()
+        } else {
+            speech
+        }
         val engine = llm
         if (stt == null || engine == null) { android.util.Log.e(TAG, "coexist: no engines (${blocked ?: "unknown"})"); return }
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val out = runCatching {
                 val pcm = readWav(java.io.File(path))
-                com.megathon.incident.eval.CoexistRunner(getApplication<Application>().filesDir, stt, engine).run(pcm, loops)
+                com.megathon.incident.eval.CoexistRunner(getApplication<Application>().filesDir, stt, engine, lane.language).run(pcm, loops)
             }
             out.onSuccess { android.util.Log.i(TAG, "coexist done: ${it.path}") }
                 .onFailure { android.util.Log.e(TAG, "coexist failed", it) }
@@ -586,7 +773,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
 
     fun hearAgain() {
         val text = session.ui.value.spokenSummary ?: return
-        viewModelScope.launch { local.update { it.copy(speaking = true) }; speaker.speak(text); local.update { it.copy(speaking = false) } }
+        viewModelScope.launch { local.update { it.copy(speaking = true) }; speakAloud(text); local.update { it.copy(speaking = false) } }
     }
 
     fun stopSpeaking() { speaker.stop(); local.update { it.copy(speaking = false) } }
@@ -595,7 +782,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         speaker.stop()
         session.reset()
         demoSpeech.restart()
-        local.update { Local(network = meter.read(), ttsOffline = it.ttsOffline, readiness = it.readiness) }
+        local.update { Local(network = meter.read(), ttsOffline = it.ttsOffline, ttsNote = it.ttsNote, hindi = it.hindi, readiness = it.readiness) }
     }
 
     fun openProof() = local.update { it.copy(showProof = true, network = meter.read()) }
@@ -603,6 +790,86 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     fun dismissMessage() = local.update { it.copy(message = null) }
 
     // ---- helpers -------------------------------------------------------------------------------------------------
+
+    /**
+     * The language the VOICE speaks, which is English in every lane: follow-up questions and spoken replies stay English
+     * even when the reporter's speech was recognised as Hindi (the Piper voice is chosen from this, so it must not follow
+     * the recognition lane or an English sentence would be read by the Hindi voice). What the RECOGNISER is asked for is
+     * [currentLane]'s language.
+     */
+    private fun speechLanguage(): String = "en"
+
+    /** The lane this turn's recognition runs in. English is exactly the lane the app had before the Hindi lane existed. */
+    private fun currentLane(): SpeechLane =
+        if (local.value.hindi) SpeechLanes.select("hi") else SpeechLane.ENGLISH
+
+    private fun openHindiEngine(): Result<SpeechEngine> = runCatching {
+        hindiEngine ?: NemotronHindiSpeechEngine(getApplication<Application>()).also { hindiEngine = it }
+    }
+
+    /**
+     * The Home switch for the experimental Hindi lane. Turning it on checks that the Hindi files are on the device first
+     * (a cheap size check, no model load) and says plainly if they are not, leaving the lane off. Not while listening.
+     */
+    fun setHindiLane(on: Boolean) {
+        if (local.value.listening || local.value.processing) return
+        if (!on) {
+            local.update { it.copy(hindi = false, message = null) }
+            android.util.Log.i(TAG, "speech lane: english (Hindi switched off)")
+            return
+        }
+        if (selection.speech == SpeechKind.FAKE) {
+            say("The Hindi lane needs the real speech engine. This run uses the scripted demo.")
+            return
+        }
+        openHindiEngine().onFailure {
+            android.util.Log.w(TAG, "hindi lane unavailable: ${it.message}")
+            say(explain(it))
+            return
+        }
+        local.update { it.copy(hindi = true, message = null) }
+        android.util.Log.i(TAG, "speech lane: hindi (experimental), engine=${RecognitionEngine.NEMOTRON_HINDI}")
+    }
+
+    /** Debug builds only: speak [text] with the selected engine and log which engine spoke, on what, and how long it took. */
+    fun debugSay(text: String) {
+        if (!Engines.isDebuggable(getApplication())) return
+        viewModelScope.launch {
+            val t0 = System.nanoTime()
+            speakAloud(text)
+            val used = speaker.last
+            android.util.Log.i(
+                TAG,
+                "tts say engine=${used?.engine} compute=${used?.compute} offline=${used?.offline} " +
+                    "ms=${(System.nanoTime() - t0) / 1_000_000} fallback=${used?.fallbackReason ?: "none"}",
+            )
+        }
+    }
+
+    /**
+     * Says [text] aloud. In the Hindi lane with the Supertonic voice ready, the app's English sentences are spoken in Hindi
+     * ([HindiPhrases]: the reporter's own words and Latin-script place names are kept as they are, an unknown sentence stays
+     * English). Anything else, including a Supertonic voice that is not available, speaks the text exactly as before.
+     * The screen text is never changed: labels and questions stay English on screen.
+     */
+    private suspend fun speakAloud(text: String) {
+        if (local.value.hindi) {
+            val voice = hindiVoice
+            val reason = if (voice == null) "the Hindi voice could not be created" else voice.unavailableReason("hi")
+            if (voice != null && reason == null) {
+                hindiVoiceNote = null
+                speaker.usePrimary(voice)
+                speaker.speakAll(HindiPhrases.segments(text))
+                return
+            }
+            hindiVoiceNote = "The Hindi voice is not available ($reason), so replies are spoken in English."
+            android.util.Log.w(TAG, "tts: Hindi speech not used: $reason")
+        } else {
+            hindiVoiceNote = null
+        }
+        speaker.usePrimary(configuredVoice)
+        speaker.speak(text)
+    }
 
     private fun say(message: String) = local.update { it.copy(message = message) }
 
@@ -639,6 +906,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         (speech as? ResidentSherpaSpeechEngine)?.release()
         recorder.cancel()
         speaker.shutdown()
+        if (hindiVoice !== configuredVoice) hindiVoice?.shutdown()
     }
 
     class Factory(private val app: Application, private val selection: EngineSelection) : ViewModelProvider.Factory {

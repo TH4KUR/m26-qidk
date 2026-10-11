@@ -140,6 +140,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.conversation(ui: AppU
         TranscriptCard(
             ui.session.transcripts, highlight, ui.heardNow ?: ui.liveText, reading = ui.processing,
             readingLabel = if (ui.heardNow == null) "Transcribing your recording…" else "Organizing the report…",
+            scriptNote = ui.scriptNote,
         )
         }
         }

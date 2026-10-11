@@ -32,7 +32,7 @@ class ReportSessionTest {
     private val slide = FakeLlmEngine.DECK_TRANSCRIPT
 
     private fun session(llm: LlmEngine = FakeLlmEngine(), store: InMemoryReportStore = InMemoryReportStore()) =
-        Pipeline.newSession(llm, store, clock)
+        Pipeline.newSession(llm, store, clock, askOptional = false) // the mandatory flow; the optional asks have their own tests
 
     private fun ReportSession.say(text: String, stt: StageRecord? = null) = runBlocking { onUtterance(text, stt) }
     private fun ReportSession.field(f: Field) = ui.value.fields.first { it.field == f }
@@ -47,12 +47,12 @@ class ReportSessionTest {
         it.tap(Field.DATE_TIME, "Today")
     }
 
-    @Test fun theSlideExampleFillsTheFieldsAndAsksWhichDayAndHowSevere() {
+    @Test fun theSlideExampleFillsTheFieldsAndAsksWhichDayThenHowSevereOneAtATime() {
         val s = session()
         s.say(slide)
         val state = assertIs<SessionState.Asking>(s.ui.value.state)
-        assertEquals(listOf(Field.DATE_TIME, Field.SEVERITY), state.question.asks.map { it.field }, "the time has no date, so the day is asked")
-        assertEquals("Was that today? How severe is it?", s.ui.value.say?.text)
+        assertEquals(listOf(Field.DATE_TIME), state.question.asks.map { it.field }, "the time has no date, so the day is asked, alone")
+        assertEquals("Was that today?", s.ui.value.say?.text)
 
         assertEquals("Water leak or flood", s.field(Field.INCIDENT_TYPE).value)
         assertEquals(UiStatus.HEARD, s.field(Field.INCIDENT_TYPE).status)
@@ -63,6 +63,16 @@ class ReportSessionTest {
         assertEquals("Which day was this?", s.field(Field.DATE_TIME).hint)
         assertEquals("isolated the area", s.field(Field.IMMEDIATE_ACTIONS).value)
         assertEquals(listOf("update_report", "ask_user"), s.ui.value.toolLog.map { it.tool })
+    }
+
+    @Test fun aHindiTimeTheModelMissedIsStillReadFromTheWordsSoTheDayIsNotAskedAgain() {
+        val reply = """{"tool":"update_report","arguments":{"incident_type":"water_leak_flood","location":"कमरे","evidence":{"incident_type":"पानी लीक","location":"कमरे"}}}"""
+        val s = session(Scripted(reply))
+        s.say("आज सुबह 10 बजे कमरे में पानी लीक हो गया")
+        assertEquals(UiStatus.HEARD, s.field(Field.DATE_TIME).status)
+        assertTrue("10" in s.field(Field.DATE_TIME).value.orEmpty(), s.field(Field.DATE_TIME).value.orEmpty())
+        val asked = (s.ui.value.state as? SessionState.Asking)?.question?.asks?.map { it.field }.orEmpty()
+        assertTrue(Field.DATE_TIME !in asked, "the time was said, so it is not asked: $asked")
     }
 
     @Test fun severityIsOnlySuggestedUntilTheReporterAnswers() {
@@ -88,8 +98,10 @@ class ReportSessionTest {
         val llm = Scripted(FakeLlmEngine.DECK_REPLY)
         val s = session(llm)
         s.say(slide)
-        s.tap(Field.SEVERITY, "Moderate")
         s.tap(Field.DATE_TIME, "Today")
+        assertEquals(listOf(Field.SEVERITY), assertIs<SessionState.Asking>(s.ui.value.state).question.asks.map { it.field }, "severity is the next, separate question")
+        assertEquals("How bad is it?", s.ui.value.say?.text)
+        s.tap(Field.SEVERITY, "Moderate")
         assertEquals(1, llm.calls, "a tap must not call the model")
         assertEquals(SessionState.Review, s.ui.value.state)
         assertEquals("Moderate", s.field(Field.SEVERITY).value)
@@ -144,7 +156,7 @@ class ReportSessionTest {
         s.say("   ")
         assertEquals(0, llm.calls)
         val failed = assertIs<SessionState.Failed>(s.ui.value.state)
-        assertTrue(failed.message.isNotBlank())
+        assertEquals("I didn't catch that. Could you say it again, a little closer to the microphone?", failed.message)
         assertTrue(failed.retryable)
     }
 
@@ -153,7 +165,7 @@ class ReportSessionTest {
         val s = session(llm)
         s.say(slide)
         assertEquals(2, llm.calls)
-        assertIs<SessionState.Failed>(s.ui.value.state)
+        assertEquals("I didn't quite get that. Could you say it again?", assertIs<SessionState.Failed>(s.ui.value.state).message)
         assertTrue(s.ui.value.fields.filter { it.mandatory }.all { it.status == UiStatus.NEEDED })
         assertEquals(listOf(slide), s.ui.value.transcripts, "what was heard is kept so the reporter can retry")
     }
@@ -235,6 +247,52 @@ class ReportSessionTest {
     private val nothing = update("{}")
     private val strange = "there is something strange in the basement"
     private val fireNoPlace = update("""{"incident_type":"fire_smoke","evidence":{"incident_type":"fire"}}""")
+
+    // ---- what the reporter stated raises the advice (PriorityAdvisor.onReport, C/008) -----------------------------
+
+    private val printerSaid = "The printer on the second floor stopped working and the severity is critical"
+    private val printerCritical = update(
+        """{"incident_type":"equipment_failure","severity":"critical","evidence":{"incident_type":"printer on the second floor stopped working","severity":"severity is critical"}}""",
+    )
+
+    @Test fun aSeverityTheReporterStatedRaisesThePriorityFloor() {
+        val s = session(Scripted(printerCritical))
+        s.say(printerSaid)
+        assertEquals("Critical", s.field(Field.SEVERITY).value)
+        assertEquals(UiStatus.HEARD, s.field(Field.SEVERITY).status)
+        assertEquals(Priority.URGENT, s.ui.value.priority?.level, "'critical' said by the reporter is URGENT")
+        assertTrue(s.ui.value.priority!!.reasons.any { it.contains("critical") }, "the reason names what was said: ${s.ui.value.priority!!.reasons}")
+    }
+
+    @Test fun aSeverityTheReporterTypesInReviewRaisesThePriorityFloor() {
+        val s = reviewed()
+        assertTrue(s.ui.value.priority!!.level < Priority.HIGH, "a minor, harmless leak starts below HIGH: ${s.ui.value.priority!!.level}")
+        s.edit(Field.SEVERITY, "severe")
+        assertEquals(Priority.HIGH, s.ui.value.priority?.level, "'severe' set by the reporter is HIGH")
+    }
+
+    @Test fun aStatedFloorIsNotLoweredByALaterUtteranceThatSaysNothingNew() {
+        val s = session(Scripted(printerCritical, nothing))
+        s.say(printerSaid)
+        s.say("Okay")
+        assertEquals(Priority.URGENT, s.ui.value.priority?.level, "raise-only: a later chunk must not undo the floor")
+    }
+
+    @Test fun aStatedCriticalSpeaksTheEmergencyLineBecauseTheFloorIsWhatMadeItUrgent() {
+        val s = session(Scripted(printerCritical))
+        s.say(printerSaid)
+        assertTrue(s.ui.value.say?.text.orEmpty().contains("call 112 now"), "the line must not be swallowed by the call that raised the floor: ${s.ui.value.say?.text}")
+    }
+
+    @Test fun aCriticalTheReporterTypesSpeaksTheEmergencyLineOnce() {
+        val s = reviewed()
+        s.edit(Field.SEVERITY, "critical")
+        assertEquals("If anyone is in danger, call 112 now.", s.ui.value.say?.text)
+        val sayId = s.ui.value.say!!.id
+        s.edit(Field.SEVERITY, "critical")
+        s.edit(Field.LOCATION, "Block C")
+        assertEquals(sayId, s.ui.value.say?.id, "the line is spoken once, however often the report is edited")
+    }
 
     @Test fun theModelsHintReachesTheAdvisorAndRaisesTheLevelButNotToUrgent() {
         val plain = session(Scripted(nothing)).also { it.say(strange) }

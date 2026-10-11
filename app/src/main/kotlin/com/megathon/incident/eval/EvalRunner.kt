@@ -1,5 +1,7 @@
 package com.megathon.incident.eval
 
+import com.megathon.incident.eval.EvalSplit
+import com.megathon.incident.eval.SplitFilter
 import com.megathon.incident.llm.LlmEngine
 import com.megathon.incident.llm.LlmRequest
 import com.megathon.incident.llm.LlmResult
@@ -46,21 +48,34 @@ class RecordingLlmEngine(private val inner: LlmEngine) : LlmEngine {
 }
 
 /**
- * Debug-only: runs the **dev** split of E's gold set through the app's real pipeline (prompt, model, parser, validator,
- * merge, planner) and writes what E's scorer reads: `raw.jsonl` and `predictions.jsonl`. Held-out cases are never run.
- * Output: `<filesDir>/eval/<runName>/`.
+ * Debug-only: runs one split of E's gold set through the app's real pipeline (prompt, model, parser, validator,
+ * merge, planner) and writes what E's scorer reads: `raw.jsonl` and `predictions.jsonl`.
+ * The split is [EvalSplit.DEV] unless the caller passes [EvalSplit.HOLDOUT], and the held-out items are only ever reached
+ * through `AppViewModel.debugHoldout`, which applies `HoldoutGuard` first. Output: `<filesDir>/eval/<runName>/`.
+ * [onSelected] receives the ids that are about to run, before the first model call (the held-out ledger is written there).
  */
 class EvalRunner(private val filesDir: File, private val engine: LlmEngine, private val warmUp: suspend () -> Long) {
     private val json = Json { prettyPrint = false; encodeDefaults = true }
 
-    suspend fun run(gold: File, prompts: PromptBuilder, runName: String, only: Set<String>?): File {
+    suspend fun run(
+        gold: File,
+        prompts: PromptBuilder,
+        runName: String,
+        only: Set<String>?,
+        split: EvalSplit = EvalSplit.DEV,
+        /** `--es probe on`: after each item's turns, run the focused second look and record its chips (dev scoring only; the first-pass numbers are unchanged). */
+        probe: Boolean = false,
+        onSelected: (List<String>) -> Unit = {},
+    ): File {
         val outDir = File(filesDir, "eval/$runName").apply { mkdirs() }
-        val loadMs = warmUp()
         val items = gold.readLines().filter { it.isNotBlank() }.map { json.parseToJsonElement(it).jsonObject }
-            .filter { it["split"]?.jsonPrimitive?.contentOrNull == "dev" } // held-out cases are never touched
+            .filter { SplitFilter.selects(it["split"]?.jsonPrimitive?.contentOrNull, split) }
             .filter { only == null || it["id"]!!.jsonPrimitive.content in only }
+        onSelected(items.map { it["id"]!!.jsonPrimitive.content })
+        val loadMs = warmUp()
 
         val raw = StringBuilder()
+        val probeRaw = StringBuilder()
         val preds = StringBuilder()
         val zone = ZoneOffset.ofHoursMinutes(5, 30)
         val summary = mutableListOf<String>()
@@ -102,6 +117,26 @@ class EvalRunner(private val filesDir: File, private val engine: LlmEngine, priv
                 (session.ui.value.state as? SessionState.Asking)?.let { asked += it.question.asks.map { a -> a.field.name.lowercase() } } ?: asked.add(emptyList())
                 if (failed != null) break
             }
+            val firstPassCalls = recording.calls.size
+            var probeChips = emptyList<com.megathon.incident.domain.Suggestion>()
+            var probeError: String? = null
+            if (probe && failed == null) {
+                try {
+                    session.probeMissing()
+                } catch (e: Exception) {
+                    probeError = "${e.javaClass.simpleName}: ${e.message}"
+                }
+                probeChips = session.ui.value.suggestions.filter { it.source == com.megathon.incident.domain.Source.LLM }
+                recording.calls.drop(firstPassCalls).forEach { c ->
+                    probeRaw.appendLine(
+                        buildJsonObject {
+                            put("gold_id", id); put("output", c.result?.text ?: "")
+                            c.result?.let { r -> put("elapsed_ms", r.elapsedMs); put("compute", r.compute.name) }
+                            c.error?.let { put("error", it) }
+                        }.toString(),
+                    )
+                }
+            }
             val report: IncidentReport = session.ui.value.report
             val compute = recording.calls.lastOrNull { it.result != null }?.result?.compute?.name ?: "NONE"
             preds.appendLine(
@@ -109,13 +144,16 @@ class EvalRunner(private val filesDir: File, private val engine: LlmEngine, priv
                     put("gold_id", id); put("captured_at", capturedAt); put("compute", compute)
                     put("report", json.parseToJsonElement(json.encodeToString(IncidentReport.serializer(), report)))
                     putJsonArray("asked") { asked.forEach { turn -> add(JsonArray(turn.map { JsonPrimitive(it) })) } }
+                    if (probe) putJsonArray("probe_chips") { probeChips.forEach { c -> add(buildJsonObject { put("field", c.field.name.lowercase()); put("proposed", c.proposed); put("reason", c.reason) }) } }
+                    probeError?.let { put("probe_error", it) }
                     failed?.let { put("error", it) }
                 }.toString(),
             )
-            summary += "$id calls=${recording.calls.size} valid=${recording.calls.count { c -> c.result?.let { ToolCallParser.parse(it.text) is ParseResult.Ok } == true }}${failed?.let { " ERROR $it" } ?: ""}"
+            summary += "$id calls=${firstPassCalls} valid=${recording.calls.take(firstPassCalls).count { c -> c.result?.let { ToolCallParser.parse(it.text) is ParseResult.Ok } == true }}${failed?.let { " ERROR $it" } ?: ""}"
         }
         File(outDir, "raw.jsonl").writeText(raw.toString())
         File(outDir, "predictions.jsonl").writeText(preds.toString())
+        if (probe) File(outDir, "probe_raw.jsonl").writeText(probeRaw.toString())
         File(outDir, "meta.json").writeText(
             buildJsonObject {
                 put("run", runName); put("engine", engine.name); put("items", items.size); put("model_load_ms", loadMs)

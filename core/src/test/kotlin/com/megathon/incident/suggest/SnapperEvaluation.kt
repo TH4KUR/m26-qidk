@@ -20,6 +20,8 @@ import kotlin.test.Test
  *  - synthetic: digits and single letters spoken as words ("2" -> "to", "C" -> "see"), the way speech
  *    recognition often writes them. The right answer is the gold place. Labelled synthetic: these are
  *    generated, not real recognition errors.
+ *  - misheard sentences: E's `turns_misheard` (authored Whisper-style text), the whole sentence as input,
+ *    which is harder than the app's case (there the LLM usually passes only the place phrase).
  */
 class SnapperEvaluation {
 
@@ -40,12 +42,14 @@ class SnapperEvaluation {
 
         val clean = cases.map { it to judge(site, snapper, it) }
         val synthetic = cases.mapNotNull { c -> spokenForm(c.heard)?.let { c.copy(heard = it) } }.map { it to judge(site, snapper, it) }
+        val misheard = goldPaths.split(',').flatMap { readCases(File(it.trim()), misheardTurns = true) }.map { it to judge(site, snapper, it) }
 
         val report = buildString {
             appendLine("cases: ${cases.size} values (dev split only) from ${cases.map { it.id }.distinct().size} gold items")
             appendLine()
             section("Clean values (as typed in the gold)", clean)
             section("Synthetic mishearings (digits/letters spoken as words)", synthetic)
+            section("Misheard sentences (E's turns_misheard, whole sentence in)", misheard)
         }
         File(outPath!!).writeText(report)
         println(report)
@@ -76,23 +80,26 @@ class SnapperEvaluation {
         }
     }
 
-    private fun readCases(file: File): List<Case> = file.readLines().filter { it.isNotBlank() }.flatMap { line ->
+    /** Dev items only. With [misheardTurns], the input is the item's misheard sentence instead of the gold value. */
+    private fun readCases(file: File, misheardTurns: Boolean = false): List<Case> = file.readLines().filter { it.isNotBlank() }.flatMap { line ->
         val item = Json.parseToJsonElement(line).jsonObject
         if (item["split"]?.jsonPrimitive?.content != "dev") return@flatMap emptyList()
         val id = item["id"]!!.jsonPrimitive.content
         val gold = item["gold"]!!.jsonObject
+        val sentence = (item["turns_misheard"] as? JsonArray)?.joinToString(" ") { it.jsonPrimitive.content }
+        if (misheardTurns && sentence == null) return@flatMap emptyList()
         listOfNotNull(
-            caseFor(id, EntryKind.PLACE, gold["location"]?.jsonObject),
-            caseFor(id, EntryKind.ASSET, gold["equipment_asset"]?.jsonObject),
+            caseFor(id, EntryKind.PLACE, gold["location"]?.jsonObject, if (misheardTurns) sentence else null),
+            caseFor(id, EntryKind.ASSET, gold["equipment_asset"]?.jsonObject, if (misheardTurns) sentence else null),
         )
     }
 
-    private fun caseFor(id: String, kind: EntryKind, field: JsonObject?): Case? {
+    private fun caseFor(id: String, kind: EntryKind, field: JsonObject?, input: String? = null): Case? {
         val value = field?.get("value") ?: return null
         if (value is JsonArray) return null
-        val heard = value.jsonPrimitive.content
+        val gold = value.jsonPrimitive.content
         val alts = (field["alts"] as? JsonArray)?.map { it.jsonPrimitive.content } ?: emptyList()
-        return Case(id, kind, heard, listOf(heard) + alts)
+        return Case(id, kind, input ?: gold, listOf(gold) + alts)
     }
 
     /** "Conference Room 2" -> "conference room to", "Lab C4" -> "lab see four"; null when nothing changes. */

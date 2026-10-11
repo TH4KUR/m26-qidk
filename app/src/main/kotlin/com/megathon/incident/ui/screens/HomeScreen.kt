@@ -1,5 +1,8 @@
 package com.megathon.incident.ui.screens
 
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
+import com.megathon.incident.speech.HindiLaneNotice
 import android.content.res.Configuration
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
@@ -36,6 +39,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -113,7 +117,7 @@ fun HomeScreen(ui: AppUi, vm: AppViewModel) {
                     Spacer(Modifier.height(Space.s6))
                 }
             }
-            Footer(ui)
+            Footer(ui, vm)
         }
     }
 }
@@ -190,6 +194,7 @@ private fun LiveDetails(ui: AppUi) {
         TranscriptCard(
             transcripts = emptyList(), highlight = null, heardNow = ui.heardNow ?: ui.liveText, reading = true,
             readingLabel = if (ui.heardNow == null) "Transcribing your recording…" else "Organizing the report…",
+            scriptNote = ui.scriptNote,
         )
     }
 }
@@ -214,11 +219,32 @@ private fun ExampleNote() {
 }
 
 @Composable
-private fun Footer(ui: AppUi) {
+private fun Footer(ui: AppUi, vm: AppViewModel) {
+    val c = Theme.colors
     Column(
         Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Size.gutter, vertical = Space.s3),
-        verticalArrangement = Arrangement.spacedBy(Space.s2),
-    ) { PrivacyLine(ui.network) }
+        verticalArrangement = Arrangement.spacedBy(Space.s3),
+    ) {
+        if (!ui.listening && !ui.processing) HindiLaneSwitch(ui.hindiLane, vm::setHindiLane)
+        PrivacyLine(ui.network)
+    }
+}
+
+/**
+ * The experimental Hindi lane, off by default. Small and plainly labelled: it changes only which recogniser hears the
+ * next utterance. The whole row is the switch, so a screen reader announces it once with its state.
+ */
+@Composable
+private fun HindiLaneSwitch(on: Boolean, onChange: (Boolean) -> Unit) {
+    val c = Theme.colors
+    Row(
+        Modifier.fillMaxWidth().toggleable(value = on, role = Role.Switch, onValueChange = onChange).padding(vertical = Space.s1),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Space.s3),
+    ) {
+        Text(HindiLaneNotice.SWITCH_LABEL, style = MaterialTheme.typography.labelLarge, color = c.ink2, modifier = Modifier.weight(1f))
+        Switch(checked = on, onCheckedChange = null)
+    }
 }
 
 @Composable

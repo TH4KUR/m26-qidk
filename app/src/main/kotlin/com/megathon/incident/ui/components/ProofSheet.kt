@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
+import com.megathon.incident.speech.HindiLaneNotice
 import com.megathon.incident.session.JournalEntry
 import com.megathon.incident.session.Labels
 import com.megathon.incident.session.StageRecord
@@ -69,7 +70,12 @@ fun ProofSheet(ui: AppUi, onClose: () -> Unit) {
                 }
             }
 
-            item { Section("Where each step ran") { Stages(ui.session.stages, ui.ttsOffline) } }
+            item { Section("Where each step ran") { Stages(ui.session.stages, ui.ttsOffline, ui.ttsNote) } }
+
+            // Only when the experimental Hindi lane is on or was used: says plainly that nothing about its accuracy is measured.
+            if (ui.hindiLane || ui.session.stages.any { it.stage == "Hear" && it.engine.startsWith("Nemotron") }) {
+                item { Section("Hindi (experimental)") { Muted(HindiLaneNotice.TEXT) } }
+            }
 
             item { Section("Voice tags (suggestions only)") { VoiceTags(ui) } }
 
@@ -116,7 +122,7 @@ private fun Fact(label: String, value: String) {
 private val STAGES = listOf("Hear" to "Heard with", "Read" to "Understood with", "Speak" to "Spoken with")
 
 @Composable
-private fun Stages(stages: List<StageRecord>, ttsOffline: Boolean?) {
+private fun Stages(stages: List<StageRecord>, ttsOffline: Boolean?, ttsNote: String?) {
     val c = Theme.colors
     Column(verticalArrangement = Arrangement.spacedBy(Space.s3)) {
         STAGES.forEach { (key, label) ->
@@ -132,10 +138,16 @@ private fun Stages(stages: List<StageRecord>, ttsOffline: Boolean?) {
                         s.ms?.let { Text("$it ms", style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"), color = c.ink2) }
                     }
                     if (key == "Speak") {
+                        val piper = s.engine.startsWith("Piper")
                         Text(
-                            if (ttsOffline == true) "Uses an offline system voice, on the CPU." else "Uses the system voice, on the CPU. No offline voice was confirmed.",
+                            when {
+                                piper -> "Uses the Piper voice (an open model run by sherpa-onnx), offline, on the CPU."
+                                ttsOffline == true -> "Uses an offline system voice, on the CPU."
+                                else -> "Uses the system voice, on the CPU. No offline voice was confirmed."
+                            },
                             style = MaterialTheme.typography.bodyMedium, color = c.ink2,
                         )
+                        if (ttsNote != null) Text(ttsNote, style = MaterialTheme.typography.bodyMedium, color = c.ink2)
                     }
                 }
             }

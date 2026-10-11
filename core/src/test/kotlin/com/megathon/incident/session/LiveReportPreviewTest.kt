@@ -178,4 +178,22 @@ class LiveReportPreviewTest {
         assertIs<SessionState.Asking>(s.ui.value.state)
         Unit
     }
+
+    @Test fun aSpokenNotSureThatChangesNothingStillEndsTheRecordingAndClearsThePreview() = runBlocking {
+        val s = Pipeline.newSession(com.megathon.incident.testing.FakeLlmEngine(), InMemoryReportStore(), clock)
+        s.onUtterance(com.megathon.incident.testing.FakeLlmEngine.DECK_TRANSCRIPT)
+        s.onUtterance("Minor, nobody was hurt.")
+        s.answer((s.ui.value.state as SessionState.Asking).question.asks.first { it.field == Field.DATE_TIME }.replies.first { it.label == "Today" })
+        assertEquals(listOf(Field.EQUIPMENT_ASSET), (s.ui.value.state as SessionState.Asking).question.asks.map { it.field }) // tools or items is open
+
+        val id = s.beginRecording()
+        s.previewRecording(id, "not sure")
+        assertTrue(s.ui.value.provisional != null, "the preview was showing while the reporter spoke")
+        val before = s.ui.value.report
+        s.onUtterance("not sure", recording = id) // master's voice path: a Skip answers the question and records nothing
+
+        assertEquals(listOf(Field.WITNESSES), (s.ui.value.state as SessionState.Asking).question.asks.map { it.field }, "the skip moved on to the next question")
+        assertEquals(before, s.ui.value.report, "a skip changes no field, so the report-changed rebase cannot clear the preview")
+        assertNull(s.ui.value.provisional, "the recording is over: no provisional card may stay on screen")
+    }
 }

@@ -86,6 +86,8 @@ fun TranscriptCard(
     reading: Boolean,
     modifier: Modifier = Modifier,
     readingLabel: String = "Working on your report…",
+    /** One short line shown when the transcript is in a different script from the labels and replies; null shows nothing. */
+    scriptNote: String? = null,
 ) {
     val c = Theme.colors
     Card(modifier) {
@@ -101,6 +103,7 @@ fun TranscriptCard(
                 )
             }
             if (all.isEmpty() && !reading) Text("Nothing yet.", style = MaterialTheme.typography.bodyLarge, color = c.ink3)
+            if (scriptNote != null) Text(scriptNote, style = MaterialTheme.typography.bodyMedium, color = c.ink2)
             if (reading) {
                 Row(Modifier.semantics { liveRegion = LiveRegionMode.Polite }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
                     androidx.compose.foundation.layout.Box(

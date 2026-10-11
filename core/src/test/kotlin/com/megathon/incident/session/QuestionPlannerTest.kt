@@ -12,7 +12,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class QuestionPlannerTest {
-    private val planner = QuestionPlanner()
+    private val planner = QuestionPlanner(askOptional = false) // the mandatory flow; OptionalAsksTest covers the rest
     private val low = TriageLanes.forLevel(Priority.LOW)
 
     private fun heard(f: Field, t: String) = FieldValue(t, ValueStatus.REPORTED, t)
@@ -24,8 +24,63 @@ class QuestionPlannerTest {
     @Test fun theSlideExampleAsksExactlyOneQuestionAboutSeverity() {
         val q = planner.next(full(), emptySet(), low, emptyList())!!
         assertEquals(listOf(Field.SEVERITY), q.asks.map { it.field })
-        assertEquals("How severe is it?", q.spoken)
+        assertEquals("How bad is it?", q.spoken)
         assertEquals(listOf("Minor", "Moderate", "Severe", "Critical", "No harm"), q.asks.single().replies.map { it.label })
+    }
+
+    @Test fun aMissingTimeIsAskedAsWhenWasThat() {
+        val r = full().with(Field.DATE_TIME, FieldValue(null, ValueStatus.MISSING)).with(Field.SEVERITY, FieldValue("minor", ValueStatus.USER_CONFIRMED))
+        val q = planner.next(r, emptySet(), low, emptyList())!!
+        assertEquals(listOf(Field.DATE_TIME), q.asks.map { it.field })
+        assertEquals("When was that?", q.spoken)
+        assertEquals(listOf("Just now"), q.asks.single().replies.map { it.label })
+    }
+
+    @Test fun aNonUrgentLocationIsAskedAsWhereDidItHappen() {
+        val r = full().with(Field.LOCATION, FieldValue(null, ValueStatus.MISSING)).with(Field.SEVERITY, FieldValue("minor", ValueStatus.USER_CONFIRMED))
+        assertEquals("Where did it happen?", planner.next(r, emptySet(), low, emptyList())!!.spoken)
+    }
+
+    @Test fun onlyOneQuestionIsAskedAtATimeWhateverIsMissing() {
+        val empty = IncidentReport.empty("r", 0)
+        assertEquals("What kind of incident is it?", planner.next(empty, emptySet(), low, emptyList())!!.spoken)
+        val noPlaceNoTime = full().with(Field.LOCATION, FieldValue(null, ValueStatus.MISSING)).with(Field.DATE_TIME, FieldValue(null, ValueStatus.MISSING))
+        assertEquals("Where did it happen?", planner.next(noPlaceNoTime, emptySet(), low, emptyList())!!.spoken)
+        for (lane in listOf(Priority.LOW, Priority.MEDIUM, Priority.HIGH, Priority.URGENT)) {
+            assertEquals(1, planner.next(empty, emptySet(), TriageLanes.forLevel(lane), emptyList())!!.asks.size, "lane $lane")
+        }
+    }
+
+    @Test fun aSkippedQuestionIsFollowedByTheNextMissingFieldNotAskedAgain() {
+        val empty = IncidentReport.empty("r", 0)
+        val second = planner.next(empty, emptySet(), low, listOf(setOf(Field.INCIDENT_TYPE)))!!
+        assertEquals(listOf(Field.LOCATION), second.asks.map { it.field })
+        val third = planner.next(empty, emptySet(), low, listOf(setOf(Field.INCIDENT_TYPE), setOf(Field.LOCATION)))!!
+        assertEquals(listOf(Field.DATE_TIME), third.asks.map { it.field })
+    }
+
+    @Test fun whenEveryMissingFieldHasBeenAskedOnceTheReportGoesToReviewInsteadOfNagging() {
+        val empty = IncidentReport.empty("r", 0)
+        val asked = listOf(setOf(Field.INCIDENT_TYPE), setOf(Field.LOCATION), setOf(Field.DATE_TIME), setOf(Field.SEVERITY))
+        assertNull(planner.next(empty, emptySet(), low, asked))
+    }
+
+    @Test fun aFieldThatNeedsClarifyingIsAskedOnceAndNotAgainUntilTheSessionClearsTheHistory() {
+        val r = full().with(Field.SEVERITY, FieldValue("minor", ValueStatus.USER_CONFIRMED))
+            .with(Field.DATE_TIME, heard(Field.DATE_TIME, "date missing ≈10:00 (around 10 AM)"))
+        val clarify = setOf(Field.DATE_TIME)
+        assertEquals(listOf(Field.DATE_TIME), planner.next(r, clarify, low, emptyList())!!.asks.map { it.field })
+        assertNull(planner.next(r, clarify, low, listOf(setOf(Field.DATE_TIME))))
+    }
+
+    @Test fun theOpenFieldsAreTheMandatoryOnesNotYetAnsweredOrStillNeedingClarifyingInPolicyOrder() {
+        assertEquals(
+            listOf(Field.INCIDENT_TYPE, Field.LOCATION, Field.DATE_TIME, Field.SEVERITY),
+            planner.open(IncidentReport.empty("r", 0), emptySet(), low),
+        )
+        assertEquals(listOf(Field.SEVERITY), planner.open(full(), emptySet(), low))
+        assertEquals(listOf(Field.DATE_TIME, Field.SEVERITY), planner.open(full(), setOf(Field.DATE_TIME), low))
+        assertEquals(listOf(Field.LOCATION), planner.open(IncidentReport.empty("r", 0), emptySet(), TriageLanes.forLevel(Priority.URGENT)))
     }
 
     @Test fun nothingMissingMeansNoQuestion() {
@@ -33,10 +88,10 @@ class QuestionPlannerTest {
         assertNull(planner.next(r, emptySet(), low, emptyList()))
     }
 
-    @Test fun mandatoryFieldsAreAskedInPolicyOrderAndCappedByTheLane() {
+    @Test fun mandatoryFieldsAreAskedInPolicyOrderOneAtATime() {
         val empty = IncidentReport.empty("r", 0)
         val q = planner.next(empty, emptySet(), low, emptyList())!!
-        assertEquals(listOf(Field.INCIDENT_TYPE, Field.LOCATION), q.asks.map { it.field }, "max two per turn on the LOW lane")
+        assertEquals(listOf(Field.INCIDENT_TYPE), q.asks.map { it.field }, "the first mandatory field in policy order, alone")
     }
 
     @Test fun anUrgentIncidentAsksOnlyForTheLocation() {

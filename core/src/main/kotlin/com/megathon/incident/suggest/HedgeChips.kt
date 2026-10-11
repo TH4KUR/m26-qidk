@@ -47,7 +47,7 @@ internal val FIELD_LABELS = listOf(
     Field.LOCATION to "location",
     Field.DATE_TIME to "time",
     Field.PERSONS_INVOLVED to "people involved",
-    Field.EQUIPMENT_ASSET to "equipment",
+    Field.EQUIPMENT_ASSET to "tool or item",
     Field.IMMEDIATE_ACTIONS to "actions taken",
     Field.WITNESSES to "witnesses",
 )

@@ -19,6 +19,10 @@ class GazetteerSnapperTest {
     @Test fun spokenDigitsJoinUp() = assertEquals("North 105", place("north one oh five"))
     @Test fun leadingPrepositionsAreIgnored() = assertEquals("Conference Room 2", place("near the conference room to"))
 
+    /** Slips from E's misheard dev texts (h04, h07): authored Whisper-style errors, not measured ones. */
+    @Test fun treeBecomesThree() = assertEquals("Conference Room 3", place("conference room tree"))
+    @Test fun blogBecomesBlock() = assertEquals("Research Block", place("research blog"))
+
     // ---- aliases and spelling ------------------------------------------------------------------
     @Test fun anAliasSnapsToTheCanonicalName() = assertEquals("Conference Room 2", place("CR2"))
     @Test fun aMisheardAliasOfAnAsset() = assertEquals("Chiller 1", asset("the chilla"))

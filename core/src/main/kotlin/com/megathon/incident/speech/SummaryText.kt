@@ -3,6 +3,7 @@ package com.megathon.incident.speech
 import com.megathon.incident.domain.Field
 import com.megathon.incident.domain.IncidentReport
 import com.megathon.incident.domain.ValueStatus
+import com.megathon.incident.session.Labels
 
 /** Text the app speaks after submit ([of]) and when the user says "read it back" ([readBack]). */
 object SummaryText {
@@ -15,15 +16,23 @@ object SummaryText {
     )
 
     private val LABELS = mapOf(
-        Field.INCIDENT_TYPE to "Incident type", Field.LOCATION to "Location", Field.DATE_TIME to "Date and time",
-        Field.SEVERITY to "Severity", Field.PERSONS_INVOLVED to "Persons involved",
-        Field.EQUIPMENT_ASSET to "Equipment", Field.IMMEDIATE_ACTIONS to "Immediate actions",
+        Field.INCIDENT_TYPE to "What happened", Field.LOCATION to "Where", Field.DATE_TIME to "When",
+        Field.SEVERITY to "Severity", Field.PERSONS_INVOLVED to "People involved",
+        Field.EQUIPMENT_ASSET to "Tools or items", Field.IMMEDIATE_ACTIONS to "What was done",
         Field.WITNESSES to "Witnesses",
+    )
+
+    /** What is still missing, as the end of "I still need to know ...". */
+    private val MISSING_WORDS = mapOf(
+        Field.INCIDENT_TYPE to "what happened", Field.LOCATION to "where", Field.DATE_TIME to "when",
+        Field.SEVERITY to "how severe it is", Field.PERSONS_INVOLVED to "who was involved",
+        Field.EQUIPMENT_ASSET to "which tool or item", Field.IMMEDIATE_ACTIONS to "what was done",
+        Field.WITNESSES to "who saw it",
     )
 
     /** `Report ready. <type> at <location>, <time>. Severity <severity>. Actions taken: <actions>.` Missing parts are skipped. */
     fun of(report: IncidentReport): String {
-        val type = heard(report, Field.INCIDENT_TYPE)?.replace('_', ' ')
+        val type = heard(report, Field.INCIDENT_TYPE)?.let(Labels::type)
         val location = heard(report, Field.LOCATION)
         val time = heard(report, Field.DATE_TIME)
         val severity = heard(report, Field.SEVERITY)
@@ -58,11 +67,11 @@ object SummaryText {
                 else -> null
             }
         }
-        val missing = mandatory.filterNot { report.isAnswered(it) }.map { LABELS.getValue(it).lowercase() }
+        val missing = mandatory.filterNot { report.isAnswered(it) }.map { MISSING_WORDS.getValue(it) }
 
         return buildString {
-            append(if (lines.isEmpty()) "The report is empty so far." else "Here is the report so far. ${lines.joinToString(" ")}")
-            if (missing.isNotEmpty()) append(" Still missing: ${spokenList(missing)}.")
+            append(if (lines.isEmpty()) "There is nothing in the report yet." else "Here's what I have so far. ${lines.joinToString(" ")}")
+            if (missing.isNotEmpty()) append(" I still need to know ${spokenList(missing)}.")
         }
     }
 
@@ -70,8 +79,12 @@ object SummaryText {
         if (report.isFilled(field)) report.value(field).text?.takeIf { it.isNotBlank() } else null
 
     private fun spoken(field: Field, text: String): String =
-        if (field == Field.INCIDENT_TYPE) text.replace('_', ' ') else text
+        if (field == Field.INCIDENT_TYPE) Labels.type(text) else text
 
     private fun spokenList(items: List<String>): String =
-        if (items.size <= 1) items.joinToString() else items.dropLast(1).joinToString(", ") + " and " + items.last()
+        when (items.size) {
+            0, 1 -> items.joinToString()
+            2 -> items.joinToString(" and ")
+            else -> items.dropLast(1).joinToString(", ") + ", and " + items.last()
+        }
 }
