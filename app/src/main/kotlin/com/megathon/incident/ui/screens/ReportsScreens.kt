@@ -17,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,8 +26,12 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.megathon.incident.domain.Field
+import com.megathon.incident.session.HindiDate
+import com.megathon.incident.session.HindiLabels
+import com.megathon.incident.session.HindiSavedAt
 import com.megathon.incident.session.Labels
 import com.megathon.incident.session.ReportListRow
+import com.megathon.incident.session.UiStatus
 import com.megathon.incident.ui.AppUi
 import com.megathon.incident.ui.AppViewModel
 import com.megathon.incident.ui.components.AppTabs
@@ -34,6 +39,8 @@ import com.megathon.incident.ui.components.AppTopBar
 import com.megathon.incident.ui.components.Hairline
 import com.megathon.incident.ui.components.Panel
 import com.megathon.incident.ui.components.Pill
+import com.megathon.incident.ui.i18n.isHindi
+import com.megathon.incident.ui.i18n.tr
 import com.megathon.incident.ui.theme.Size
 import com.megathon.incident.ui.theme.Space
 import com.megathon.incident.ui.theme.Theme
@@ -51,7 +58,7 @@ fun ReportsScreen(ui: AppUi, vm: AppViewModel) {
     val c = Theme.colors
     Scaffold(
         containerColor = c.canvas,
-        topBar = { AppTopBar("Reports", onProof = vm::openProof, simulatedNote = ui.simulatedNote) },
+        topBar = { AppTopBar(tr("Reports", "रिपोर्ट"), onProof = vm::openProof, simulatedNote = ui.simulatedNote) },
         bottomBar = { AppTabs(selected = 1, onNewReport = vm::closeReports, onReports = {}) },
     ) { pad ->
         if (ui.savedReports.isEmpty()) {
@@ -59,46 +66,58 @@ fun ReportsScreen(ui: AppUi, vm: AppViewModel) {
                 Modifier.fillMaxSize().padding(pad).padding(horizontal = Size.gutter),
                 verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text("No reports yet", style = MaterialTheme.typography.headlineSmall, color = c.ink, modifier = Modifier.semantics { heading() })
+                Text(tr("No reports yet", "अभी कोई रिपोर्ट नहीं"), style = MaterialTheme.typography.headlineSmall, color = c.ink, modifier = Modifier.semantics { heading() })
                 Text(
-                    "Reports you save appear here. They stay on this device.",
+                    tr("Reports you save appear here. They stay on this device.", "आपकी सहेजी रिपोर्ट यहाँ दिखेंगी। वे इसी डिवाइस पर रहती हैं।"),
                     style = MaterialTheme.typography.bodyLarge, color = c.ink2, modifier = Modifier.padding(top = Space.s2),
                 )
             }
         } else {
+            val today = remember { LocalDate.now(ZoneId.of("Asia/Kolkata")) }
             LazyColumn(
                 Modifier.fillMaxSize().padding(pad).padding(horizontal = Size.gutter),
                 contentPadding = PaddingValues(vertical = Space.s4),
                 verticalArrangement = Arrangement.spacedBy(Space.s3),
             ) {
-                items(ui.savedReports, key = { it.id }) { row -> ReportRow(row) { vm.openSavedReport(row.id) } }
+                items(ui.savedReports, key = { it.id }) { row -> ReportRow(row, today) { vm.openSavedReport(row.id) } }
             }
         }
     }
 }
 
 @Composable
-private fun ReportRow(row: ReportListRow, onOpen: () -> Unit) {
+private fun ReportRow(row: ReportListRow, today: LocalDate, onOpen: () -> Unit) {
     val c = Theme.colors
+    val hindi = isHindi()
+    // In Hindi the type, severity and date are said from the stored values; what the reporter said (the place) is shown as it was.
+    val title = if (hindi) row.typeWire?.let { HindiLabels.type(it) } ?: "घटना की रिपोर्ट" else row.title
+    val whenText = if (hindi) row.whenRaw?.let { HindiDate.friendly(it, today) } else row.whenText
+    val severity = if (hindi) {
+        row.severityWire?.let { w ->
+            HindiLabels.severity(w) + (if (row.severityIsSuggested) " (${HindiLabels.status(UiStatus.SUGGESTED).orEmpty()})" else "")
+        }
+    } else row.severity
+    val status = if (hindi && row.status == "Saved") "सहेजी गई" else row.status
     Column(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(c.surface)
-            .clickable(role = Role.Button, onClickLabel = "Open this report", onClick = onOpen)
+            .clickable(role = Role.Button, onClickLabel = tr("Open this report", "यह रिपोर्ट खोलें"), onClick = onOpen)
             .heightIn(min = Size.touch)
             .padding(Space.s4),
         verticalArrangement = Arrangement.spacedBy(Space.s2),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-            Text(row.title, style = MaterialTheme.typography.titleMedium, color = c.ink, modifier = Modifier.weight(1f))
-            Pill(row.status, c.accentContainer, c.onAccentContainer)
+            Text(title, style = MaterialTheme.typography.titleMedium, color = c.ink, modifier = Modifier.weight(1f))
+            Pill(status, c.accentContainer, c.onAccentContainer)
         }
-        val where = listOfNotNull(row.place, row.whenText).joinToString(" · ")
+        val where = listOfNotNull(row.place, whenText).joinToString(" · ")
         if (where.isNotEmpty()) Text(where, style = MaterialTheme.typography.bodyLarge, color = c.ink2)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-            row.severity?.let { Pill("Severity: $it", c.attentionContainer, c.onAttention) }
-            Text("Saved " + SAVED_AT.format(Instant.ofEpochMilli(row.savedAtEpochMs)), style = MaterialTheme.typography.labelSmall, color = c.ink3)
+            severity?.let { Pill(tr("Severity: $it", "गंभीरता: $it"), c.attentionContainer, c.onAttention) }
+            val savedAt = if (hindi) HindiSavedAt.format(row.savedAtEpochMs) + " सहेजी गई" else "Saved " + SAVED_AT.format(Instant.ofEpochMilli(row.savedAtEpochMs))
+            Text(savedAt, style = MaterialTheme.typography.labelSmall, color = c.ink3)
         }
     }
 }
@@ -111,10 +130,14 @@ fun SavedReportScreen(ui: AppUi, vm: AppViewModel) {
     val today = LocalDate.now(ZoneId.of("Asia/Kolkata"))
     Scaffold(
         containerColor = c.canvas,
-        topBar = { AppTopBar("Saved report", onProof = vm::openProof, onBack = vm::closeSavedReport, simulatedNote = ui.simulatedNote) },
+        topBar = { AppTopBar(tr("Saved report", "सहेजी हुई रिपोर्ट"), onProof = vm::openProof, onBack = vm::closeSavedReport, simulatedNote = ui.simulatedNote) },
     ) { pad ->
+        val hindi = isHindi()
         val rows = report?.let { r ->
-            Field.entries.mapNotNull { f -> Labels.display(f, r.value(f).text, today)?.let { Labels.fieldLabel(f) to it } }
+            Field.entries.mapNotNull { f ->
+                if (hindi) HindiLabels.display(f, r.value(f).text, today)?.let { HindiLabels.field(f) to it }
+                else Labels.display(f, r.value(f).text, today)?.let { Labels.fieldLabel(f) to it }
+            }
         }.orEmpty()
         LazyColumn(
             Modifier.fillMaxSize().padding(pad).padding(horizontal = Size.gutter),
@@ -122,8 +145,8 @@ fun SavedReportScreen(ui: AppUi, vm: AppViewModel) {
             verticalArrangement = Arrangement.spacedBy(Space.s4),
         ) {
             item {
-                Panel("Saved on this device") {
-                    if (rows.isEmpty()) Text("This report has no details.", style = MaterialTheme.typography.bodyLarge, color = c.ink3, modifier = Modifier.padding(vertical = Space.s3))
+                Panel(tr("Saved on this device", "इस डिवाइस पर सहेजी गई रिपोर्ट")) {
+                    if (rows.isEmpty()) Text(tr("This report has no details.", "इस रिपोर्ट में कोई ब्यौरा नहीं है।"), style = MaterialTheme.typography.bodyLarge, color = c.ink3, modifier = Modifier.padding(vertical = Space.s3))
                     rows.forEachIndexed { i, (label, value) ->
                         if (i > 0) Hairline()
                         Column(Modifier.fillMaxWidth().padding(horizontal = Space.s1, vertical = Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s1)) {
