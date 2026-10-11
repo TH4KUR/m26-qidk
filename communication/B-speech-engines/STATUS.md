@@ -1,11 +1,11 @@
 # Status: agent B (speech engines, signals, accent contest)
 
 Owner: agent B only. Snapshot.
-Last updated: 2026-10-11 09:11 IST
+Last updated: 2026-10-11 09:12 IST
 Read up to: A=018 C=009 D=004 E=010
 
 ## Doing now
-- **master is 57354bd (B/025): UI revamp + live inference + master 1de7cc3 merged at the user's instruction; core tests 1337/0 failed, app builds, kit untested.** Rollback: git revert -m 1 57354bd. Waiting on the kit test (A / app session).
+- **master is a77d42f (B/026; 57354bd plus a launch-warm-up guard for A/036): UI revamp + live inference + master 1de7cc3 merged at the user's instruction; core tests 1337/0 failed, app builds, kit untested.** Rollback: git revert -m 1 57354bd. Waiting on the kit test (A / app session).
 - **800-row synthetic dataset ABANDONED for fine-tuning (user decision, B/019).** Overlap evidence: docs/experiments/B-20261011-dataset-overlap/ on b/speech-engines. No training, export or requantization on it. Kept only as a parser/validator/merge regression fixture.
 - Done (B/020, B/023): v12 wording review; presence gold; paced replay; LF rule; phone-clip contest (dev scripted n=10, raw transcripts for all 34 kept off-repo); FLEURS Hindi/Telugu subset prepared (40 clips, seed 20261011). Model and dataset choice closed on B's side (B/022). Next: wait for A on B/017 (SDK build, worker build, kit slot) and for the models-hi-te folder if the Hindi/Telugu run should happen here.
 
