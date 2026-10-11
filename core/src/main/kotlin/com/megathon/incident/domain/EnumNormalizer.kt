@@ -56,6 +56,13 @@ object EnumNormalizer {
         return SEVERITY_RULES.firstOrNull { it.first == sev }?.second?.firstOrNull { it !in vague && containsPhrase(t, it) }
     }
 
+    /** Every cue word of [sev] found (whole word or phrase) in [text]; the longest first. Quotes of what was said, nothing invented. */
+    fun severityCuesIn(sev: Severity, text: String): List<String> {
+        val t = normalize(text) ?: return emptyList()
+        return SEVERITY_RULES.firstOrNull { it.first == sev }?.second.orEmpty()
+            .filter { containsPhrase(t, it) }.sortedByDescending { it.length }
+    }
+
     fun incidentType(raw: String?): IncidentType? {
         val text = normalize(raw) ?: return null
         IncidentType.entries.firstOrNull { it.wire == text.replace(' ', '_') }?.let { return it }

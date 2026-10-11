@@ -40,6 +40,10 @@ class MainActivity : ComponentActivity() {
         intent.getStringExtra("eval")?.let { gold ->
             vm.debugEval(gold, intent.getStringExtra("prompt"), intent.getStringExtra("run") ?: "run", intent.getStringExtra("only")?.split(',')?.toSet())
         }
+        // Debug builds: `--es tts PIPER` speaks with Piper TTS (sherpa-onnx, CPU) instead of the Android voice, falling back to the
+        // Android voice with a logged reason if the Piper files or library are missing. It is read by Engines.selection above.
+        // `--es say "text"` speaks that text with the selected voice and logs which engine spoke, its compute and the time (tag Incident).
+        if (Engines.isDebuggable(this)) intent.getStringExtra("say")?.let { vm.debugSay(it) }
         // Debug builds: `--es tts check` logs the system TTS voices for en-IN/hi-IN/te-IN (tag Incident, prefix ttscheck) and writes files/ttscheck.txt. Silent, no downloads.
         if (intent.getStringExtra("tts") == "check" && Engines.isDebuggable(this)) {
             lifecycleScope.launch {
@@ -53,6 +57,10 @@ class MainActivity : ComponentActivity() {
             val n = intent.getStringExtra("loops")?.toIntOrNull() ?: intent.getIntExtra("loops", 20)
             vm.debugCoexist(wav, n.coerceAtLeast(1))
         }
+        // Normal launches load the language model in the background now, so the first turn does not wait for it. The debug
+        // eval, coexist and WAV paths time the load themselves and must not have it done for them.
+        val timedByDebugPath = Engines.isDebuggable(this) && listOf("eval", "coexist", "wav").any { intent.hasExtra(it) }
+        if (!timedByDebugPath) vm.preloadModels()
         setContent { IncidentTheme { AppRoot(vm) } }
     }
 }

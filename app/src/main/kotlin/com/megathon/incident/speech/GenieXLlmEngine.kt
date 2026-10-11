@@ -16,6 +16,7 @@ import com.megathon.incident.llm.LlmEngine
 import com.megathon.incident.llm.LlmRequest
 import com.megathon.incident.llm.LlmResult
 import com.megathon.incident.llm.LlmTimings
+import com.megathon.incident.llm.Warmable
 import com.megathon.incident.testing.Compute
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -38,7 +39,7 @@ class GenieXLlmEngine(
     private val context: Context,
     private val modelName: String = debugModel ?: DEFAULT_MODEL,
     private val maxTokens: Int = 320,
-) : LlmEngine {
+) : LlmEngine, Warmable {
     override val name = if (modelName == DEFAULT_MODEL) "Qwen3-4B-Instruct-2507 (GenieX, QAIRT)" else "$modelName (GenieX, QAIRT)"
 
     private val loadLock = Mutex()
@@ -48,8 +49,13 @@ class GenieXLlmEngine(
     private var runtimeId: String = ""
     private var sdkReady = false
 
-    /** Loads the model if it is not loaded yet. Returns the time it took in ms (0 when it was already loaded). */
-    suspend fun warmUp(): Long = loadLock.withLock {
+    /**
+     * Loads the model if it is not loaded yet. Returns the time it took in ms (0 when it was already loaded).
+     * Safe to start early and from anywhere: a real call that arrives while this is loading waits on [loadLock] and then sees
+     * the loaded model (it never loads twice), and a failed load leaves [wrapper] null so the next call tries again.
+     * [generate] takes [generateLock] before [loadLock] and this takes only [loadLock], so the two cannot deadlock.
+     */
+    override suspend fun warmUp(): Long = loadLock.withLock {
         if (wrapper != null) return 0
         val started = System.nanoTime()
         withContext(Dispatchers.IO) {
