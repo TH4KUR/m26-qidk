@@ -110,6 +110,9 @@ fun ProofSheet(ui: AppUi, onClose: () -> Unit) {
             }
 
             if (showAll) allSessionsView(ui) else thisSessionView(ui)
+
+            // Who made it and what runs where: the same on both views.
+            item { AboutSection(Modifier.padding(bottom = Space.s8)) }
         }
     }
 }
