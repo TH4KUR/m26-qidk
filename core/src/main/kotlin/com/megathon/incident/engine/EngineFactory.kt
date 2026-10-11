@@ -5,13 +5,22 @@ import com.megathon.incident.testing.Compute
 import com.megathon.incident.testing.FakeLlmEngine
 import com.megathon.incident.testing.FakeSpeechEngine
 import com.megathon.incident.testing.SpeechEngine
+import com.megathon.incident.tts.TtsBackend
+import com.megathon.incident.tts.TtsKind
 
 enum class SpeechKind { FAKE, WHISPERKIT, SHERPA_QNN, AIHUB }
 
 enum class LlmKind { FAKE, GENIEX }
 
-/** Which engines to use. Default is FAKE until the real engine passes its contract test (handoff section 8). */
-data class EngineSelection(val speech: SpeechKind = SpeechKind.FAKE, val llm: LlmKind = LlmKind.FAKE)
+/**
+ * Which engines to use. Default is FAKE until the real engine passes its contract test (handoff section 8).
+ * [tts] is the speech-output engine: the system voice unless Piper is asked for (debug switch `--es tts PIPER`).
+ */
+data class EngineSelection(
+    val speech: SpeechKind = SpeechKind.FAKE,
+    val llm: LlmKind = LlmKind.FAKE,
+    val tts: TtsKind = TtsKind.ANDROID,
+)
 
 /** A release build was asked to run a simulated engine. A scripted result must never look like live recognition. */
 class SimulatedEngineInReleaseException(message: String) : IllegalStateException(message)
@@ -27,6 +36,7 @@ class EngineFactory(
     private val isDebug: Boolean,
     private val speechProviders: Map<SpeechKind, () -> SpeechEngine> = mapOf(SpeechKind.FAKE to { FakeSpeechEngine() }),
     private val llmProviders: Map<LlmKind, () -> LlmEngine> = mapOf(LlmKind.FAKE to { FakeLlmEngine() }),
+    private val ttsProviders: Map<TtsKind, () -> TtsBackend> = emptyMap(),
 ) {
     fun speech(kind: SpeechKind): SpeechEngine {
         refuseSimulatedInRelease(kind == SpeechKind.FAKE, "speech engine FAKE")
@@ -37,6 +47,12 @@ class EngineFactory(
     fun llm(kind: LlmKind): LlmEngine {
         refuseSimulatedInRelease(kind == LlmKind.FAKE, "LLM engine FAKE")
         val provider = llmProviders[kind] ?: throw EngineUnavailableException("LLM engine $kind is not wired yet")
+        return provider()
+    }
+
+    /** A speech-output engine. Neither kind is simulated, so there is no release guard; an unwired kind is refused. */
+    fun tts(kind: TtsKind): TtsBackend {
+        val provider = ttsProviders[kind] ?: throw EngineUnavailableException("speech output $kind is not wired yet")
         return provider()
     }
 
