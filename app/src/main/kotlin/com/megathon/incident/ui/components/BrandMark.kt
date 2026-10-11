@@ -58,34 +58,35 @@ fun BrandMark(size: Dp = 34.dp, modifier: Modifier = Modifier) {
 }
 
 /**
- * The wordmark "bayaan", drawn as strokes (b a y a a n) with the evidence highlight behind the double "a". The same shapes as
- * res/drawable/splash_branding.xml, on a 164 x 60 grid. Decorative: the caller gives it the accessible name.
+ * The wordmark: the Hindi letter ब (ba) then "yaan", drawn as strokes, with the evidence highlight behind the double "a". The
+ * same shapes as res/drawable/splash_branding.xml, on a 152 x 60 grid. Decorative: the caller gives it the accessible name.
  */
 @Composable
 fun BrandWordmark(color: Color, height: Dp = 22.dp, modifier: Modifier = Modifier, onBand: Color = LETTERS) {
-    Canvas(modifier.size(height * (164f / 60f), height)) {
-        val u = this.size.width / 164f
+    Canvas(modifier.size(height * (152f / 60f), height)) {
+        val u = this.size.width / 152f
         fun p(x: Float, y: Float) = Offset(x * u, y * u)
         val w = 4f * u
         val box = Size(20f * u, 20f * u)
         fun ring(c: Color, x: Float) = drawCircle(c, 10f * u, p(x + 10f, 30f), style = Stroke(w))
         fun stem(c: Color, x: Float, top: Float, bottom: Float) = drawLine(c, p(x, top), p(x, bottom), w, StrokeCap.Round)
-        drawRoundRect(HIGHLIGHT, p(82f, 14f), Size(56f * u, 32f * u), CornerRadius(8f * u))
-        // b
-        stem(color, 2f, 8f, 40f); ring(color, 2f)
-        // a
-        ring(color, 30f); stem(color, 50f, 20f, 40f)
+        drawRoundRect(HIGHLIGHT, p(70f, 14f), Size(56f * u, 32f * u), CornerRadius(8f * u))
+        // ब: the headline, the stem, the bowl and the slash through it
+        drawLine(color, p(2f, 9f), p(36f, 9f), w, StrokeCap.Round)
+        stem(color, 32f, 9f, 40f)
+        drawCircle(color, 10.5f * u, p(20f, 29f), style = Stroke(w))
+        drawLine(color, p(12.6f, 21.6f), p(27.4f, 36.4f), w, StrokeCap.Round)
         // y: a bowl, the right stem, and the hook of the tail
-        drawArc(color, 0f, 180f, false, p(58f, 20f), box, style = Stroke(w, cap = StrokeCap.Round))
-        stem(color, 58f, 20f, 30f); stem(color, 78f, 20f, 44f)
-        drawArc(color, 0f, 90f, false, p(58f, 34f), box, style = Stroke(w, cap = StrokeCap.Round))
+        drawArc(color, 0f, 180f, false, p(46f, 20f), box, style = Stroke(w, cap = StrokeCap.Round))
+        stem(color, 46f, 20f, 30f); stem(color, 66f, 20f, 44f)
+        drawArc(color, 0f, 90f, false, p(46f, 34f), box, style = Stroke(w, cap = StrokeCap.Round))
         // aa, on the band, in the dark letter colour
-        ring(onBand, 86f); stem(onBand, 106f, 20f, 40f)
-        ring(onBand, 114f); stem(onBand, 134f, 20f, 40f)
+        ring(onBand, 74f); stem(onBand, 94f, 20f, 40f)
+        ring(onBand, 102f); stem(onBand, 122f, 20f, 40f)
         // n: a stem and an arch
-        stem(color, 142f, 20f, 40f)
-        drawArc(color, 180f, 180f, false, p(142f, 20f), box, style = Stroke(w, cap = StrokeCap.Round))
-        stem(color, 162f, 30f, 40f)
+        stem(color, 130f, 20f, 40f)
+        drawArc(color, 180f, 180f, false, p(130f, 20f), box, style = Stroke(w, cap = StrokeCap.Round))
+        stem(color, 150f, 30f, 40f)
     }
 }
 

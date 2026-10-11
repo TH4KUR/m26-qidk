@@ -37,11 +37,13 @@ a font, so they look the same on every device.
 Solid colours only: no gradient, no glow, red is never used (design brief section 4). The art sits inside the 66 dp safe zone of
 the 108 dp adaptive icon, so round, squircle and teardrop masks all keep it whole.
 
-## Wordmark: "bayaan"
+## Wordmark: बyaan
 
-Lowercase, drawn as rounded strokes (the same line weight and round caps as the mark), with the amber evidence band behind the
-double **aa**: the app's one signature, "show the words that support it", on its own name. In the app it is `BrandWordmark` in the
-top bar; on the splash it is `splash_branding.xml`.
+The first syllable "ba" is the Hindi letter **ब**, the rest is Latin, so the name is written the way it is spoken in Hinglish.
+Drawn as rounded strokes (the same line weight and round caps as the mark), with the amber evidence band behind the double
+**aa**: the app's one signature, "show the words that support it", on its own name. The letter ब is traced from the standard
+form (headline, stem, bowl, slash), not set in a font. In the app it is `BrandWordmark` in the top bar; on the splash it is
+`splash_branding.xml`. The screen reader name stays "Bayaan"; the tagline and docs keep the Latin spelling "bayaan".
 
 ## Splash
 
