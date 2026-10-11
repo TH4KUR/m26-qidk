@@ -34,6 +34,7 @@ import com.megathon.incident.speech.AcceleratorLane
 import com.megathon.incident.speech.DemoSpeechEngine
 import com.megathon.incident.speech.LaneLlmEngine
 import com.megathon.incident.speech.LiveInferenceCoordinator
+import com.megathon.incident.speech.PacedReplay
 import com.megathon.incident.speech.PreviewScheduler
 import com.megathon.incident.speech.Speculative
 import com.megathon.incident.speech.GenieXLlmEngine
@@ -185,6 +186,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     // Only with the resident worker: through the per-utterance CLI every 3 s preview would reload Whisper on the shared lane.
     private var liveInference = speech is ResidentSherpaSpeechEngine
     private var live: Live? = null
+    private var replaying = false // debug replay: no spoken questions, so timings are not disturbed and the room stays quiet
     private var warm: Job? = null
 
     // Latency evidence for the kit comparison (batch vs live): monotonic time from the Stop tap to the finished turn, logged once per turn.
@@ -202,7 +204,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         // Speak whatever the session wants said (questions, the emergency line, the summary), one at a time.
         viewModelScope.launch {
             session.ui.map { it.say }.filterNotNull().distinctUntilChangedBy { it.id }.collect { say ->
-                if (local.value.listening) return@collect
+                if (local.value.listening || replaying) return@collect
                 local.update { it.copy(speaking = true) }
                 val started = System.nanoTime()
                 speaker.speak(say.text)
@@ -424,6 +426,40 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         }
     }
 
+    /**
+     * Debug builds only: replay a 16 kHz mono PCM16 WAV [loops] times and log `latency mode=live-replay|batch-replay stop_to_ready_ms=N`
+     * for each. With [useLive], the audio is fed to the live coordinator at real-time pace (as spoken) and Stop is applied at its end; without,
+     * the whole clip goes straight to the batch path at "Stop". The report is reset between loops. Needs the resident speech worker for live.
+     */
+    fun debugReplayFile(path: String, useLive: Boolean, loops: Int) {
+        if (!Engines.isDebuggable(getApplication())) return
+        viewModelScope.launch {
+            val pcm = runCatching { readWav(java.io.File(path)) }.getOrElse {
+                android.util.Log.e(TAG, "cannot read $path", it); say("Can't read that file: ${it.message}"); return@launch
+            }
+            replaying = true
+            try {
+                repeat(loops) { n ->
+                    if (n > 0) newReport()
+                    val l = if (useLive) beginLive() else null
+                    if (useLive && l == null) {
+                        android.util.Log.e(TAG, "replay: live inference is not available (it needs the resident speech worker)")
+                        return@launch
+                    }
+                    this@AppViewModel.live = null // processLive owns the recording from here
+                    local.update { it.copy(listening = true, elapsedMs = 0, levels = emptyList(), message = null, liveText = null) }
+                    if (l != null) PacedReplay.feed(pcm) { buffer, count -> l.coordinator.offer(buffer, count) }
+                    turnStartNs = System.nanoTime()
+                    turnMode = if (l != null) "live-replay" else "batch-replay"
+                    val capturedAt = java.time.Instant.now()
+                    if (l != null) processLive(l, capturedAt) else process(pcm, capturedAt)
+                }
+            } finally {
+                replaying = false
+            }
+        }
+    }
+
     /** Debug builds only: run a 16 kHz mono PCM16 WAV through the same path as the microphone. */
     fun debugTranscribeFile(path: String) {
         if (!Engines.isDebuggable(getApplication())) return
@@ -559,7 +595,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         speaker.stop()
         session.reset()
         demoSpeech.restart()
-        local.update { Local(network = meter.read(), ttsOffline = it.ttsOffline) }
+        local.update { Local(network = meter.read(), ttsOffline = it.ttsOffline, readiness = it.readiness) }
     }
 
     fun openProof() = local.update { it.copy(showProof = true, network = meter.read()) }

@@ -40,6 +40,12 @@ class MainActivity : ComponentActivity() {
         // Debug builds: `--es live off` transcribes and extracts only after Stop (the batch path), for a reproducible comparison.
         if (intent.getStringExtra("live") == "off") vm.debugSetLiveInference(false)
         intent.getStringExtra("wav")?.let { vm.debugTranscribeFile(it) }
+        // Debug builds: `--es replay <wav> [--es live off] [--ei loops N]` plays the clip at real-time pace into the live path (or straight into
+        // the batch path with `--es live off`) N times and logs `latency mode=... stop_to_ready_ms=...` per turn.
+        intent.getStringExtra("replay")?.let { wav ->
+            val n = intent.getStringExtra("loops")?.toIntOrNull() ?: intent.getIntExtra("loops", 1)
+            vm.debugReplayFile(wav, useLive = intent.getStringExtra("live") != "off", loops = n.coerceAtLeast(1))
+        }
         // Debug builds: `--es eval <gold file> [--es prompt <file>] --es run <name> [--es only g01,g02]` (dev split only).
         intent.getStringExtra("eval")?.let { gold ->
             vm.debugEval(gold, intent.getStringExtra("prompt"), intent.getStringExtra("run") ?: "run", intent.getStringExtra("only")?.split(',')?.toSet())
