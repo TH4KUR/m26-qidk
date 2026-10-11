@@ -20,14 +20,14 @@ import java.time.LocalDate
  */
 object HindiSummary {
     fun compose(report: IncidentReport, priority: PriorityAdvice?, today: LocalDate): List<SpokenSegment> {
-        val type = IncidentType.fromWire(report.value(Field.INCIDENT_TYPE).text)
-        val severity = Severity.fromWire(report.value(Field.SEVERITY).text)
+        val type = IncidentType.fromWire(stated(report, Field.INCIDENT_TYPE))
+        val severity = Severity.fromWire(stated(report, Field.SEVERITY))
         val serious = severity == Severity.SEVERE || severity == Severity.CRITICAL
         val typeName = type?.takeIf { it != IncidentType.OTHER }?.let { HindiPhrases.typeName(Labels.type(it.wire)) }
         val severityName = severity?.takeIf { it != Severity.NONE }?.let { HindiPhrases.severityName(Labels.severity(it.wire)) }
-        val whenWords = report.value(Field.DATE_TIME).text?.takeIf { it.isNotBlank() }
+        val whenWords = stated(report, Field.DATE_TIME)?.takeIf { it.isNotBlank() }
             ?.let { HindiPhrases.whenWords(DateTimeDisplay.spoken(it, today)) }
-        val place = report.value(Field.LOCATION).text?.trim()?.takeIf { it.isNotEmpty() }
+        val place = stated(report, Field.LOCATION)?.trim()?.takeIf { it.isNotEmpty() }
 
         val out = mutableListOf<SpokenSegment>()
         fun hi(text: String) = out.add(SpokenSegment(text, "hi"))
@@ -83,3 +83,10 @@ object HindiSummary {
         IncidentType.EQUIPMENT_FAILURE to "जाँच होने तक उपकरण का उपयोग बंद रखें।",
     )
 }
+
+/**
+ * The value the reporter actually gave (heard, confirmed or typed). A value the app only suggested is not something they said,
+ * so it is never read back as if they had: no part of the saved-report summary comes from a guess.
+ */
+private fun stated(report: com.megathon.incident.domain.IncidentReport, field: Field): String? =
+    if (report.isFilled(field)) report.value(field).text else null

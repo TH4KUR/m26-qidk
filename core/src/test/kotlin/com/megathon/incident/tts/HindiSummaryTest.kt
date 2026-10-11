@@ -100,4 +100,11 @@ class HindiSummaryTest {
         assertFalse("बजे" in text, text)
         assertTrue("कमरे में पानी का रिसाव" in text, text)
     }
+
+    @Test
+    fun aValueTheAppOnlySuggestedIsNeverReadBackAsSomethingTheReporterSaid() {
+        val r = report(severity = null).with(Field.SEVERITY, FieldValue("minor", ValueStatus.SUGGESTED, null))
+        val text = joined(r)
+        assertFalse("गंभीरता" in text, text)
+    }
 }
