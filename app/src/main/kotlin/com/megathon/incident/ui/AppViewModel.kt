@@ -446,13 +446,20 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
      */
     fun debugCoexist(path: String, loops: Int) {
         if (!Engines.isDebuggable(getApplication())) return
-        val stt = speech
+        // The lane decides which recogniser takes turns with the model: Whisper for English, the experimental Nemotron
+        // child for Hindi (`--es lang hi`). The language handed to it is the lane's, so a Hindi run never feeds Whisper.
+        val lane = currentLane()
+        val stt: SpeechEngine? = if (lane.engine == RecognitionEngine.NEMOTRON_HINDI) {
+            openHindiEngine().onFailure { android.util.Log.e(TAG, "coexist: hindi lane unavailable: ${it.message}") }.getOrNull()
+        } else {
+            speech
+        }
         val engine = llm
         if (stt == null || engine == null) { android.util.Log.e(TAG, "coexist: no engines (${blocked ?: "unknown"})"); return }
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val out = runCatching {
                 val pcm = readWav(java.io.File(path))
-                com.megathon.incident.eval.CoexistRunner(getApplication<Application>().filesDir, stt, engine).run(pcm, loops)
+                com.megathon.incident.eval.CoexistRunner(getApplication<Application>().filesDir, stt, engine, lane.language).run(pcm, loops)
             }
             out.onSuccess { android.util.Log.i(TAG, "coexist done: ${it.path}") }
                 .onFailure { android.util.Log.e(TAG, "coexist failed", it) }

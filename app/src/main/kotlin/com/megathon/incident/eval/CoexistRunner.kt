@@ -5,6 +5,7 @@ import com.megathon.incident.session.InMemoryReportStore
 import com.megathon.incident.session.Pipeline
 import com.megathon.incident.session.SessionState
 import com.megathon.incident.speech.GenieXLlmEngine
+import com.megathon.incident.speech.NemotronHindiSpeechEngine
 import com.megathon.incident.speech.SherpaCliSpeechEngine
 import com.megathon.incident.testing.SpeechEngine
 import kotlinx.coroutines.CancellationException
@@ -22,7 +23,13 @@ import java.util.Locale
  * `complete` call, so each loop starts from an empty context. One failing loop is recorded and the run goes on.
  * Output: `<filesDir>/coexist/<timestamp>/loops.jsonl` and `summary.json`.
  */
-class CoexistRunner(private val filesDir: File, private val speech: SpeechEngine, private val llm: LlmEngine) {
+class CoexistRunner(
+    private val filesDir: File,
+    private val speech: SpeechEngine,
+    private val llm: LlmEngine,
+    /** The language handed to the recogniser: `en` (Whisper child) or `hi` (the experimental Nemotron child). */
+    private val language: String = "en",
+) {
     private val json = Json { encodeDefaults = true; prettyPrint = false }
     private val pretty = Json { encodeDefaults = true; prettyPrint = true }
 
@@ -59,7 +66,7 @@ class CoexistRunner(private val filesDir: File, private val speech: SpeechEngine
         var error: String? = null
         try {
             val s0 = System.nanoTime()
-            val heard = speech.transcribe(pcm, "en")
+            val heard = speech.transcribe(pcm, language)
             sttMs = (System.nanoTime() - s0) / 1_000_000
             transcript = heard.text
             val recording = RecordingLlmEngine(llm)
@@ -82,7 +89,8 @@ class CoexistRunner(private val filesDir: File, private val speech: SpeechEngine
         return CoexistLoop(
             index = index, sttMs = sttMs, llmMs = llmMs, totalMs = (System.nanoTime() - started) / 1_000_000,
             ok = error == null, error = error, pssMb = pssMb(),
-            childExit = (speech as? SherpaCliSpeechEngine)?.lastChildExit, transcript = transcript?.take(200),
+            childExit = (speech as? SherpaCliSpeechEngine)?.lastChildExit ?: (speech as? NemotronHindiSpeechEngine)?.lastChildExit,
+            transcript = transcript?.take(200),
         )
     }
 
