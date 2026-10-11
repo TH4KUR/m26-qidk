@@ -1,0 +1,50 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/398 [00:00<?, ?it/s]Loading weights: 100%|██████████| 398/398 [00:00<00:00, 11985.96it/s]
+[4B base | v11] My colleague Priya was beside me when the shelf fell.
+      -> {"persons_involved": ["Priya"]}  evidence={"persons_involved": "My colleague Priya was beside me when the shelf fell"}
+[4B base | v11] Priya slipped on the wet floor and Rahul was with me when it happened.
+      -> "UNPARSEABLE"  evidence={}
+[4B base | v11] Rahul and I were together when the pipe burst, he got hurt.
+      -> {"persons_involved": ["Rahul", "I"]}  evidence={"persons_involved": "Rahul and I"}
+[4B base | v11] The pump failed at 3 PM, nobody else was around.
+      -> {}  evidence={}
+[4B base | v11] My friend Rahul was with me when the incident happened.
+      -> {"witnesses": ["Rahul"]}  evidence={"witnesses": "My friend Rahul was with me when the incident happened"}
+[4B base | v11] Witness is Rahul and me.
+      -> {"witnesses": ["Rahul", "me"]}  evidence={"witnesses": "Witness is Rahul and me"}
+[4B base | v11] Rahul saw the incident.
+      -> {"witnesses": ["Rahul"]}  evidence={"witnesses": "Rahul saw the incident"}
+[4B base | v11] Rahul was standing next to me when it happened.
+      -> {"witnesses": ["Rahul"]}  evidence={"witnesses": "Rahul was standing next to me when it happened"}
+[4B base | v11] Rahul was there.
+      -> {"witnesses": ["Rahul"]}  evidence={"witnesses": "Rahul was there"}
+[4B base | v11] Rahul and I were together when the pipe burst.
+      -> {"persons_involved": ["Rahul", "I"]}  evidence={"persons_involved": "Rahul and I"}
+[4B base | v11] There was a water leak near Conference Room 2 around 10 AM. My friend Rahul was with me when it happened.
+      -> {"persons_involved": ["Rahul"]}  evidence={"persons_involved": "Rahul"}
+[4B base | v11] Rahul was in the room when the fire started, he called the guard.
+      -> {"persons_involved": ["Rahul"], "witnesses": ["Rahul"]}  evidence={"persons_involved": "Rahul was in the room", "witnesses": "Rahul"}
+[4B base | v12] My colleague Priya was beside me when the shelf fell.
+      -> {"witnesses": ["Priya"]}  evidence={"witnesses": "My colleague Priya was beside me when the shelf fell"}
+[4B base | v12] Priya slipped on the wet floor and Rahul was with me when it happened.
+      -> {"persons_involved": ["Priya"], "witnesses": ["Rahul"]}  evidence={"persons_involved": "Priya", "witnesses": "Rahul was with me when it happened"}
+[4B base | v12] Rahul and I were together when the pipe burst, he got hurt.
+      -> {"persons_involved": ["Rahul"], "witnesses": ["Rahul"]}  evidence={"persons_involved": "Rahul", "witnesses": "Rahul and I were together when the pipe burst, he got hurt"}
+[4B base | v12] The pump failed at 3 PM, nobody else was around.
+      -> {"witnesses": []}  evidence={}
+[4B base | v12] My friend Rahul was with me when the incident happened.
+      -> {"witnesses": ["Rahul"]}  evidence={"witnesses": "My friend Rahul was with me when the incident happened"}
+[4B base | v12] Witness is Rahul and me.
+      -> {"witnesses": ["Rahul", "me"]}  evidence={"witnesses": "Witness is Rahul and me"}
+[4B base | v12] Rahul saw the incident.
+      -> {"witnesses": ["Rahul"]}  evidence={"witnesses": "Rahul saw the incident"}
+[4B base | v12] Rahul was standing next to me when it happened.
+      -> {"witnesses": ["Rahul"]}  evidence={"witnesses": "Rahul was standing next to me when it happened"}
+[4B base | v12] Rahul was there.
+      -> {"witnesses": ["Rahul"]}  evidence={"witnesses": "Rahul was there"}
+[4B base | v12] Rahul and I were together when the pipe burst.
+      -> {"persons_involved": ["Rahul"]}  evidence={"persons_involved": "Rahul and I were together when the pipe burst"}
+[4B base | v12] There was a water leak near Conference Room 2 around 10 AM. My friend Rahul was with me when it happened.
+      -> {"witnesses": ["Rahul"]}  evidence={"witnesses": "My friend Rahul was with me when it happened"}
+[4B base | v12] Rahul was in the room when the fire started, he called the guard.
+      -> {"witnesses": ["Rahul"]}  evidence={"witnesses": "Rahul was in the room when the fire started"}

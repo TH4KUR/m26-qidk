@@ -1,0 +1,39 @@
+{
+  "args": {
+    "data": "/home/ubuntu/ft",
+    "out": "/home/ubuntu/ft/run4b",
+    "base": "Qwen/Qwen3-4B-Instruct-2507",
+    "epochs": 3,
+    "lr": 0.00015,
+    "rank": 32,
+    "micro_batch": 4,
+    "accum": 4,
+    "max_len": 2048,
+    "seed": 42,
+    "no_merge": false
+  },
+  "epochs": [
+    {
+      "epoch": 1,
+      "train_loss": 0.11860402869908955,
+      "val_loss": 0.015482648052959088,
+      "elapsed_s": 108
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.006080490398314544,
+      "val_loss": 0.009703996962665728,
+      "elapsed_s": 212
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.0018115827097893687,
+      "val_loss": 0.00963039756604883,
+      "elapsed_s": 316
+    }
+  ],
+  "started": "2026-10-11 01:09:30",
+  "val_loss_before": 1.1354440745892813,
+  "best_epoch": 3,
+  "finished": "2026-10-11 01:14:47"
+}

@@ -1,0 +1,39 @@
+{
+  "args": {
+    "data": "/home/ubuntu/ft",
+    "out": "/home/ubuntu/ft/run1",
+    "base": "Qwen/Qwen3-1.7B",
+    "epochs": 3,
+    "lr": 0.00015,
+    "rank": 32,
+    "micro_batch": 4,
+    "accum": 4,
+    "max_len": 2048,
+    "seed": 42,
+    "no_merge": false
+  },
+  "epochs": [
+    {
+      "epoch": 1,
+      "train_loss": 0.17085401806018485,
+      "val_loss": 0.019083516108542645,
+      "elapsed_s": 51
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.008309353453646277,
+      "val_loss": 0.012070048199781047,
+      "elapsed_s": 101
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.002857367801069555,
+      "val_loss": 0.011661385489621723,
+      "elapsed_s": 150
+    }
+  ],
+  "started": "2026-10-11 00:44:59",
+  "val_loss_before": 1.4597905919147676,
+  "best_epoch": 3,
+  "finished": "2026-10-11 00:47:30"
+}
