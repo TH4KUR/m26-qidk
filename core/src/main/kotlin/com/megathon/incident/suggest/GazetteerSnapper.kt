@@ -27,6 +27,7 @@ class GazetteerSnapper(
     private val site: SiteDirectory,
     private val homophones: HomophoneTable,
     private val threshold: Double = 0.88,
+    private val indic: IndicTokenTable = IndicTokens.default,
 ) {
 
     private data class Token(val word: String, val start: Int, val end: Int)
@@ -40,7 +41,8 @@ class GazetteerSnapper(
     private data class SpanHit(val from: Int, val to: Int, val entry: SiteEntry, val canonical: Boolean, val said: String)
 
     fun snap(heard: String, kind: EntryKind): Snap? {
-        val text = Normalizer.normalize(heard, Normalizer.Form.NFC)
+        // Zero-width (non-)joiners are spelling marks in Indic scripts, not word breaks.
+        val text = Normalizer.normalize(heard, Normalizer.Form.NFC).replace(ZERO_WIDTH, "")
         val tokens = TOKEN.findAll(text).map { Token(it.value.lowercase(), it.range.first, it.range.last + 1) }.toList()
         val first = tokens.indexOfFirst { it.word !in FILLERS }
         if (first < 0) return null
@@ -142,9 +144,12 @@ class GazetteerSnapper(
             ?: w
     }
 
-    /** Every reading of [words] with sound-alikes and spoken digits swapped in, excluding [words] itself. */
+    /**
+     * Every reading of [words] with sound-alikes, spoken digits and Hindi/Telugu readings ([indic]) swapped in,
+     * excluding [words] itself.
+     */
     private fun expand(words: List<String>): List<List<String>> {
-        val options = words.map { w -> (listOf(w) + homophones.variants(w) + listOfNotNull(DIGITS[w])).distinct() }
+        val options = words.map { w -> (listOf(w) + homophones.variants(w) + listOfNotNull(DIGITS[w]) + indic.english(w)).distinct() }
         var readings = listOf(emptyList<String>())
         for (opts in options) {
             readings = readings.flatMap { r -> opts.map { r + it } }
@@ -185,6 +190,7 @@ class GazetteerSnapper(
         private val SEPARATORS = Regex("[^\\p{L}\\p{M}\\p{N}]+")
         private val TOKEN = Regex("[\\p{L}\\p{M}\\p{N}]+")
         private val SPACES = Regex("\\s+")
+        private val ZERO_WIDTH = Regex("[\\u200C\\u200D]")
         private val ARTICLES = setOf("the", "a", "an")
         private val DIRECTION = setOf("to", "into", "in", "at", "inside")
         private val FILLERS = setOf("the", "a", "an", "near", "in", "at", "inside", "outside", "by", "behind", "beside", "next", "of", "from", "on")
