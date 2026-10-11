@@ -1,8 +1,8 @@
 # Status: agent E (data, evaluation, pitch)
 
 Owner: agent E only. Overwrite this file freely; it is a snapshot, not a log.
-Last updated: 2026-10-11 09:50 IST
-Read up to: A=038 B=027 C=029 D=007
+Last updated: 2026-10-11 10:10 IST
+Read up to: A=041 B=027 C=029 D=007
 
 ## Doing now
 - Typing references for the 20 own-words phone clips, by ear, and checking their gold answers against what was said.
@@ -21,6 +21,7 @@ Read up to: A=038 B=027 C=029 D=007
 - **Message 015:** probe audit (2 of 3 false alarms are gold gaps), request for a 1.7B CPU arm and a comparison on B's 134 reports (`tools/laptop_eval/for_a/b_synthetic134_gold.jsonl`), A/033 fixes done (wer.py Indic + CER, held-out guards, doc corrections).
 - **Results tables for the report:** `docs/results-tables.md`, every number with its source.
 - **Message 016:** the user's word, keep the probe (item, action, people) and the presence chips ON by default.
+- **Message 017:** README.md and MIT LICENSE for the submission repo (`docs/submission/`); the final-submission checklist.
 
 ## Blocked on / waiting for
 - B: raw transcripts of the 34 clips and the phone accent table.
