@@ -110,7 +110,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.conversation(ui: AppU
     }
     item(key = "transcript") {
         val highlight = ui.session.fields.firstOrNull { it.field == ui.selected }?.evidence
-        TranscriptCard(ui.session.transcripts, highlight, ui.heardNow, reading = ui.processing)
+        TranscriptCard(ui.session.transcripts, highlight, ui.heardNow, reading = ui.processing, scriptNote = ui.scriptNote)
     }
     val q = ui.session.state as? SessionState.Asking
     if (inlineQuestion && q != null && !ui.processing && !ui.listening) {

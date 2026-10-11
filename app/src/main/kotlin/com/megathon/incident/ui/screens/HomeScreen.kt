@@ -2,6 +2,9 @@ package com.megathon.incident.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
+import com.megathon.incident.speech.HindiLaneNotice
 import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.platform.LocalConfiguration
 import android.content.res.Configuration
@@ -22,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -87,7 +91,7 @@ fun HomeScreen(ui: AppUi, vm: AppViewModel) {
                     Spacer(Modifier.height(Space.s6))
                 }
             }
-            Footer(ui)
+            Footer(ui, vm)
         }
     }
 }
@@ -118,7 +122,7 @@ private fun HomeText(ui: AppUi, centered: Boolean) {
                     if (ui.heardNow == null) "Got it." else "Heard you.", style = MaterialTheme.typography.displayMedium, textAlign = align,
                     modifier = Modifier.semantics { heading(); liveRegion = LiveRegionMode.Polite },
                 )
-                TranscriptCard(transcripts = emptyList(), highlight = null, heardNow = ui.heardNow, reading = true)
+                TranscriptCard(transcripts = emptyList(), highlight = null, heardNow = ui.heardNow, reading = true, scriptNote = ui.scriptNote)
             }
             else -> {
                 Text("Tell me what happened.", style = MaterialTheme.typography.displayMedium, textAlign = align, modifier = Modifier.semantics { heading() })
@@ -161,13 +165,31 @@ private fun ExampleCard() {
 }
 
 @Composable
-private fun Footer(ui: AppUi) {
+private fun Footer(ui: AppUi, vm: AppViewModel) {
     val c = Theme.colors
     Column(
         Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Size.gutter, vertical = Space.s3),
         verticalArrangement = Arrangement.spacedBy(Space.s3),
     ) {
+        if (!ui.listening && !ui.processing) HindiLaneSwitch(ui.hindiLane, vm::setHindiLane)
         PrivacyLine(ui.network)
+    }
+}
+
+/**
+ * The experimental Hindi lane, off by default. Small and plainly labelled: it changes only which recogniser hears the
+ * next utterance. The whole row is the switch, so a screen reader announces it once with its state.
+ */
+@Composable
+private fun HindiLaneSwitch(on: Boolean, onChange: (Boolean) -> Unit) {
+    val c = Theme.colors
+    Row(
+        Modifier.fillMaxWidth().toggleable(value = on, role = Role.Switch, onValueChange = onChange).padding(vertical = Space.s1),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Space.s3),
+    ) {
+        Text(HindiLaneNotice.SWITCH_LABEL, style = MaterialTheme.typography.labelLarge, color = c.ink2, modifier = Modifier.weight(1f))
+        Switch(checked = on, onCheckedChange = null)
     }
 }
 
