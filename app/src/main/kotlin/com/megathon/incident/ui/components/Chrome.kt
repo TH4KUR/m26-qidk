@@ -52,7 +52,8 @@ fun AppTopBar(title: String, onProof: (() -> Unit)?, onBack: (() -> Unit)? = nul
             if (onBack != null) IconButton(onBack, Modifier.size(Size.touch)) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = c.ink) }
             BrandMark(34.dp)
             Column(Modifier.weight(1f).padding(start = Space.s3, top = Space.s2, bottom = Space.s2)) {
-                Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleMedium, color = c.ink)
+                val appName = stringResource(R.string.app_name)
+                BrandWordmark(c.ink, height = 20.dp, modifier = Modifier.semantics { contentDescription = appName; heading() })
                 Text(title, style = MaterialTheme.typography.labelSmall, color = c.ink3)
             }
             if (onProof != null) IconButton(onProof, Modifier.size(Size.touch).background(c.surface, CircleShape)) { Icon(Icons.Rounded.Info, "How this ran", tint = c.ink2, modifier = Modifier.size(20.dp)) }

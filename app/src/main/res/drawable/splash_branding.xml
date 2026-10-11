@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The wordmark "bayaan", drawn as strokes, with the evidence highlight behind its double "a".
+     Shown under the splash mark where the platform supports a branding image; ignored where it does not. 200 x 80 dp. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="80dp"
+    android:viewportWidth="200"
+    android:viewportHeight="80">
+    <group android:translateX="18" android:translateY="10">
+        <path
+            android:fillColor="@color/brand_highlight"
+            android:pathData="M90,14 L130,14 A8,8 0 0 1 138,22 L138,38 A8,8 0 0 1 130,46 L90,46 A8,8 0 0 1 82,38 L82,22 A8,8 0 0 1 90,14 Z" />
+        <path
+            android:strokeColor="@color/splash_mark"
+            android:strokeWidth="4"
+            android:strokeLineCap="round"
+            android:pathData="M2,8 L2,40 M2,30 A10,10 0 1 1 22,30 A10,10 0 1 1 2,30
+                M30,30 A10,10 0 1 1 50,30 A10,10 0 1 1 30,30 M50,20 L50,40
+                M58,20 L58,30 A10,10 0 0 0 78,30 M78,20 L78,44 A10,10 0 0 1 68,54
+                M142,20 L142,40 M142,30 A10,10 0 0 1 162,30 L162,40" />
+        <!-- the double "a" sits on the amber band, so it takes the dark letter colour -->
+        <path
+            android:strokeColor="@color/splash_letters"
+            android:strokeWidth="4"
+            android:strokeLineCap="round"
+            android:pathData="M86,30 A10,10 0 1 1 106,30 A10,10 0 1 1 86,30 M106,20 L106,40
+                M114,30 A10,10 0 1 1 134,30 A10,10 0 1 1 114,30 M134,20 L134,40" />
+    </group>
+</vector>

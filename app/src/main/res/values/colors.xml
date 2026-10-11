@@ -4,8 +4,9 @@
     <color name="brand_tile">#0B6E66</color>
     <color name="brand_bubble">#F4FBFA</color>
     <color name="brand_highlight">#F2BE72</color>
-    <!-- The system splash: canvas behind, the mark in the accent. -->
+    <color name="brand_letters">#0A4F49</color>
+    <!-- The system splash: canvas behind, the mark in the accent, the letters dark enough to read on the amber band. -->
     <color name="splash_background">#F4F3EF</color>
     <color name="splash_mark">#0B6E66</color>
-    <color name="splash_lines">#F4F3EF</color>
+    <color name="splash_letters">#0A4F49</color>
 </resources>

@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Bayaan</string>
+    <!-- Hinglish: "Say it, and the statement is done." -->
+    <string name="app_tagline">Bol do, bayaan ho gaya.</string>
 </resources>
