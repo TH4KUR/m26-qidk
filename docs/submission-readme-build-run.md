@@ -51,6 +51,16 @@ app/scripts/speech_bundle.sh stage [BUNDLE_DIR]
 They are copied into `app/src/speech/jniLibs/arm64-v8a` (git-ignored). Without this step the APK still builds and starts,
 and speech falls back to a clearly labelled SIMULATED engine.
 
+**4. Optional: pack the Piper voice runtime into the APK.** The spoken replies use the Android system voice by default.
+An offline Piper voice (VITS voices run by sherpa-onnx on the CPU) can be used instead. Before step 2:
+
+```bash
+app/scripts/tts_bundle.sh stage [BUNDLE_DIR]
+```
+
+This copies `libsherpa-onnx-jni.so` and `libonnxruntime.so` from `BUNDLE_DIR` (default `$HOME/sherpa-bundle/bundle`)
+into the same git-ignored folder; `libonnxruntime.so` is skipped if step 3 already staged it.
+
 ## Run
 
 Target device: Qualcomm QIDK with Snapdragon 8 Elite (SM8750), Android 16, connected over `adb`. The model scripts
@@ -83,29 +93,55 @@ app/scripts/llm_bundle.sh push [MODEL_DIR_NAME]
 (`com.geniex.demo`) has already downloaded on the device, from that app's model store into
 `/data/data/com.megathon.incident/files/geniex/models/qualcomm/`. Download the model in the demo app first.
 
-**4. Launch:**
+**4. Optional: put the Piper voices in the app's private folder** (English `en_US-lessac-medium`, Hindi
+`hi_IN-rohan-medium-int8`; see "Model weights"). Check the voice files on the build machine first, then push them:
+
+```bash
+app/scripts/tts_bundle.sh check [TTS_DIR]
+app/scripts/tts_bundle.sh push [TTS_DIR]
+```
+
+`TTS_DIR` defaults to `$HOME/tts-models`. Each voice folder (`vits-piper-en_US-lessac-medium`,
+`vits-piper-hi_IN-rohan-medium-int8`) needs its `.onnx` model, `tokens.txt` and `espeak-ng-data/`; `check` compares the
+model's SHA-256 with the value in the script. `push` copies the folders to `/data/data/com.megathon.incident/files/tts/`
+and prints the SHA-256 of each model on the device.
+
+**5. Launch:**
 
 ```bash
 adb shell am start -n com.megathon.incident/.MainActivity
 ```
 
 or tap the app icon. A plain launch uses the on-device engines whenever their model files are in the app's folder;
-otherwise it uses SIMULATED engines, which the screen labels as such. Allow microphone access when asked.
+otherwise it uses SIMULATED engines, which the screen labels as such. Allow microphone access when asked. To speak
+replies with the Piper voice instead of the system voice:
 
-**5. First run.** The language model loads on the first use, which takes several seconds the first time. After that,
-tap the microphone, describe the incident, answer the follow-up questions, review the report and send it. Reports are
-saved on the device.
+```bash
+adb shell am start -n com.megathon.incident/.MainActivity --es tts PIPER
+```
 
-**6. Offline run (airplane mode).** Turn on airplane mode on the device and make sure Wi-Fi and mobile data are really
+**6. First run.** The language model loads in the background when the app starts, so the first start can take about a
+dozen seconds before the first turn is fast. Then tap the microphone, describe the incident, answer the follow-up
+questions, review the report and send it. Reports are saved on the device.
+
+**7. Offline run (airplane mode).** Turn on airplane mode on the device and make sure Wi-Fi and mobile data are really
 off (the status bar shows the airplane icon and no Wi-Fi icon). The app's status line shows "Airplane mode on". The
 whole flow, from speech to the saved report, runs with no network.
+
+---
+
+### Proposed row for the submission README's weights table (A/025)
+
+| Component | Source | Licence |
+|---|---|---|
+| Voices (optional): Piper `en_US-lessac-medium`, `hi_IN-rohan-medium-int8`, repackaged for sherpa-onnx | k2-fsa sherpa-onnx `tts-models` release: https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models | to confirm |
 
 ---
 
 ## Verified by running (D, 2026-10-11, laptop, no kit)
 
 - `./gradlew :core:test --no-daemon` on `d/core-suggestions` after merging master `a2b68d2`: BUILD SUCCESSFUL,
-  893 tests, 0 failures, 2 skipped (JDK 17.0.20 Temurin; Windows, Git Bash, `JAVA_HOME` unset, `java` on the `PATH` was
+  893 tests, 0 failures, 2 skipped. Re-run after merging master `12d0ae2`: see the D board message for the count (JDK 17.0.20 Temurin; Windows, Git Bash, `JAVA_HOME` unset, `java` on the `PATH` was
   17). The lead's run on the same master tree reported 3 skipped; one skip depends on the environment.
 - Nothing else in the text above was run by D.
 
@@ -119,11 +155,13 @@ whole flow, from speech to the saved report, runs with no network.
   figures (about 3 GB, about 900 MB) are the scripts' header comments, not measured by D.
 - "Without the speech files the APK still builds and starts with SIMULATED speech": from the comment in
   `app/build.gradle.kts` and `engine/Engines.kt` on `a/stubs` (falls back when the files are missing); not run.
-- First-run delay: the brief said "the LLM preloads at launch, about a dozen seconds". **I could not find a launch-time
-  preload** on `a/stubs` `a48e746` or any other branch: `GenieXLlmEngine.warmUp()` is called only by the eval and
-  coexistence runners, and the engine otherwise loads lazily on the first call. The app handoff measured "the first turn
-  adds about 9 s to load the model". So the text says "loads on the first use, several seconds". If a preload lands
-  before the freeze, change step 5 to "loads at launch".
+- First-run preload: the sentence in step 6 is A/025's wording. The code is on master `12d0ae2`
+  (`MainActivity.kt:63` calls `vm.preloadModels()`); "about a dozen seconds" was not measured by D. (An earlier draft
+  said "loads on first use": at the time no branch had a launch preload. Fixed.)
+- `tts_bundle.sh check|stage|push` and `--es tts PIPER`: read from `app/scripts/tts_bundle.sh` on master `12d0ae2`
+  (its header gives the launch line), not run. The voice source URL is the release named in
+  `docs/experiments/A-20261011-piper-tts-integration.md` ("k2-fsa sherpa-onnx `tts-models` release"); D wrote the
+  URL in its usual GitHub form and did not open it. Licence left "to confirm" as A asked.
 - "Status line shows Airplane mode on": from `device/NetworkProof.kt` on `a/stubs` (headline strings); not seen on the
   device by D.
 - Windows `gradlew.bat`: the file is in the repo; only `./gradlew` from Git Bash was run.
