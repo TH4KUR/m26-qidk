@@ -49,19 +49,18 @@ fun SuggestionChipRow(suggestion: Suggestion, onAccept: () -> Unit, onDismiss: (
     Column(
         modifier
             .fillMaxWidth()
-            .background(c.attentionContainer, RoundedCornerShape(12.dp))
-            .padding(Space.s3)
+            .padding(vertical = Space.s2)
             .semantics(mergeDescendants = false) { contentDescription = "Suggested. $question ${suggestion.reason}" },
         verticalArrangement = Arrangement.spacedBy(Space.s2),
     ) {
-        Pill("Suggested", c.canvas, c.onAttention, icon = Icons.Rounded.Info)
-        Text(question, style = MaterialTheme.typography.bodyLarge, color = c.onAttention)
-        Text(suggestion.reason, style = MaterialTheme.typography.bodyMedium, color = c.onAttention)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s1)) {
+            Icon(Icons.Rounded.Info, null, tint = c.onAttention, modifier = Modifier.size(14.dp))
+            Text("Suggested change", style = MaterialTheme.typography.labelSmall, color = c.onAttention)
+        }
+        Text(question, style = MaterialTheme.typography.bodyLarge, color = c.ink)
+        Text(suggestion.reason, style = MaterialTheme.typography.bodyMedium, color = c.ink2)
         Row(horizontalArrangement = Arrangement.spacedBy(Space.s2), verticalAlignment = Alignment.CenterVertically) {
-            SecondaryButton(
-                "Accept", onAccept, Modifier.defaultMinSize(minHeight = 48.dp),
-                leading = { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp)); Spacer(Modifier.padding(end = Space.s1)) },
-            )
+            TextAction("Accept", onAccept, flush = true)
             TextButton(
                 onDismiss, Modifier.defaultMinSize(minHeight = Size.touch),
                 colors = ButtonDefaults.textButtonColors(contentColor = c.onAttention),

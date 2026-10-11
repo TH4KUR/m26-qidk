@@ -55,6 +55,15 @@ data class StageRecord(val stage: String, val engine: String, val compute: Compu
 /** Something the device should say aloud. A new [id] means a new utterance. */
 data class Say(val id: Int, val text: String)
 
+/** One field the model has proposed from a recording that is still going on. Shown as provisional; not part of the report. */
+data class ProvisionalField(val field: Field, val label: String, val value: String?, val status: UiStatus, val evidence: String?)
+
+/**
+ * What the words so far would fill in, built on the report as it was when recording started. Replaced whole on each
+ * update, never merged into the report, journal or undo history: only Stop commits anything.
+ */
+data class ProvisionalPreview(val recordingId: Long, val transcript: String, val fields: List<ProvisionalField>)
+
 sealed interface SessionState {
     data object Idle : SessionState
     data object Extracting : SessionState
@@ -82,4 +91,6 @@ data class SessionUi(
     val deescalation: Deescalation? = null,
     /** Chips from the suggestion engine ("Did you mean Seminar Hall 2?"). Proposals only: the report keeps what was heard until the reporter taps. */
     val suggestions: List<Suggestion> = emptyList(),
+    /** Fields proposed while the reporter is still speaking; null when no recording is in progress or nothing is proposed yet. */
+    val provisional: ProvisionalPreview? = null,
 )

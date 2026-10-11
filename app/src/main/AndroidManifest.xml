@@ -15,7 +15,7 @@
         <!-- Lets the app load the Hexagon DSP RPC library on Android 12+ (isRuntimeAvailable() is false without it). -->
         <uses-native-library
             android:name="libcdsprpc.so"
-            android:required="true" />
+            android:required="${dspRuntimeRequired}" />
 
         <activity
             android:name=".MainActivity"

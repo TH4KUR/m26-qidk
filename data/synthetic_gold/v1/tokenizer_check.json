@@ -1,0 +1,12 @@
+{
+  "tokenizer": "Qwen/Qwen3-4B-Instruct-2507",
+  "rows": 800,
+  "min_total_tokens": 813,
+  "max_total_tokens": 1080,
+  "max_prompt_tokens": 1042,
+  "over_4096": 0,
+  "over_1024": 32,
+  "max_row": "update-mixed-07-sequence_update_2",
+  "gold_sha256": "9e00c787e1c6da572f4f95d28c96fa7091db4a60fbcf9dca366547a3c543f389",
+  "chat_template_sha256": "64f85b198065d0fba2a81f37e10ed68161ce2c19a754c7100e67e0ca2ee9c326"
+}

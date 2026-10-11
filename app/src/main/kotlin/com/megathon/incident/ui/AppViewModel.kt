@@ -30,13 +30,21 @@ import com.megathon.incident.suggest.RuleSuggestionEngine
 import com.megathon.incident.suggest.SiteDirectory
 import com.megathon.incident.tam.TamCueLists
 import com.megathon.incident.tam.TamHedgeDetector
+import com.megathon.incident.speech.AcceleratorLane
 import com.megathon.incident.speech.DemoSpeechEngine
+import com.megathon.incident.speech.LaneLlmEngine
+import com.megathon.incident.speech.LiveInferenceCoordinator
+import com.megathon.incident.speech.PacedReplay
+import com.megathon.incident.speech.PreviewScheduler
+import com.megathon.incident.speech.Speculative
 import com.megathon.incident.speech.GenieXLlmEngine
 import com.megathon.incident.speech.HindiTranscript
 import com.megathon.incident.speech.SenseVoiceSignalEngine
 import com.megathon.incident.speech.NemotronHindiSpeechEngine
 import com.megathon.incident.speech.RecognitionEngine
+import com.megathon.incident.speech.ResidentSherpaSpeechEngine
 import com.megathon.incident.speech.SherpaCliSpeechEngine
+import com.megathon.incident.speech.SpeechBundle
 import com.megathon.incident.speech.SupertonicSpeaker
 import com.megathon.incident.speech.SpeechLane
 import com.megathon.incident.speech.SpeechLanes
@@ -61,14 +69,20 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 
 enum class Screen { HOME, REPORT, CHECK, SENT }
+
+/** Whether the on-device models (language model and, with the resident worker, speech) are loaded. Loading moves earlier (at launch); it is not removed. */
+enum class Readiness { NOT_NEEDED, LOADING, READY, FAILED }
 
 /** Everything the screens draw. The report itself lives in [SessionUi]. */
 data class AppUi(
@@ -101,6 +115,9 @@ data class AppUi(
     val voiceTags: SignalReading? = null,
     /** Why there are no voice tags, in words (the bundle is missing, or the last read failed); null when not a failure. */
     val voiceTagsNote: String? = null,
+    /** The transcript so far while recording is still going on (live windows); null otherwise. */
+    val liveText: String? = null,
+    val readiness: Readiness = Readiness.NOT_NEEDED,
     /** True while the EXPERIMENTAL Hindi recognition lane is switched on (default off). */
     val hindiLane: Boolean = false,
     /** One short line when a transcript in Devanagari sits next to English labels and replies; null otherwise. */
@@ -127,6 +144,8 @@ private data class Local(
     val needsMicPermission: Boolean = false,
     val voiceTags: SignalReading? = null,
     val voiceTagsNote: String? = null,
+    val liveText: String? = null,
+    val readiness: Readiness = Readiness.NOT_NEEDED,
     val hindi: Boolean = false,
 )
 
@@ -134,7 +153,13 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     private val demoSpeech = DemoSpeechEngine()
     private val factory = EngineFactory(
         isDebug = Engines.isDebuggable(app),
-        speechProviders = mapOf(SpeechKind.FAKE to { demoSpeech }, SpeechKind.SHERPA_QNN to { SherpaCliSpeechEngine(app) }),
+        speechProviders = mapOf(
+            SpeechKind.FAKE to { demoSpeech },
+            // The resident worker when it is staged in the APK (models load once); otherwise the per-utterance CLI, which stays the baseline.
+            SpeechKind.SHERPA_QNN to {
+                if (!ResidentSherpaSpeechEngine.preferCliBaseline && SpeechBundle(app).worker.exists()) ResidentSherpaSpeechEngine(app) else SherpaCliSpeechEngine(app)
+            },
+        ),
         llmProviders = mapOf(LlmKind.FAKE to { FakeLlmEngine(name = "DEMO REPLIES") }, LlmKind.GENIEX to { GenieXLlmEngine(app) }),
         ttsProviders = mapOf(
             TtsKind.ANDROID to { AndroidTtsBackend(SystemTtsSpeaker(app)) },
@@ -163,6 +188,8 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     )
     private val meter = NetworkMeter(app)
     private val mutex = Mutex()
+    /** Speech, the language model and the tag model take turns here: separate processes do not mean separate NPUs. */
+    private val accelerator = AcceleratorLane()
 
     // Voice tags are optional: a missing SenseVoice bundle is noticed once and then not retried every turn.
     private var tagEngine: SenseVoiceSignalEngine? = null
@@ -176,7 +203,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     private val suggestionEngine = RuleSuggestionEngine(
         siteLoad.site, Homophones.default, TamHedgeDetector(TamCueLists.loadDefault()), java.time.Clock.systemDefaultZone(),
     )
-    private val session: ReportSession = Pipeline.newSession(llm ?: FakeLlmEngine(), FileReportStore(app), suggestions = suggestionEngine)
+    private val session: ReportSession = Pipeline.newSession(LaneLlmEngine(llm ?: FakeLlmEngine(), accelerator), FileReportStore(app), suggestions = suggestionEngine)
 
     // The recognition lane. English is the default and the only lane unless Hindi is asked for (`--es lang hi` or the Home
     // switch). Telugu and unknown codes resolve to English with a note. Hindi needs the real speech engine: with the
@@ -208,7 +235,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             simulatedNote = simulatedNote(),
             network = l.network, showProof = l.showProof, ttsOffline = l.ttsOffline, ttsNote = l.ttsNote, undoLabel = l.undoLabel,
             needsMicPermission = l.needsMicPermission,
-            voiceTags = l.voiceTags, voiceTagsNote = l.voiceTagsNote,
+            voiceTags = l.voiceTags, voiceTagsNote = l.voiceTagsNote, liveText = l.liveText, readiness = l.readiness,
             hindiLane = l.hindi,
             scriptNote = TranscriptScriptNote.forTexts(s.transcripts + listOfNotNull(l.heardNow)),
         )
@@ -219,7 +246,25 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         needsMicPermission = false, hindiLane = local.value.hindi,
     ))
 
+    /** Debug switch (`--es live off`): transcribe and extract only after Stop, as before, for a reproducible comparison. */
+    // Only with the resident worker: through the per-utterance CLI every 3 s preview would reload Whisper on the shared lane.
+    private var liveInference = speech is ResidentSherpaSpeechEngine
+    private var live: Live? = null
+    private var replaying = false // debug replay: no spoken questions, so timings are not disturbed and the room stays quiet
+    private var warm: Job? = null
+
+    // Latency evidence for the kit comparison (batch vs live): monotonic time from the Stop tap to the finished turn, logged once per turn.
+    private var turnStartNs = 0L
+    private var turnMode = ""
+
+    private class Live(val id: Long, val coordinator: LiveInferenceCoordinator, val scheduler: PreviewScheduler)
+
+    fun debugSetLiveInference(on: Boolean) {
+        if (Engines.isDebuggable(getApplication())) liveInference = on && speech is ResidentSherpaSpeechEngine
+    }
+
     init {
+        warmUpModels()
         android.util.Log.i(
             TAG,
             "speech lane: requested=${selection.language} -> language=${if (local.value.hindi) "hi" else SpeechLane.ENGLISH.language} " +
@@ -229,7 +274,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         // Speak whatever the session wants said (questions, the emergency line, the summary), one at a time.
         viewModelScope.launch {
             session.ui.map { it.say }.filterNotNull().distinctUntilChangedBy { it.id }.collect { say ->
-                if (local.value.listening) return@collect
+                if (local.value.listening || replaying) return@collect
                 local.update { it.copy(speaking = true) }
                 val started = System.nanoTime()
                 speakAloud(say.text)
@@ -238,6 +283,37 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
                 used?.note()?.let { android.util.Log.w(TAG, "tts fallback: $it") }
                 val ms = (System.nanoTime() - started) / 1_000_000
                 session.recordStage(used?.toStage(ms) ?: StageRecord("Speak", AndroidTtsBackend.LABEL, Compute.CPU, ms))
+            }
+        }
+    }
+
+    /**
+     * Loads the language model at launch instead of at the first Stop. Idempotent: one load however often it is asked for.
+     * Recording may start while it loads; inference waits its turn on the lane. A failure is shown and the first real
+     * request tries the lazy load again.
+     */
+    private fun warmUpModels() {
+        // Off unless live inference is on (the resident speech worker is the engine): without it the app loads models lazily at the
+        // first turn exactly as before, and no launch-time label or load appears (A/036 condition 2).
+        if (!liveInference) return
+        val genie = llm as? GenieXLlmEngine
+        val worker = speech as? ResidentSherpaSpeechEngine
+        if (genie == null && worker == null) return
+        if (warm != null) return
+        local.update { it.copy(readiness = Readiness.LOADING) }
+        warm = viewModelScope.launch {
+            val started = System.nanoTime()
+            try {
+                // One after the other on the shared lane: two accelerator initialisations at once is not something to test at launch.
+                accelerator.run { worker?.warmUp() }
+                accelerator.run { genie?.warmUp() }
+                android.util.Log.i(TAG, "models ready after ${(System.nanoTime() - started) / 1_000_000} ms (launch-time load)")
+                local.update { it.copy(readiness = Readiness.READY) }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.e(TAG, "model warm-up failed", e)
+                local.update { it.copy(readiness = Readiness.FAILED, message = "The on-device model did not load yet: ${e.message?.take(120) ?: "unknown error"}. It will be tried again when you speak.") }
             }
         }
     }
@@ -259,6 +335,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         if (!recorder.hasPermission()) { local.update { it.copy(needsMicPermission = true) }; return }
         speaker.stop()
         val levels = ArrayDeque<Float>()
+        val started = beginLive()
         val ok = recorder.start(
             viewModelScope,
             onLevel = { lv ->
@@ -266,9 +343,10 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
                 local.update { it.copy(levels = levels.toList()) }
             },
             onLimit = { stopAndProcess() },
+            onChunk = started?.let { l -> { buffer, n -> l.coordinator.offer(buffer, n) } },
         )
-        if (!ok) { say("I couldn't open the microphone. Another app may be using it."); return }
-        local.update { it.copy(listening = true, elapsedMs = 0, levels = emptyList(), message = null, speaking = false) }
+        if (!ok) { started?.let(::abandon); say("I couldn't open the microphone. Another app may be using it."); return }
+        local.update { it.copy(listening = true, elapsedMs = 0, levels = emptyList(), message = null, speaking = false, liveText = null) }
         timer = viewModelScope.launch {
             val t0 = System.currentTimeMillis()
             while (true) { delay(200); local.update { it.copy(elapsedMs = System.currentTimeMillis() - t0) } }
@@ -276,10 +354,94 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     }
 
     private fun stopAndProcess() {
+        // Atomic: a tap and the 30 s limit can both arrive; only the first one commits the recording.
+        if (!local.getAndUpdate { it.copy(listening = false, processing = it.listening || it.processing) }.listening) return
         viewModelScope.launch {
             timer?.cancel()
+            val l = live // taken before waiting: a second Stop (the 30 s limit racing a tap) must not commit the same recording twice
+            live = null
+            turnStartNs = System.nanoTime()
+            turnMode = if (l != null) "live" else "batch"
             val pcm = recorder.stop()
-            process(pcm, java.time.Instant.now()) // the device clock at the moment the reporter stopped speaking
+            val capturedAt = java.time.Instant.now() // the device clock at the moment the reporter stopped speaking
+            if (l != null) processLive(l, capturedAt) else process(pcm, capturedAt)
+        }
+    }
+
+    /** Starts incremental transcription and provisional extraction for a new recording; null in batch mode. */
+    private fun beginLive(): Live? {
+        val engine = speech ?: return null
+        if (!liveInference) return null
+        // Live windows are English-lane only: the Hindi lane has its own experimental engine and normalisation (process() below).
+        if (currentLane().engine != RecognitionEngine.WHISPER_SMALL) return null
+        accelerator.startSpeculation()
+        val id = session.beginRecording()
+        // Extraction runs on the session's own (main) dispatcher: the session is not thread-safe, only the model call waits.
+        val scheduler = PreviewScheduler(viewModelScope) { text -> withContext(Speculative) { session.previewRecording(id, text) } }
+        val coordinator = LiveInferenceCoordinator(engine, currentLane().language, lane = accelerator.lock, onSnapshot = snapshot@{ s ->
+            if (!local.value.listening) return@snapshot // a decode that ended after Stop: the final transcript replaces it
+            val text = listOf(s.stable, s.tail).filter { it.isNotBlank() }.joinToString(" ")
+            local.update { it.copy(liveText = text) }
+            scheduler.offer(text)
+        })
+        viewModelScope.launch(Dispatchers.Default) { coordinator.run() }
+        return Live(id, coordinator, scheduler).also { live = it }
+    }
+
+    private fun abandon(l: Live) {
+        l.scheduler.stop()
+        l.coordinator.cancel()
+        session.cancelRecording(l.id)
+        live = null
+    }
+
+    /**
+     * Stop after a live recording: pending previews are dropped, the tail is decoded, and ONE authoritative turn is committed
+     * (re-using the provisional extraction only if its transcript and baseline match exactly). Questions and speech start here.
+     */
+    private suspend fun processLive(l: Live, capturedAt: java.time.Instant) {
+        l.scheduler.stop()
+        accelerator.stopSpeculation()
+        mutex.withLock {
+            local.update { it.copy(listening = false, processing = true, heardNow = null, message = null) }
+            val engine = speech ?: return@withLock
+            val before = session.ui.value.fields
+            val journalBefore = session.ui.value.journal.size
+            val heard = try {
+                l.coordinator.finish()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.e(TAG, "speech engine failed", e)
+                session.cancelRecording(l.id)
+                local.update { it.copy(liveText = null) }
+                finishTurn(before, journalBefore, "I couldn't hear that: ${e.message?.take(160) ?: "the speech engine failed"}")
+                return@withLock
+            }
+            android.util.Log.i(TAG, "heard live [${heard.compute}] ${heard.decodeCalls} decodes, ${heard.decodeMs} ms engine time, whole-recording fallback=${heard.fullPass}: ${heard.text}")
+            heard.compute?.let { c -> runCatching { factory.checkResult(c) }.onFailure { blocked = explain(it) } }
+            local.update { it.copy(heardNow = heard.text.ifBlank { null }, liveText = null) }
+            val tags = if (heard.text.isBlank()) null else readVoiceTags(heard.pcm)
+            tags?.let { session.recordStage(StageRecord("Tags", "SenseVoice (sherpa-onnx, QNN)", it.compute, it.elapsedMs)) }
+            val stage = heard.compute?.let { StageRecord("Hear", "${engine.name} (live windows)", it, heard.decodeMs) }
+            session.onUtterance(heard.text, stage, tags?.signals.orEmpty(), capturedAt, recording = l.id)
+            if (heard.text.isBlank()) session.cancelRecording(l.id)
+            finishTurn(before, journalBefore, null)
+            probeMissingAfterTurn()
+        }
+    }
+
+    /**
+     * The focused second look at empty tool/item and action fields: after the turn is on screen, while the reply is spoken, holding the
+     * model lock so a new turn simply waits for it. Failure costs the chips, never the turn. Shared by the batch and the live path.
+     */
+    private suspend fun probeMissingAfterTurn() {
+        try {
+            session.probeMissing()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "probe failed", e)
         }
     }
 
@@ -301,7 +463,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             val before = session.ui.value.fields
             val journalBefore = session.ui.value.journal.size
             val heard = try {
-                engine.transcribe(pcm, lane.language)
+                accelerator.run { engine.transcribe(pcm, lane.language) }
             } catch (e: Exception) {
                 // Say why, in words and in the log: a real engine that fails must never be silent.
                 android.util.Log.e(TAG, "speech engine failed", e)
@@ -317,15 +479,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             tags?.let { session.recordStage(StageRecord("Tags", "SenseVoice (sherpa-onnx, QNN)", it.compute, it.elapsedMs)) }
             session.onUtterance(said.text, StageRecord("Hear", engine.name, said.compute, said.elapsedMs), tags?.signals.orEmpty(), capturedAt)
             finishTurn(before, journalBefore, null)
-            // The focused second look at empty tool/item and action fields: after the turn is on screen, while the reply is spoken,
-            // holding the model lock so a new turn simply waits for it. Failure costs the chips, never the turn.
-            try {
-                session.probeMissing()
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                android.util.Log.w(TAG, "probe failed", e)
-            }
+            probeMissingAfterTurn()
         }
     }
 
@@ -348,7 +502,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             return null
         }
         return try {
-            engine.read(pcm).also { r ->
+            accelerator.run { engine.read(pcm) }.also { r ->
                 android.util.Log.i(TAG, "tags [${r.compute}] in ${r.elapsedMs} ms: emotion=${r.reading?.emotion} event=${r.reading?.event} -> ${r.signals.map { it.label }}")
                 local.update { it.copy(voiceTags = r, voiceTagsNote = null) }
             }
@@ -456,6 +610,40 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         }
     }
 
+    /**
+     * Debug builds only: replay a 16 kHz mono PCM16 WAV [loops] times and log `latency mode=live-replay|batch-replay stop_to_ready_ms=N`
+     * for each. With [useLive], the audio is fed to the live coordinator at real-time pace (as spoken) and Stop is applied at its end; without,
+     * the whole clip goes straight to the batch path at "Stop". The report is reset between loops. Needs the resident speech worker for live.
+     */
+    fun debugReplayFile(path: String, useLive: Boolean, loops: Int) {
+        if (!Engines.isDebuggable(getApplication())) return
+        viewModelScope.launch {
+            val pcm = runCatching { readWav(java.io.File(path)) }.getOrElse {
+                android.util.Log.e(TAG, "cannot read $path", it); say("Can't read that file: ${it.message}"); return@launch
+            }
+            replaying = true
+            try {
+                repeat(loops) { n ->
+                    if (n > 0) newReport()
+                    val l = if (useLive) beginLive() else null
+                    if (useLive && l == null) {
+                        android.util.Log.e(TAG, "replay: live inference is not available (it needs the resident speech worker)")
+                        return@launch
+                    }
+                    this@AppViewModel.live = null // processLive owns the recording from here
+                    local.update { it.copy(listening = true, elapsedMs = 0, levels = emptyList(), message = null, liveText = null) }
+                    if (l != null) PacedReplay.feed(pcm) { buffer, count -> l.coordinator.offer(buffer, count) }
+                    turnStartNs = System.nanoTime()
+                    turnMode = if (l != null) "live-replay" else "batch-replay"
+                    val capturedAt = java.time.Instant.now()
+                    if (l != null) processLive(l, capturedAt) else process(pcm, capturedAt)
+                }
+            } finally {
+                replaying = false
+            }
+        }
+    }
+
     /** Debug builds only: run a 16 kHz mono PCM16 WAV through the same path as the microphone. */
     fun debugTranscribeFile(path: String, thenSend: Boolean = false) {
         if (!Engines.isDebuggable(getApplication())) return
@@ -511,6 +699,10 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     }
 
     private fun finishTurn(before: List<com.megathon.incident.session.FieldView>, journalBefore: Int, error: String?) {
+        if (turnStartNs != 0L) {
+            android.util.Log.i(TAG, "latency mode=$turnMode stop_to_ready_ms=${(System.nanoTime() - turnStartNs) / 1_000_000} ok=${error == null}")
+            turnStartNs = 0L
+        }
         val s = session.ui.value
         // A spoken correction replaced a value: say what changed and offer undo, as for a tap.
         s.journal.drop(journalBefore).lastOrNull()?.let { j ->
@@ -595,7 +787,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         speaker.stop()
         session.reset()
         demoSpeech.restart()
-        local.update { Local(network = meter.read(), ttsOffline = it.ttsOffline, ttsNote = it.ttsNote, hindi = it.hindi) }
+        local.update { Local(network = meter.read(), ttsOffline = it.ttsOffline, ttsNote = it.ttsNote, hindi = it.hindi, readiness = it.readiness) }
     }
 
     fun openProof() = local.update { it.copy(showProof = true, network = meter.read()) }
@@ -723,6 +915,8 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     }
 
     override fun onCleared() {
+        live?.let(::abandon)
+        (speech as? ResidentSherpaSpeechEngine)?.release()
         recorder.cancel()
         speaker.shutdown()
         if (hindiVoice !== configuredVoice) hindiVoice?.shutdown()

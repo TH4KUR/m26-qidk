@@ -104,6 +104,66 @@ class ContestTest(unittest.TestCase):
             self.assertIn("device=phone", (root / "wer.md").read_text())
             self.assertIn("0/2", (root / "wer.md").read_text())
 
+    def _write_wav(self, path):
+        with wave.open(str(path), "wb") as audio:
+            audio.setnchannels(1)
+            audio.setsampwidth(2)
+            audio.setframerate(16000)
+            audio.writeframes(b"\x00\x00")
+
+    def _fake_modules(self, calls):
+        def fake_pipeline(*args, **kwargs):
+            def transcribe(wav):
+                calls.append(wav)
+                return {"text": "Heard it."}
+            return transcribe
+        return {"torch": SimpleNamespace(cuda=SimpleNamespace(is_available=lambda: False)),
+                "transformers": SimpleNamespace(pipeline=fake_pipeline)}
+
+    def test_transcripts_only_exports_every_clip_including_ones_without_a_reference(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write_wav(root / "a.wav")
+            self._write_wav(root / "b.wav")
+            manifest = root / "clips.jsonl"
+            manifest.write_text(
+                json.dumps({"clip_id": "scripted-1", "wav": "a.wav", "reference": "water leak"}) + "\n"
+                + json.dumps({"clip_id": "own-words-1", "wav": "b.wav", "reference": ""}) + "\n")
+            calls = []
+            argv = ["contest.py", "--manifest", str(manifest), "--raw-transcripts", str(root / "raw.jsonl"),
+                    "--transcripts-only", "--model", "test-model"]
+            with patch.dict("sys.modules", self._fake_modules(calls)), patch("sys.argv", argv), patch("builtins.print"):
+                contest.main()
+            rows = [json.loads(line) for line in (root / "raw.jsonl").read_text().splitlines()]
+            self.assertEqual([r["clip_id"] for r in rows], ["scripted-1", "own-words-1"])
+            self.assertTrue(all(r == {"clip_id": r["clip_id"], "model": "test-model", "text": "Heard it."} for r in rows))
+            self.assertEqual(len(calls), 2)
+            self.assertEqual(sorted(p.name for p in root.iterdir()), ["a.wav", "b.wav", "clips.jsonl", "raw.jsonl"],
+                             "no WER table and no predictions file are written without references")
+
+    def test_without_transcripts_only_a_missing_reference_is_still_an_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write_wav(root / "b.wav")
+            manifest = root / "clips.jsonl"
+            manifest.write_text(json.dumps({"clip_id": "own-words-1", "wav": "b.wav", "reference": ""}) + "\n")
+            with self.assertRaises(ValueError):
+                load_manifest(manifest)
+            self.assertEqual(len(load_manifest(manifest, allow_empty_reference=True)), 1)
+
+    def test_transcripts_only_needs_raw_transcripts_and_otherwise_output_is_required(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for argv, message in (
+                (["contest.py", "--manifest", str(root / "m.jsonl"), "--transcripts-only"], "--transcripts-only needs --raw-transcripts"),
+                (["contest.py", "--manifest", str(root / "m.jsonl")], "--output is required"),
+            ):
+                errors = io.StringIO()
+                with patch("sys.argv", argv), patch("sys.stderr", errors), self.assertRaises(SystemExit) as caught:
+                    contest.main()
+                self.assertEqual(caught.exception.code, 2)
+                self.assertIn(message, errors.getvalue())
+
     def test_normalization_ignores_case_and_punctuation(self):
         self.assertEqual(normalize("Conference Room 2, at 10 AM!"), ["conference", "room", "2", "at", "10", "am"])
 

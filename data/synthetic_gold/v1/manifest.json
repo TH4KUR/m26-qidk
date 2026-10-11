@@ -1,0 +1,34 @@
+{
+  "dataset": "incident-synthetic-gold-v1",
+  "created_date": "2026-10-11",
+  "seed": 20261011,
+  "base_git_revision": "e34df9763cf7087a74d49c427bca86874c7c5dba",
+  "independent_human_adjudication": false,
+  "generation": "Original 480 rows plus 80 authored four-turn update sequences (320 rows); no external records or model sampling",
+  "supersedes_git_revision": "959d6719a25f1804cbc0bbb8761e7499ab331dd3",
+  "deployment_app_revision": "9bf0d36",
+  "input_contract": "Current PromptBuilder: at most two earlier worker utterances; date_time_text contains the saved spoken phrase",
+  "sha256": {
+    "gold.jsonl": "9e00c787e1c6da572f4f95d28c96fa7091db4a60fbcf9dca366547a3c543f389",
+    "train.jsonl": "5c84e3dab3b014a43a4827e79d9f2cfd179be84e7646dfb4ed4384a0a56a2400",
+    "validation.jsonl": "40de834e21dfc27c0dc817e849955032848dc17ebeadde17530c054d65ee0aa4",
+    "test.jsonl": "4b4b0161da2a4e5c634660d5e3f8791d632080892e36886981b4fe1232af6bdc",
+    "system_prompt.txt": "8b423f5a1835daa034846c3be1f33ce13f86cfac42c243cec095e23a446916ca",
+    "target.schema.json": "f4407163e2af4ec39249efc6ade1a4b56be3f6c678165b898de2a5f4c8bd363a",
+    "statistics.json": "d3f6bea00723380d1f04b0038c3993e9f6bbfd3aa9aaa3de0cb7722b259e5247",
+    "existing_e_benchmark.json": "309311b9bbb49831582c7af82b72204017984dd986de216ede9cfc101c717be1",
+    "tokenizer_check.json": "7ffaa408a45728f913e3287ca21ee99c7c4781e851d357cdc76e456055280475",
+    "runtime_update_audit.json": "59924cc9a6ebede5cf855ed4a93b917eb0193dc1e8744af7e2fe3b34ac5bc830",
+    "validation_results.json": "8c6f9a10b6dfc2c8f11e4a7ad51411db52305c8ad17d57a6cf0ab555388145b1"
+  },
+  "source_sha256": {
+    "tools/synthetic_gold/build_dataset.py": "38e702c323c830d997b900fdc351f752d7ecd410bb0aed7a9325c09099b03537",
+    "tools/synthetic_gold/corpus.py": "ee671c7499e674a0956c5ce1142efcce0219f3fdc5616299f80ecb8454082376",
+    "tools/synthetic_gold/temporal_gold.py": "95e2aca68b1daf3cf1ee8827e56149dd3aeb9eef2818882346fc09ca48b0ceaf",
+    "tools/synthetic_gold/updates.py": "ecc41abc5dc0dce09262208f89b56b65ea251c11c5ea19086a3d133df001b2c7",
+    "core/src/main/kotlin/com/megathon/incident/domain/Model.kt": "030aefb65e475b235e8c6ece6c89b2e5c42a5d6e8d3253de3682910f4238de40",
+    "core/src/main/kotlin/com/megathon/incident/session/PromptBuilder.kt": "3197db2354829721f2b3ff8876cf8ca283cf7a1db0da4b5a616a08e220126bc0",
+    "core/src/main/kotlin/com/megathon/incident/llm/ToolCallParser.kt": "1bb3bbe66fd6705b17239e4f99ec836d4135415f355cc2c5b80140559094a165",
+    "core/src/main/kotlin/com/megathon/incident/llm/PayloadValidator.kt": "f36cd13984f73a2d0fc698bb18befd9a985bdfa28238b47df4d4c7a4fc8dc8ea"
+  }
+}

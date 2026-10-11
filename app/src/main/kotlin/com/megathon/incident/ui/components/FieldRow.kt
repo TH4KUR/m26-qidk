@@ -8,6 +8,13 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.background
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.LaunchedEffect
@@ -58,47 +65,34 @@ import com.megathon.incident.ui.theme.Motion
 import com.megathon.incident.ui.theme.Space
 import com.megathon.incident.ui.theme.Theme
 
-/** The option buttons are squarer than a pill: a 10 dp corner (the user asked for less rounded). */
-private val ChipShape = RoundedCornerShape(10.dp)
-
-/** A tappable answer chip. 48 dp tall, 3:1 border. [note] is a second small line (for example "suggested"). */
+/** Answer options are text with a fine underline, rather than another set of cards. */
 @Composable
 fun ChoiceChip(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, note: String? = null, selected: Boolean = false) {
-    val c = Theme.colors
-    val shape = ChipShape
-    Column(
-        modifier
-            .defaultMinSize(minHeight = 48.dp)
-            .background(if (selected) c.accentContainer else c.surface, shape)
-            .then(Modifier.semantics { contentDescription = if (note != null) "$label, $note" else label })
-            .clickable(onClickLabel = "Choose $label", onClick = onClick)
-            .padding(horizontal = Space.s4, vertical = Space.s2),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text(label, style = MaterialTheme.typography.labelLarge, color = if (selected) c.onAccentContainer else c.ink)
-        if (note != null) Text(note, style = MaterialTheme.typography.labelSmall, color = if (selected) c.onAccentContainer else c.ink2)
-    }
+    ReplyOption(label, onClick, modifier, note, selected)
 }
 
-/** Outlined version used where the chip sits on a tinted card. 1.5 dp border at 3:1 so it is visible without colour. */
 @Composable
 fun OutlinedChoiceChip(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, note: String? = null, emphasis: Boolean = false) {
+    ReplyOption(label, onClick, modifier, note, emphasis)
+}
+
+@Composable
+private fun ReplyOption(label: String, onClick: () -> Unit, modifier: Modifier, note: String?, emphasis: Boolean) {
     val c = Theme.colors
-    val shape = ChipShape
+    val interaction = remember { MutableInteractionSource() }
     Column(
-        modifier
-            .defaultMinSize(minHeight = 48.dp)
-            .background(c.surface, shape)
-            .border(BorderStroke(if (emphasis) 2.dp else 1.5.dp, if (emphasis) c.accent else c.ink3), shape)
+        modifier.pressMotion(interaction).defaultMinSize(minHeight = 48.dp).clip(RoundedCornerShape(4.dp))
+            .drawBehind {
+                drawLine(if (emphasis) c.accent else c.line, androidx.compose.ui.geometry.Offset(12.dp.toPx(), size.height - 1.dp.toPx()), androidx.compose.ui.geometry.Offset(size.width - 12.dp.toPx(), size.height - 1.dp.toPx()), 1.dp.toPx())
+            }
             .semantics { contentDescription = if (note != null) "$label, $note" else label }
-            .clickable(onClickLabel = "Choose $label", onClick = onClick)
-            .padding(horizontal = Space.s4, vertical = Space.s2),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .clickable(interactionSource = interaction, indication = androidx.compose.material3.ripple(), role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "Choose $label", onClick = onClick)
+            .padding(horizontal = Space.s3, vertical = Space.s2),
         verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(label, style = MaterialTheme.typography.labelLarge, color = c.ink)
-        if (note != null) Text(note, style = MaterialTheme.typography.labelSmall, color = c.onAccentContainer)
+        Text(label, style = MaterialTheme.typography.labelLarge, color = if (emphasis) c.accent else c.ink)
+        if (note != null) Text(note, style = MaterialTheme.typography.labelSmall, color = c.ink3)
     }
 }
 
@@ -143,28 +137,30 @@ fun FieldRow(
     Row(modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
         Box(Modifier.width(4.dp).fillMaxHeight().background(c.accent.copy(alpha = bar)))
         Column(Modifier.weight(1f)) {
+            val turn = animateFloatAsState(if (selected || editing) 180f else 0f, tween(if (reduce) 0 else Motion.standard), label = "field expansion")
             // The tappable header is one accessibility node; the action buttons below stay separate.
             Column(
                 Modifier
                     .fillMaxWidth()
                     .semantics(mergeDescendants = true) { contentDescription = summary }
                     .clickable(onClickLabel = if (selected) "Hide details for ${view.label}" else "Show details for ${view.label}", onClick = onSelect)
-                    .padding(horizontal = Space.s4, vertical = Space.s3),
+                    .padding(horizontal = Space.s1, vertical = Space.s3),
                 verticalArrangement = Arrangement.spacedBy(Space.s1),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(view.label, style = MaterialTheme.typography.labelMedium, color = c.ink2, modifier = Modifier.weight(1f))
                     StatusChip(view.status)
+                    Icon(Icons.Rounded.KeyboardArrowDown, null, tint = c.ink3, modifier = Modifier.padding(start = Space.s2).graphicsLayer { rotationZ = turn.value })
                 }
                 when {
                     valueText != null -> Text(
-                        valueText, style = MaterialTheme.typography.bodyLarge,
+                        valueText, style = MaterialTheme.typography.titleMedium,
                         color = if (view.status == UiStatus.NONE || view.status == UiStatus.UNKNOWN) c.ink2 else c.ink,
                     )
                     view.status == UiStatus.NEEDED -> Text("Needed", style = MaterialTheme.typography.bodyLarge, color = c.onAttention)
                     else -> Text("Not mentioned", style = MaterialTheme.typography.bodyLarge, color = c.ink3)
                 }
-                view.hint?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.ink2) }
+                if (view.status == UiStatus.NEEDED) view.hint?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.ink2) }
             }
 
             if (chips.isNotEmpty() && !editing) {
@@ -175,14 +171,15 @@ fun FieldRow(
 
             AnimatedVisibility(
                 visible = selected || editing,
-                enter = fadeIn(tween(Motion.standard, easing = Motion.enter)) + expandVertically(tween(Motion.standard, easing = Motion.enter)),
-                exit = fadeOut(tween(Motion.quick, easing = Motion.exit)) + shrinkVertically(tween(Motion.quick, easing = Motion.exit)),
+                enter = fadeIn(tween(if (reduce) 0 else Motion.standard, easing = Motion.enter)) + expandVertically(tween(if (reduce) 0 else Motion.standard, easing = Motion.enter)),
+                exit = fadeOut(tween(if (reduce) 0 else Motion.quick, easing = Motion.exit)) + shrinkVertically(tween(if (reduce) 0 else Motion.quick, easing = Motion.exit)),
             ) {
                 Column(Modifier.bringIntoViewRequester(requester).padding(start = Space.s4, end = Space.s4, bottom = Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
+                    if (view.status == UiStatus.SUGGESTED) Text("Suggested from your story. Confirm it or choose a different answer.", style = MaterialTheme.typography.bodyMedium, color = c.ink2)
                     if (view.writtenByAssistant) {
                         Text("Written by the assistant from what you said. Edit it if it is not right.", style = MaterialTheme.typography.bodyMedium, color = c.ink2)
                     } else if (view.evidence != null) {
-                        Column(Modifier.fillMaxWidth().background(c.accentContainer, RoundedCornerShape(12.dp)).padding(Space.s3)) {
+                        Column(Modifier.fillMaxWidth().drawBehind { drawLine(c.accent, androidx.compose.ui.geometry.Offset.Zero, androidx.compose.ui.geometry.Offset(0f, size.height), 2.dp.toPx()) }.padding(start = Space.s3, top = Space.s1, bottom = Space.s1)) {
                             Text("You said", style = MaterialTheme.typography.labelSmall, color = c.onAccentContainer)
                             Text("“${view.evidence}”", style = MaterialTheme.typography.bodyLarge, color = c.onAccentContainer)
                         }

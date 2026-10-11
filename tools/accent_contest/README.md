@@ -29,6 +29,13 @@ python tools/accent_contest/contest.py --manifest clips.jsonl \
 
 Repeat with `device=kit` and distinct output paths. Selectors are recorded in the Markdown report and must match metadata exactly. They apply before WAV validation, so unselected WAVs need not be downloaded. Missing, blank or non-string selection metadata and empty selected subsets raise errors. Use the manifest's actual split names (`tuning/test` or `dev/holdout`), not a guessed mapping. Choose/freeze the split before inspecting inference, and reserve the test set until evaluation settings are fixed. Default English checkpoints should not be scored on Hindi/Telugu clips.
 
+To get the raw transcripts of **every** clip, including ones whose reference is not typed yet (E's own-words clips), add `--transcripts-only`: it needs `--raw-transcripts`, accepts empty references, and writes no WER table or predictions file (so it never produces a score for unchecked labels):
+
+```sh
+python tools/accent_contest/contest.py --manifest manifest_phone_r1.jsonl --models-dir "$HOME/.cache/megathon-asr-models" \
+  --transcripts-only --raw-transcripts results/phone-r1-all-transcripts.jsonl
+```
+
 Additional `--select noise=fan`, `--select tone=stressed`, or `--select condition=fan` runs provide separate condition tables using the manifest's actual keys. Select `label_source=human` only if that is the exact label in the manifest. Model-generated labels remain silver; mark that limitation in the dataset heading. A filtered run does not require files for unselected clips. Output paths must be distinct and cannot overwrite the input manifest. These options change neither WER normalization nor the legacy unfiltered invocation.
 
 Use `--dataset-label "Synthetic smoke test — not an accuracy estimate"` for generated dummy audio.

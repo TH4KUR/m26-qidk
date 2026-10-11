@@ -14,9 +14,17 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
+import com.megathon.incident.ui.components.StageTrack
+import com.megathon.incident.ui.theme.LocalReduceMotion
+import com.megathon.incident.ui.theme.Motion
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
@@ -42,6 +50,7 @@ import com.megathon.incident.ui.components.LevelBars
 import com.megathon.incident.ui.components.MessageCard
 import com.megathon.incident.ui.components.MicButton
 import com.megathon.incident.ui.components.MicGlyph
+import com.megathon.incident.ui.components.ProvisionalCard
 import com.megathon.incident.ui.components.Pill
 import com.megathon.incident.ui.components.PriorityBanner
 import com.megathon.incident.ui.components.PrimaryButton
@@ -64,16 +73,17 @@ fun ReportScreen(ui: AppUi, vm: AppViewModel) {
     val wide = isWide()
     Scaffold(
         containerColor = c.canvas,
-        topBar = { AppTopBar("Your report", onProof = vm::openProof, simulatedNote = ui.simulatedNote) },
+        topBar = { AppTopBar("Shape your report", onProof = vm::openProof, simulatedNote = ui.simulatedNote) },
         bottomBar = { ReportBottomBar(ui, vm) },
     ) { pad ->
         if (wide) {
             Row(Modifier.fillMaxSize().padding(pad).padding(horizontal = Size.gutter), horizontalArrangement = Arrangement.spacedBy(Space.s6)) {
                 LazyColumn(Modifier.weight(0.42f), verticalArrangement = Arrangement.spacedBy(Space.s4), contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = Space.s4)) {
+                    alerts(ui, vm)
                     conversation(ui, vm, inlineQuestion = true)
                 }
                 LazyColumn(Modifier.weight(0.58f), verticalArrangement = Arrangement.spacedBy(Space.s4), contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = Space.s4)) {
-                    fields(ui, vm)
+                    if (!ui.listening && !ui.processing) fields(ui, vm)
                 }
             }
         } else {
@@ -82,8 +92,13 @@ fun ReportScreen(ui: AppUi, vm: AppViewModel) {
                 verticalArrangement = Arrangement.spacedBy(Space.s4),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = Space.s4),
             ) {
-                conversation(ui, vm)
-                fields(ui, vm)
+                alerts(ui, vm)
+                if (ui.listening || ui.processing) {
+                    conversation(ui, vm)
+                } else {
+                    fields(ui, vm)
+                    conversation(ui, vm)
+                }
             }
         }
     }
@@ -96,7 +111,7 @@ fun isWide(): Boolean {
     return cfg.screenWidthDp >= WIDE_DP || cfg.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
 }
 
-private fun androidx.compose.foundation.lazy.LazyListScope.conversation(ui: AppUi, vm: AppViewModel, inlineQuestion: Boolean = false) {
+private fun androidx.compose.foundation.lazy.LazyListScope.alerts(ui: AppUi, vm: AppViewModel) {
     ui.message?.let { m -> item(key = "message") { MessageCard(m, vm::dismissMessage) } }
     ui.session.priority?.let { p ->
         item(key = "priority") {
@@ -108,14 +123,30 @@ private fun androidx.compose.foundation.lazy.LazyListScope.conversation(ui: AppU
             )
         }
     }
-    item(key = "transcript") {
-        val highlight = ui.session.fields.firstOrNull { it.field == ui.selected }?.evidence
-        TranscriptCard(ui.session.transcripts, highlight, ui.heardNow, reading = ui.processing, scriptNote = ui.scriptNote)
-    }
+ }
+
+private fun androidx.compose.foundation.lazy.LazyListScope.conversation(ui: AppUi, vm: AppViewModel, inlineQuestion: Boolean = false) {
     val q = ui.session.state as? SessionState.Asking
     if (inlineQuestion && q != null && !ui.processing && !ui.listening) {
         item(key = "question") { QuestionDock(q.question, ui.speaking, vm::reply, vm::onMicTapped, vm::stopSpeaking, vm::goCheck, inline = true, onKeyAnswer = vm::answerKeyQuestion) }
     }
+    item(key = "transcript") {
+        var expanded by remember { mutableStateOf(false) }
+        val reduce = LocalReduceMotion.current
+        Column {
+        if (!ui.listening && !ui.processing) TextAction(if (expanded) "Hide original words" else "Read your original words", { expanded = !expanded })
+        AnimatedVisibility(expanded || ui.listening || ui.processing, enter = fadeIn(tween(if (reduce) 0 else Motion.standard)) + expandVertically(tween(if (reduce) 0 else Motion.standard)), exit = fadeOut(tween(if (reduce) 0 else Motion.quick)) + shrinkVertically(tween(if (reduce) 0 else Motion.standard))) {
+        val highlight = ui.session.fields.firstOrNull { it.field == ui.selected }?.evidence
+        TranscriptCard(
+            ui.session.transcripts, highlight, ui.heardNow ?: ui.liveText, reading = ui.processing,
+            readingLabel = if (ui.heardNow == null) "Transcribing your recording…" else "Organizing the report…",
+            scriptNote = ui.scriptNote,
+        )
+        }
+        }
+    }
+    if (ui.listening) item(key = "provisional") { ProvisionalCard(ui.session.provisional) }
+
 }
 
 private val TYPE_CHOICES: List<QuickReply> = IncidentType.entries.map { QuickReply(Labels.type(it.wire), Field.INCIDENT_TYPE, it.wire) }
@@ -129,36 +160,62 @@ private fun choicesFor(f: Field): List<QuickReply> = when (f) {
 
 private fun androidx.compose.foundation.lazy.LazyListScope.fields(ui: AppUi, vm: AppViewModel) {
     val all = ui.session.fields
-    val needed = all.count { it.mandatory && it.status == UiStatus.NEEDED }
-    val toConfirm = all.count { it.mandatory && it.status == UiStatus.SUGGESTED }
+    val mandatory = all.filter { it.mandatory }
+    val needed = mandatory.count { it.status == UiStatus.NEEDED }
+    val toConfirm = mandatory.count { it.status == UiStatus.SUGGESTED }
+    val resolved = mandatory.count { it.status == UiStatus.HEARD || it.status == UiStatus.CONFIRMED }
+    val progress = if (mandatory.isEmpty()) 1f else resolved.toFloat() / mandatory.size
     item(key = "h-needed") {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("To send", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f).semantics { heading() })
-            when {
-                needed > 0 -> Pill("$needed needed", Theme.colors.attentionContainer, Theme.colors.onAttention)
-                toConfirm > 0 -> Pill("$toConfirm to confirm", Theme.colors.attentionContainer, Theme.colors.onAttention)
-                else -> Pill("Ready to check", Theme.colors.accentContainer, Theme.colors.onAccentContainer)
+        Column(verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+            StageTrack(1)
+            if (!isWide()) Spacer(Modifier.height(Space.s3))
+            if (!isWide()) Text("Your story, organized.", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.s1)) {
+                    if (!isWide()) Text("KEY DETAILS", style = MaterialTheme.typography.labelSmall, color = Theme.colors.accent)
+                    Text("$resolved of ${mandatory.size} essentials ready", style = MaterialTheme.typography.bodyMedium, color = Theme.colors.ink2)
+                }
+                when {
+                    needed > 0 -> Text("$needed needed", style = MaterialTheme.typography.labelSmall, color = Theme.colors.onAttention)
+                    toConfirm > 0 -> Text("$toConfirm to confirm", style = MaterialTheme.typography.labelSmall, color = Theme.colors.onAttention)
+                    else -> Text("Ready to review", style = MaterialTheme.typography.labelSmall, color = Theme.colors.accent)
+                }
             }
+            val reduce = LocalReduceMotion.current
+            val animatedProgress = animateFloatAsState(progress, tween(if (reduce) 0 else Motion.slow), label = "essentials ready")
+            LinearProgressIndicator(
+                progress = { animatedProgress.value }, modifier = Modifier.fillMaxWidth().height(5.dp),
+                color = Theme.colors.accent, trackColor = Theme.colors.line,
+            )
         }
     }
     item(key = "mandatory") { FieldGroup(all.filter { it.mandatory }, ui, vm) }
-    item(key = "h-details") { Text("Details", style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() }) }
-    item(key = "details") { FieldGroup(all.filter { !it.mandatory }, ui, vm) }
+    item(key = "details") {
+        var expanded by remember { mutableStateOf(false) }
+        val reduce = LocalReduceMotion.current
+        Column(verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+            TextAction(if (expanded) "Hide additional details" else "Additional details  +", { expanded = !expanded }, color = Theme.colors.ink2)
+            AnimatedVisibility(expanded, enter = fadeIn(tween(if (reduce) 0 else Motion.standard)) + expandVertically(tween(if (reduce) 0 else Motion.standard)), exit = fadeOut(tween(if (reduce) 0 else Motion.quick)) + shrinkVertically(tween(if (reduce) 0 else Motion.standard))) {
+                FieldGroup(all.filter { !it.mandatory }, ui, vm)
+            }
+        }
+    }
     item(key = "spacer") { Spacer(Modifier.height(Space.s6)) }
 }
 
 @Composable
 private fun FieldGroup(group: List<FieldView>, ui: AppUi, vm: AppViewModel) {
-    Card {
-        group.forEachIndexed { i, v ->
-            if (i > 0) Hairline()
+    var openField by remember { mutableStateOf<Field?>(null) }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.s1)) {
+        group.forEachIndexed { index, v ->
+            if (index > 0) Hairline()
             FieldRow(
                 view = v,
-                selected = ui.selected == v.field,
+                selected = openField == v.field,
                 editing = ui.editing == v.field,
                 justFilled = v.field in ui.justFilled,
                 choices = choicesFor(v.field),
-                onSelect = { vm.select(v.field) },
+                onSelect = { openField = if (openField == v.field) null else v.field; vm.select(v.field) },
                 onEdit = { vm.startEdit(v.field) },
                 onSave = { vm.saveEdit(v.field, it) },
                 onChoose = vm::reply,
@@ -175,26 +232,39 @@ private fun FieldGroup(group: List<FieldView>, ui: AppUi, vm: AppViewModel) {
 @Composable
 private fun ReportBottomBar(ui: AppUi, vm: AppViewModel) {
     val c = Theme.colors
-    val state = ui.session.state
-    val asking = state as? SessionState.Asking
-    val docked = asking != null && !ui.listening && !ui.processing && !isWide()
-    Column(Modifier.fillMaxWidth().background(if (docked) c.accentContainer else c.canvas).navigationBarsPadding()) {
-        if (!docked) Hairline()
+    val reduce = LocalReduceMotion.current
+    val wide = isWide()
+    val mode = when {
+        ui.listening -> 0
+        ui.processing -> 1
+        ui.session.state is SessionState.Asking && !wide -> 2
+        else -> 3
+    }
+    Column(Modifier.fillMaxWidth().background(c.canvas).navigationBarsPadding()) {
         ui.undoLabel?.let { UndoBar(it, vm::undo) }
         if (ui.session.canSubmitNow && !ui.listening && !ui.processing) {
-            // Urgent lane: sending is never made to wait for the other fields; what is missing is listed in the report.
-            PrimaryButton("Submit now", vm::send, Modifier.fillMaxWidth().padding(horizontal = Size.gutter, vertical = Space.s2))
+            PrimaryButton("Save now", vm::send, Modifier.fillMaxWidth().padding(horizontal = Size.gutter, vertical = Space.s2))
         }
-        if (asking != null && !ui.listening && !ui.processing && !isWide()) {
-            // The question sits in the thumb zone and the report stays visible above it.
-            QuestionDock(asking.question, ui.speaking, vm::reply, vm::onMicTapped, vm::stopSpeaking, vm::goCheck, onKeyAnswer = vm::answerKeyQuestion)
-        } else Column(Modifier.padding(horizontal = Size.gutter, vertical = Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
-            when {
-                ui.listening -> ListeningBar(ui, vm)
-                ui.processing -> Text("Reading it…", style = MaterialTheme.typography.bodyLarge, color = c.ink2, modifier = Modifier.padding(vertical = Space.s3))
-                else -> Row(horizontalArrangement = Arrangement.spacedBy(Space.s3), verticalAlignment = Alignment.CenterVertically) {
-                    VoiceButton(vm::onMicTapped)
-                    PrimaryButton("Check and send", vm::goCheck, Modifier.weight(1f))
+        AnimatedContent(mode, transitionSpec = {
+            if (reduce || targetState == 0) ContentTransform(EnterTransition.None, ExitTransition.None, sizeTransform = null)
+            else (fadeIn(tween(Motion.standard, delayMillis = 80)) + slideInVertically(tween(Motion.standard)) { it / 8 }) togetherWith fadeOut(tween(Motion.quick))
+        }, label = "report action") { activeMode ->
+            var previousUi by remember(activeMode) { mutableStateOf(ui) }
+            if (activeMode == mode) SideEffect { previousUi = ui }
+            val dockUi = if (activeMode == mode) ui else previousUi
+            if (activeMode == 2) {
+                // The live state wins over an outgoing animation snapshot: never retain a prompt during capture.
+                if (!ui.listening && !ui.processing) (dockUi.session.state as? SessionState.Asking)?.let { asking ->
+                    QuestionDock(asking.question, dockUi.speaking, vm::reply, vm::onMicTapped, vm::stopSpeaking, vm::goCheck, onKeyAnswer = vm::answerKeyQuestion)
+                }
+            } else Column(Modifier.padding(horizontal = Size.gutter, vertical = Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+                when (activeMode) {
+                    0 -> ListeningBar(dockUi, vm)
+                    1 -> Text("Shaping the details…", style = MaterialTheme.typography.bodyLarge, color = c.ink2, modifier = Modifier.padding(vertical = Space.s3))
+                    else -> if (!ui.listening && !ui.processing) Row(Modifier.fillMaxWidth(if (wide) .58f else 1f).align(Alignment.End), horizontalArrangement = Arrangement.spacedBy(Space.s3), verticalAlignment = Alignment.CenterVertically) {
+                        VoiceButton(vm::onMicTapped)
+                        PrimaryButton("Review report", vm::goCheck, Modifier.weight(1f))
+                    }
                 }
             }
         }
@@ -218,10 +288,10 @@ private fun ListeningBar(ui: AppUi, vm: AppViewModel) {
 private fun UndoBar(label: String, onUndo: () -> Unit) {
     val c = Theme.colors
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = Size.gutter, vertical = Space.s2).background(c.ink, RoundedCornerShape(14.dp)).padding(start = Space.s4),
+        Modifier.fillMaxWidth().padding(horizontal = Size.gutter, vertical = Space.s2).background(c.accentContainer, RoundedCornerShape(4.dp)).padding(start = Space.s4),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = c.canvas, modifier = Modifier.weight(1f))
-        TextAction("Undo", onUndo, color = c.canvas)
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = c.onAccentContainer, modifier = Modifier.weight(1f))
+        TextAction("Undo", onUndo, color = c.accent)
     }
 }

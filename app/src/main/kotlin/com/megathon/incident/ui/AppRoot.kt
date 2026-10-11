@@ -21,6 +21,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -73,11 +77,14 @@ fun AppRoot(vm: AppViewModel) {
             },
             label = "screen",
         ) { screen ->
+            var lastUi by remember(screen) { mutableStateOf(ui) }
+            if (screen == ui.screen) SideEffect { lastUi = ui }
+            val screenUi = if (screen == ui.screen) ui else lastUi
             when (screen) {
-                Screen.HOME -> HomeScreen(ui, vm)
-                Screen.REPORT -> ReportScreen(ui, vm)
-                Screen.CHECK -> CheckScreen(ui, vm)
-                Screen.SENT -> SentScreen(ui, vm)
+                Screen.HOME -> HomeScreen(screenUi, vm)
+                Screen.REPORT -> ReportScreen(screenUi, vm)
+                Screen.CHECK -> CheckScreen(screenUi, vm)
+                Screen.SENT -> SentScreen(screenUi, vm)
             }
         }
         if (ui.showProof) ProofSheet(ui, onClose = vm::closeProof)

@@ -59,11 +59,16 @@ class EndOfSpeechDetector(private val config: Config = Config()) {
     /** Loud time so far in the current utterance (0 when none): what the minimum-speech rule is judged on. */
     val currentVoicedMs: Double get() = if (inSpeech) voicedMs else 0.0
 
+    /** Whether the most recent frame was speech (louder than the room), also inside an utterance, so a pause shows up as quiet. */
+    var lastFrameLoud = false
+        private set
+
     /** Quiet at the end of the last utterance; valid until the next utterance starts. */
     var trailingQuietMs = 0.0
         private set
 
     fun accept(chunk: ShortArray): VadEvent {
+        lastFrameLoud = false
         if (chunk.isEmpty()) return VadEvent.NONE
         val ms = chunk.size * 1000.0 / config.sampleRate
         val rms = rms(chunk)
@@ -76,6 +81,7 @@ class EndOfSpeechDetector(private val config: Config = Config()) {
         }
 
         val loud = rms >= max(config.minRms, noiseFloor * config.noiseRatio)
+        lastFrameLoud = loud
 
         if (!inSpeech) {
             if (!loud) {

@@ -2,7 +2,7 @@
 # Stage and push the sherpa-onnx QNN speech bundle. The bundle is built by the lead on the build VM and is NOT in git
 # (it is about 900 MB and includes Qualcomm runtime libraries and model files).
 #
-#   speech_bundle.sh stage [BUNDLE_DIR]   copy the CLI and ONNX Runtime into app/src/speech/jniLibs (gitignored), so the
+#   speech_bundle.sh stage [BUNDLE_DIR]   copy the CLI, the optional resident worker and ONNX Runtime into app/src/speech/jniLibs (gitignored), so the
 #                                         next Gradle build packs them into the APK
 #   speech_bundle.sh push  [BUNDLE_DIR]   push the QNN libraries and the models into the app's private folder on the kit
 #                                         (needs `adb root`; the app must be installed once so its folder and uid exist)
@@ -55,6 +55,13 @@ case "$cmd" in
     # Android only extracts files named lib*.so, so the executable is renamed. It is run as a child process (not loaded).
     cp "$bundle/sherpa-onnx-offline" "$out/libsherpa_offline.so"
     cp "$bundle/libonnxruntime.so" "$out/libonnxruntime.so"
+    # Optional resident worker (tools/sherpa_worker): models load once per worker instead of once per utterance. The CLI above
+    # stays staged as the per-utterance baseline (and the app falls back to it when the worker is absent).
+    if [ -e "$bundle/sherpa-onnx-offline-worker" ]; then
+      cp "$bundle/sherpa-onnx-offline-worker" "$out/libsherpa_worker.so"
+    else
+      echo "note: no $bundle/sherpa-onnx-offline-worker; the app will use the per-utterance CLI"
+    fi
     echo "staged into $out:"; ls -la "$out" | tail -n +2
     ;;
   push)

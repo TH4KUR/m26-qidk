@@ -24,6 +24,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Debug builds: `--es speech_worker cli` uses the per-utterance CLI instead of the resident worker (the latency baseline).
+        if (Engines.isDebuggable(this) && intent.getStringExtra("speech_worker") == "cli") com.megathon.incident.speech.ResidentSherpaSpeechEngine.preferCliBaseline = true
         // Debug builds: `--es model qualcomm/Qwen3-8B` loads that GenieX bundle from the app's model store instead of the default 4B.
         if (Engines.isDebuggable(this)) intent.getStringExtra("model")?.let { com.megathon.incident.speech.GenieXLlmEngine.debugModel = it }
         // Debug builds: `--es record <clipName>` opens a tap-to-record screen that writes filesDir/recordings/<clipName>.wav
@@ -35,7 +37,16 @@ class MainActivity : ComponentActivity() {
             return
         }
         // Debug builds: `--es wav <path in the app's files dir>` runs that WAV through the real speech path.
+        // Debug builds: `--es live off` transcribes and extracts only after Stop (the batch path), for a reproducible comparison.
+        if (intent.getStringExtra("live") == "off") vm.debugSetLiveInference(false)
+        // With `--es submit 1` the report is sent right after the clip, to hear the saved-report summary.
         intent.getStringExtra("wav")?.let { vm.debugTranscribeFile(it, thenSend = intent.getStringExtra("submit") == "1") }
+        // Debug builds: `--es replay <wav> [--es live off] [--ei loops N]` plays the clip at real-time pace into the live path (or straight into
+        // the batch path with `--es live off`) N times and logs `latency mode=... stop_to_ready_ms=...` per turn.
+        intent.getStringExtra("replay")?.let { wav ->
+            val n = intent.getStringExtra("loops")?.toIntOrNull() ?: intent.getIntExtra("loops", 1)
+            vm.debugReplayFile(wav, useLive = intent.getStringExtra("live") != "off", loops = n.coerceAtLeast(1))
+        }
         // Debug builds: `--es eval <gold file> [--es prompt <file>] --es run <name> [--es only g01,g02]` (dev split only).
         // Debug builds: the held-out items run ONLY through `--es holdout CONFIRM --es gold <file> --es run <name> [--es prompt <file>]`,
         // never in the same launch as `--es eval` (the launch is refused and nothing runs); a second run of the same prompt on the same

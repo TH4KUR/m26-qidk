@@ -1,6 +1,11 @@
 package com.megathon.incident.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.draw.clip
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -27,7 +32,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -60,13 +64,13 @@ import com.megathon.incident.ui.theme.Size
 import com.megathon.incident.ui.theme.Space
 import com.megathon.incident.ui.theme.Theme
 
-private val CardShape = RoundedCornerShape(20.dp)
+private val CardShape = RoundedCornerShape(4.dp)
 
-/** A plain content card: tonal surface plus a hairline, no shadow (one elevation language). */
+/** Editorial surface: standard content is unboxed; warnings retain a restrained tonal background. */
 @Composable
 fun Card(modifier: Modifier = Modifier, container: androidx.compose.ui.graphics.Color = Theme.colors.surface, content: @Composable () -> Unit) {
     Column(
-        modifier.fillMaxWidth().background(container, CardShape).border(BorderStroke(1.dp, Theme.colors.line), CardShape),
+        modifier.fillMaxWidth().then(if (container != Theme.colors.surface) Modifier.background(container, CardShape) else Modifier),
     ) { content() }
 }
 
@@ -81,6 +85,7 @@ fun TranscriptCard(
     heardNow: String?,
     reading: Boolean,
     modifier: Modifier = Modifier,
+    readingLabel: String = "Working on your report…",
     /** One short line shown when the transcript is in a different script from the labels and replies; null shows nothing. */
     scriptNote: String? = null,
 ) {
@@ -101,10 +106,38 @@ fun TranscriptCard(
             if (scriptNote != null) Text(scriptNote, style = MaterialTheme.typography.bodyMedium, color = c.ink2)
             if (reading) {
                 Row(Modifier.semantics { liveRegion = LiveRegionMode.Polite }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                    LinearProgressIndicator(modifier = Modifier.size(width = 40.dp, height = 3.dp), color = c.accent, trackColor = c.line)
-                    Text(if (heardNow == null) "Listening back to what you said…" else "Reading it…", style = MaterialTheme.typography.bodyMedium, color = c.ink2)
+                    androidx.compose.foundation.layout.Box(
+                        Modifier.size(width = 20.dp, height = 3.dp).background(c.accent, RoundedCornerShape(2.dp)),
+                    )
+                    Text(readingLabel, style = MaterialTheme.typography.bodyMedium, color = c.ink2)
                 }
             }
+        }
+    }
+}
+
+/**
+ * What the words so far would fill in, while the reporter is still speaking. Labelled Provisional and kept apart from the
+ * report: nothing here is saved, asked about or spoken until the reporter taps done.
+ */
+@Composable
+fun ProvisionalCard(preview: com.megathon.incident.session.ProvisionalPreview?, modifier: Modifier = Modifier) {
+    val shown = preview?.fields.orEmpty().filter { it.value != null }
+    if (shown.isEmpty()) return
+    val c = Theme.colors
+    Card(modifier) {
+        Column(Modifier.padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                Text("Filling in as you speak", style = MaterialTheme.typography.labelMedium, color = c.ink2, modifier = Modifier.semantics { heading() })
+                Pill("Provisional", c.accentContainer, c.onAccentContainer)
+            }
+            shown.forEach { f ->
+                Column {
+                    Text(f.label, style = MaterialTheme.typography.labelMedium, color = c.ink2)
+                    Text(f.value.orEmpty(), style = MaterialTheme.typography.bodyLarge, color = c.ink)
+                }
+            }
+            Text("Not saved yet. I'll check everything when you tap done.", style = MaterialTheme.typography.bodyMedium, color = c.ink3)
         }
     }
 }
@@ -138,21 +171,23 @@ fun QuestionDock(
     onKeyAnswer: (KeyAnswer) -> Unit = {},
 ) {
     val c = Theme.colors
-    val shape = if (inline) RoundedCornerShape(20.dp) else RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    val shape = RoundedCornerShape(28.dp)
+    val reduce = LocalReduceMotion.current
     val maxHeight = (LocalConfiguration.current.screenHeightDp * 0.5f).dp
     Column(
-        modifier.fillMaxWidth().background(c.accentContainer, shape).heightIn(max = maxHeight).verticalScroll(rememberScrollState())
-            .padding(start = Space.s4, end = Space.s4, top = Space.s3, bottom = Space.s3),
-        verticalArrangement = Arrangement.spacedBy(Space.s3),
+        modifier.fillMaxWidth().background(c.canvas).heightIn(max = maxHeight).verticalScroll(rememberScrollState())
+            .padding(start = if (inline) 0.dp else Size.gutter, end = if (inline) 0.dp else Size.gutter, top = Space.s3, bottom = Space.s3),
+        verticalArrangement = Arrangement.spacedBy(if (inline) Space.s2 else Space.s3),
     ) {
+        Hairline()
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("One quick question", style = MaterialTheme.typography.labelMedium, color = c.onAccentContainer, modifier = Modifier.weight(1f).semantics { heading() })
+            Text("LET’S FILL ONE DETAIL", style = MaterialTheme.typography.labelSmall, color = c.accent, modifier = Modifier.weight(1f).semantics { heading() })
             if (speaking) TextAction("Stop speaking", onStopSpeaking, color = c.onAccentContainer)
         }
         if (question.key) {
             // The advisor's one dispatch-style question: no field behind it, answered Yes / No / Not sure.
             Column(verticalArrangement = Arrangement.spacedBy(Space.s2), modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
-                Text(question.spoken, style = MaterialTheme.typography.headlineSmall, color = c.onAccentContainer)
+                Text(question.spoken, style = if (inline) MaterialTheme.typography.titleMedium else MaterialTheme.typography.headlineSmall, color = c.onAccentContainer)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.s2), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
                     OutlinedChoiceChip("Yes", onClick = { onKeyAnswer(KeyAnswer.YES) })
                     OutlinedChoiceChip("No", onClick = { onKeyAnswer(KeyAnswer.NO) })
@@ -160,9 +195,12 @@ fun QuestionDock(
                 }
             }
         }
-        question.asks.forEach { ask ->
+        AnimatedContent(question.asks.firstOrNull(), transitionSpec = {
+            (fadeIn(tween(if (reduce) 0 else Motion.standard)) + slideInVertically(tween(if (reduce) 0 else Motion.standard)) { it / 8 }) togetherWith fadeOut(tween(if (reduce) 0 else Motion.quick))
+        }, label = "next question") { ask ->
+            if (ask != null)
             Column(verticalArrangement = Arrangement.spacedBy(Space.s2), modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
-                Text(ask.prompt, style = MaterialTheme.typography.headlineSmall, color = c.onAccentContainer)
+                Text(ask.prompt, style = if (inline) MaterialTheme.typography.titleMedium else MaterialTheme.typography.headlineSmall, color = c.onAccentContainer)
                 if (ask.replies.isNotEmpty()) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.s2), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
                         ask.replies.forEach { r ->
@@ -172,9 +210,12 @@ fun QuestionDock(
                 }
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(Space.s2), verticalAlignment = Alignment.CenterVertically) {
-            PrimaryButton("Answer by voice", onVoice, leading = { MicGlyph(c.onAccent, Modifier.padding(end = Space.s2)) })
-            TextAction("Skip", onSkip, color = c.onAccentContainer)
+        if (!inline) Row(horizontalArrangement = Arrangement.spacedBy(Space.s2), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+                MicGlyph(c.accent, size = 20.dp)
+                TextAction("Answer by voice", onVoice, flush = true)
+            }
+            TextAction("Review", onSkip, color = c.ink2)
         }
     }
 }

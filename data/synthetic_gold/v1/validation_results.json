@@ -1,0 +1,58 @@
+{
+  "gold_sha256": "9e00c787e1c6da572f4f95d28c96fa7091db4a60fbcf9dca366547a3c543f389",
+  "raw_inputs_with_all_mandatory_answers": 800,
+  "date_and_clock_resolvable_inputs": 800,
+  "train": 600,
+  "validation": 100,
+  "test": 100,
+  "family_split_leakage": 0,
+  "e_exact_utterance_overlap": 0,
+  "python_tests": {
+    "run": 24,
+    "failed": 0
+  },
+  "app_compatibility": {
+    "targets_accepted_by_real_parser": 800,
+    "inputs_match_real_prompt_builder": 800,
+    "history_window": "Up to two actual earlier worker utterances, matching ReportSession",
+    "saved_time_format": "date_time_text with spoken phrase, matching current PromptBuilder"
+  },
+  "update_coverage": {
+    "new_four_turn_sequences": 80,
+    "new_sequence_rows": 320,
+    "actual_correction_calls_added": 160,
+    "confirmation_noops_added": 80,
+    "saved_context_rows_before": 24,
+    "saved_context_rows_after": 264,
+    "rows_replacing_previously_saved_values": 178
+  },
+  "core_tests": {
+    "run": 877,
+    "passed": 876,
+    "failed": 1,
+    "failing_test": "SyntheticGoldContractTest.update sequence gold replaces saved fields through the real validator and merge",
+    "method": "Fresh compilation of all core production and test Kotlin sources with cached K2 compiler 2.2.0 + serialization plugin 2.2.0, JVM target 17, Java 21 runtime, JUnit 4.13.2; abstract contract base excluded, inherited tests run via concrete classes."
+  },
+  "runtime_update_audit": {
+    "status": "blocked",
+    "rows": 320,
+    "matching_rows": 274,
+    "mismatching_rows": 46,
+    "excluded_field": "date_time",
+    "mode": "sequential replay from empty report; no gold-state reseeding"
+  },
+  "blocker": "PayloadValidator mistakes an explicit severity rating none for negation. Correct gold patches can leave severity missing or retain an older rating. 46 sequential replay row states mismatch, including downstream consequences. Correct labels retained; C must fix/adjudicate and re-run before clearance.",
+  "normal_gradle_command": "Re-run blocked by missing JDK 17; no repository toolchain settings changed.",
+  "independent_human_adjudication": false,
+  "qwen_inference_or_finetuning_run": false,
+  "model_accuracy": "not_measured",
+  "training_gate": "blocked pending C review and downstream compatibility resolution; human approval required before training",
+  "original_narratives_labels_saved_states_and_splits_preserved": 480,
+  "deployment_app_revision": "9bf0d36",
+  "tokenizer_context": {
+    "max_total_tokens": 1080,
+    "over_1024": 32,
+    "over_4096": 0
+  },
+  "submission_mirror_behavior": "Dataset tests use JUnit assumptions to skip when the non-mirrored data folder is absent; this is not a review clearance."
+}

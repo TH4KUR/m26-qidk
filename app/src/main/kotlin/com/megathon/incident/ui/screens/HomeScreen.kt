@@ -1,16 +1,30 @@
 package com.megathon.incident.ui.screens
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.semantics.Role
 import com.megathon.incident.speech.HindiLaneNotice
-import androidx.compose.foundation.layout.Row
-import androidx.compose.ui.platform.LocalConfiguration
 import android.content.res.Configuration
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.*
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.withStyle
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material3.Icon
+import com.megathon.incident.ui.components.*
+import com.megathon.incident.ui.theme.LocalReduceMotion
+import com.megathon.incident.ui.theme.Motion
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -37,57 +51,69 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.megathon.incident.session.UiStatus
-import com.megathon.incident.testing.Compute
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalConfiguration
 import com.megathon.incident.testing.FakeLlmEngine
 import com.megathon.incident.ui.AppUi
 import com.megathon.incident.ui.AppViewModel
+import com.megathon.incident.ui.Readiness
 import com.megathon.incident.ui.components.AppTopBar
-import com.megathon.incident.ui.components.Card
-import com.megathon.incident.ui.components.ComputePill
-import com.megathon.incident.ui.components.LevelBars
+import com.megathon.incident.ui.components.AudioSignature
 import com.megathon.incident.ui.components.MessageCard
 import com.megathon.incident.ui.components.MicButton
-import com.megathon.incident.ui.components.Pill
 import com.megathon.incident.ui.components.PrivacyLine
+import com.megathon.incident.ui.components.ProvisionalCard
 import com.megathon.incident.ui.components.TranscriptCard
 import com.megathon.incident.ui.components.formatClock
 import com.megathon.incident.ui.theme.Size
 import com.megathon.incident.ui.theme.Space
+import com.megathon.incident.ui.theme.CapturePalette
 import com.megathon.incident.ui.theme.Theme
 
-/** The way in: one invitation, one button. Becomes the listening and working view without leaving the screen. */
+/** One clear invitation, one microphone, and a live preview that never hides that the draft is provisional. */
 @Composable
 fun HomeScreen(ui: AppUi, vm: AppViewModel) {
-    val c = Theme.colors
     val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    Scaffold(containerColor = c.canvas, topBar = { AppTopBar("Incident report", onProof = vm::openProof, brand = true, simulatedNote = ui.simulatedNote) }) { pad ->
+    val c = Theme.colors
+    Scaffold(
+        containerColor = c.canvas,
+        topBar = { AppTopBar("Your voice. A clear report.", onProof = vm::openProof, brand = true, simulatedNote = ui.simulatedNote) },
+    ) { pad ->
         Column(Modifier.fillMaxSize().padding(pad)) {
             if (landscape) {
-                // A projector or a landscape screen is short: text on the left, the mic always on screen at the right.
-                Row(Modifier.weight(1f).padding(horizontal = Size.gutter), horizontalArrangement = Arrangement.spacedBy(Space.s8)) {
+                Row(
+                    Modifier.weight(1f).padding(horizontal = Size.gutter, vertical = Space.s2),
+                    horizontalArrangement = Arrangement.spacedBy(Space.s6),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Column(
                         Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(Space.s4, Alignment.CenterVertically),
                     ) {
                         Notices(ui, vm)
-                        HomeText(ui, centered = false)
+                        StageTrack(0)
+                        HomeCopy(ui)
+                        if (!ui.listening && !ui.processing) ExampleNote()
+                        LiveDetails(ui)
                     }
-                    Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        HomeMic(ui, vm)
+                    Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.Center) {
+                        StudioPanel(ui, vm, compact = true)
                     }
                 }
             } else {
                 Column(
                     Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Size.gutter),
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                    horizontalAlignment = Alignment.Start,
                 ) {
                     Spacer(Modifier.height(Space.s4))
                     Notices(ui, vm)
-                    HomeText(ui, centered = true)
+                    StageTrack(0)
+                    Spacer(Modifier.height(Space.s8))
+                    HomeCopy(ui)
                     Spacer(Modifier.height(Space.s6))
-                    HomeMic(ui, vm)
-                    if (!ui.listening && !ui.processing) { Spacer(Modifier.height(Space.s6)); ExampleCard() }
+                    StudioPanel(ui, vm)
+                    Spacer(Modifier.height(Space.s4))
+                    if (ui.listening || ui.processing) LiveDetails(ui) else ExampleNote()
                     Spacer(Modifier.height(Space.s6))
                 }
             }
@@ -98,68 +124,96 @@ fun HomeScreen(ui: AppUi, vm: AppViewModel) {
 
 @Composable
 private fun Notices(ui: AppUi, vm: AppViewModel) {
-    ui.blocked?.let { Blocked(it); Spacer(Modifier.height(Space.s4)) }
-    ui.message?.let { MessageCard(it, vm::dismissMessage); Spacer(Modifier.height(Space.s4)) }
+    ui.blocked?.let { Blocked(it); Spacer(Modifier.height(Space.s3)) }
+    ui.message?.let { MessageCard(it, vm::dismissMessage); Spacer(Modifier.height(Space.s3)) }
 }
 
-/** The words: an invitation, or what is happening now. */
 @Composable
-private fun HomeText(ui: AppUi, centered: Boolean) {
+private fun HomeCopy(ui: AppUi) {
     val c = Theme.colors
-    val align = if (centered) TextAlign.Center else TextAlign.Start
-    val h = if (centered) Alignment.CenterHorizontally else Alignment.Start
-    Column(horizontalAlignment = h, verticalArrangement = Arrangement.spacedBy(Space.s3), modifier = if (centered) Modifier.fillMaxWidth() else Modifier) {
-        when {
-            ui.listening -> {
-                Pill("Recording on this device", c.dangerContainer, c.onDanger, glyph = {
-                    androidx.compose.foundation.layout.Box(Modifier.size(8.dp).background(c.onDanger, CircleShape))
-                })
-                Text("Listening…", style = MaterialTheme.typography.displayMedium, textAlign = align, modifier = Modifier.semantics { heading(); liveRegion = LiveRegionMode.Polite })
-                Text(formatClock(ui.elapsedMs), style = MaterialTheme.typography.headlineSmall.copy(fontFeatureSettings = "tnum"), color = c.ink2)
-            }
-            ui.processing -> {
-                Text(
-                    if (ui.heardNow == null) "Got it." else "Heard you.", style = MaterialTheme.typography.displayMedium, textAlign = align,
-                    modifier = Modifier.semantics { heading(); liveRegion = LiveRegionMode.Polite },
-                )
-                TranscriptCard(transcripts = emptyList(), highlight = null, heardNow = ui.heardNow, reading = true, scriptNote = ui.scriptNote)
-            }
-            else -> {
-                Text("Tell me what happened.", style = MaterialTheme.typography.displayMedium, textAlign = align, modifier = Modifier.semantics { heading() })
-                Text("Just speak. I'll fill in the report and ask only what's missing.", style = MaterialTheme.typography.bodyLarge, color = c.ink2, textAlign = align)
-                if (!centered) ExampleCard()
-            }
+    val reduce = LocalReduceMotion.current
+    val compact = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val mode = if (ui.listening) 1 else if (ui.processing) 2 else 0
+    AnimatedContent(mode, transitionSpec = {
+        (fadeIn(tween(if (reduce) 0 else Motion.standard)) + slideInVertically(tween(if (reduce) 0 else Motion.standard)) { it / 8 }) togetherWith fadeOut(tween(if (reduce) 0 else Motion.quick))
+    }, label = "capture copy") { state ->
+        Column(verticalArrangement = Arrangement.spacedBy(if (compact) Space.s2 else Space.s3)) {
+            if (!compact) Text("LESS FRICTION. MORE CLARITY.", style = MaterialTheme.typography.labelSmall, color = c.accent)
+            Text(buildAnnotatedString {
+                append(when (state) { 1 -> "Your voice.\n"; 2 -> "A little clarity.\n"; else -> "A moment.\n" })
+                withStyle(SpanStyle(color = c.accent)) { append(when (state) { 1 -> "Taking shape."; 2 -> "Coming together."; else -> "A clear report." }) }
+            }, style = if (compact) MaterialTheme.typography.displayMedium.copy(fontSize = 32.sp, lineHeight = 36.sp) else MaterialTheme.typography.displayMedium, modifier = Modifier.semantics { heading() })
+            Text(when (state) {
+                1 -> "Tell it as it happened. Tap to finish when you’re ready."
+                2 -> "Organizing your words, right here on this device."
+                else -> "Tell it as it happened.\nWe’ll take care of the structure."
+            }, style = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge, color = c.ink2)
         }
     }
 }
 
-/** The one control: start, stop, or working. Always in view. */
 @Composable
-private fun HomeMic(ui: AppUi, vm: AppViewModel) {
+private fun StudioPanel(ui: AppUi, vm: AppViewModel, compact: Boolean = false) {
     val c = Theme.colors
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        if (ui.listening) {
-            LevelBars(ui.levels)
-            Spacer(Modifier.height(Space.s4))
+    val status = when {
+        ui.listening -> "LISTENING  ·  ${formatClock(ui.elapsedMs)}"
+        ui.processing -> "SHAPING YOUR REPORT"
+        ui.readiness == Readiness.LOADING -> "MODEL WARMING UP"
+        else -> "READY WHEN YOU ARE"
+    }
+    Reveal(delayMillis = 100) {
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            RecorderAura(ui.listening, ui.levels.lastOrNull() ?: 0f, Modifier.then(if (compact) Modifier.size(140.dp) else Modifier)) {
+                MicButton(ui.listening, ui.processing, ui.levels.lastOrNull() ?: 0f, vm::onMicTapped, diameter = if (compact) 68.dp else 112.dp)
+            }
+            Text(status, style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"), color = if (ui.listening) c.danger else c.accent)
+            Spacer(Modifier.height(if (compact) Space.s1 else Space.s2))
+            Text(when {
+                ui.listening -> "Tap to finish your story"
+                ui.processing -> "A few details. One clear report."
+                ui.readiness == Readiness.LOADING -> "You can start while it warms up"
+                else -> "Tap to tell your story"
+            }, style = if (compact) MaterialTheme.typography.labelLarge else MaterialTheme.typography.titleMedium, color = c.ink)
+            if (ui.listening) AudioSignature(ui.levels, true, Modifier.fillMaxWidth(.65f).height(32.dp).padding(top = Space.s2))
         }
-        MicButton(
-            listening = ui.listening, busy = ui.processing, level = ui.levels.lastOrNull() ?: 0f,
-            onClick = vm::onMicTapped,
-        )
-        Text(
-            when { ui.listening -> "Tap when you're done"; ui.processing -> "Reading it…"; else -> "Tap to start" },
-            style = MaterialTheme.typography.labelLarge, color = c.ink2,
+    }
+}
+
+@Composable
+private fun LiveDetails(ui: AppUi) {
+    if (ui.listening) ui.liveText?.let { text ->
+        Spacer(Modifier.height(Space.s3))
+        TranscriptCard(transcripts = emptyList(), highlight = null, heardNow = text, reading = false)
+    }
+    if (ui.listening) {
+        Spacer(Modifier.height(Space.s2))
+        ProvisionalCard(ui.session.provisional)
+    }
+    if (ui.processing) {
+        Spacer(Modifier.height(Space.s3))
+        TranscriptCard(
+            transcripts = emptyList(), highlight = null, heardNow = ui.heardNow ?: ui.liveText, reading = true,
+            readingLabel = if (ui.heardNow == null) "Transcribing your recording…" else "Organizing the report…",
+            scriptNote = ui.scriptNote,
         )
     }
 }
 
 @Composable
-private fun ExampleCard() {
+private fun ExampleNote() {
     val c = Theme.colors
+    val reduce = LocalReduceMotion.current
+    var open by remember { mutableStateOf(false) }
     Card {
-        Column(Modifier.padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
-            Text("For example", style = MaterialTheme.typography.labelMedium, color = c.ink2)
-            Text("“${FakeLlmEngine.DECK_TRANSCRIPT}”", style = MaterialTheme.typography.bodyLarge, color = c.ink)
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).clickable { open = !open }.padding(Space.s4), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.s1)) {
+                Text("Not sure where to start?", style = MaterialTheme.typography.labelLarge, color = c.ink)
+                Text(if (open) "No special format. Just say what happened." else "See a quick example", style = MaterialTheme.typography.bodyMedium, color = c.ink3)
+            }
+            Icon(Icons.Rounded.KeyboardArrowDown, if (open) "Hide example" else "Show example", tint = c.accent)
+        }
+        AnimatedVisibility(open, enter = fadeIn(tween(if (reduce) 0 else Motion.standard)) + expandVertically(tween(if (reduce) 0 else Motion.standard)), exit = fadeOut(tween(if (reduce) 0 else Motion.quick)) + shrinkVertically(tween(if (reduce) 0 else Motion.standard))) {
+            Text("“${FakeLlmEngine.DECK_TRANSCRIPT}”", Modifier.padding(start = Space.s4, end = Space.s4, bottom = Space.s4), style = MaterialTheme.typography.bodyLarge, color = c.ink2)
         }
     }
 }
@@ -196,8 +250,14 @@ private fun HindiLaneSwitch(on: Boolean, onChange: (Boolean) -> Unit) {
 @Composable
 private fun Blocked(message: String) {
     val c = Theme.colors
-    Column(Modifier.fillMaxWidth().background(c.dangerContainer, RoundedCornerShape(16.dp)).padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
-        Text("This build can't start", style = MaterialTheme.typography.titleMedium, color = c.onDanger, fontWeight = FontWeight.SemiBold)
+    Column(
+        Modifier.fillMaxWidth().background(c.dangerContainer, RoundedCornerShape(16.dp)).padding(Space.s4),
+        verticalArrangement = Arrangement.spacedBy(Space.s2),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+            androidx.compose.material3.Icon(Icons.Rounded.Warning, contentDescription = null, tint = c.onDanger)
+            Text("This build can’t start", style = MaterialTheme.typography.titleMedium, color = c.onDanger, fontWeight = FontWeight.SemiBold)
+        }
         Text(message, style = MaterialTheme.typography.bodyLarge, color = c.onDanger)
     }
 }
