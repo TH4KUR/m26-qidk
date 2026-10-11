@@ -18,7 +18,7 @@ import com.megathon.incident.ui.theme.Space
 import com.megathon.incident.ui.theme.Theme
 
 /** The team line shown under About. Decided by the user: the team number and the team name, both. */
-const val TEAM_LABEL = "Team 087 - ReadyOrNot"
+const val TEAM_LABEL = "Team 087"
 
 /**
  * About: who made it (the team number and name, as the team asked), the product, and the components that do the work on this
