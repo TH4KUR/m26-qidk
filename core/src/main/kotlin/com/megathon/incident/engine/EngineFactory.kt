@@ -22,6 +22,8 @@ data class EngineSelection(
     val speech: SpeechKind = SpeechKind.FAKE,
     val llm: LlmKind = LlmKind.FAKE,
     val tts: TtsKind = TtsKind.ANDROID,
+    /** Which of the neural voice's preset styles to use (`--es voice N`); only Supertonic has more than one. */
+    val ttsVoice: Int = 0,
     val language: String = "en",
 )
 

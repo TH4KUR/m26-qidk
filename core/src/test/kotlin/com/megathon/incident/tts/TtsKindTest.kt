@@ -19,6 +19,12 @@ class TtsKindTest {
     }
 
     @Test
+    fun supertonicIsParsedCaseInsensitively() {
+        assertEquals(TtsKind.SUPERTONIC, TtsKind.parse("SUPERTONIC"))
+        assertEquals(TtsKind.SUPERTONIC, TtsKind.parse(" supertonic "))
+    }
+
+    @Test
     fun theFactoryHandsOutOnlyWhatIsWiredAndNeverFakesIt() {
         val backend = object : TtsBackend {
             override val compute = com.megathon.incident.testing.Compute.CPU

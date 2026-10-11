@@ -36,6 +36,7 @@ import com.megathon.incident.speech.SenseVoiceSignalEngine
 import com.megathon.incident.speech.NemotronHindiSpeechEngine
 import com.megathon.incident.speech.RecognitionEngine
 import com.megathon.incident.speech.SherpaCliSpeechEngine
+import com.megathon.incident.speech.SupertonicSpeaker
 import com.megathon.incident.speech.SpeechLane
 import com.megathon.incident.speech.SpeechLanes
 import com.megathon.incident.speech.TranscriptScriptNote
@@ -46,6 +47,7 @@ import com.megathon.incident.speech.SystemTtsSpeaker
 import com.megathon.incident.testing.Compute
 import com.megathon.incident.testing.FakeLlmEngine
 import com.megathon.incident.testing.SpeechEngine
+import com.megathon.incident.tts.HindiPhrases
 import com.megathon.incident.tts.RoutingSpeaker
 import com.megathon.incident.tts.TtsKind
 import kotlinx.coroutines.Job
@@ -135,13 +137,15 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             TtsKind.ANDROID to { AndroidTtsBackend(SystemTtsSpeaker(app)) },
             // Built only when PIPER is selected, and it loads nothing until it first speaks (the native library is lazy).
             TtsKind.PIPER to { PiperSpeaker(app, requireVerified = !Engines.isDebuggable(app), language = { speechLanguage() }) },
+            // One model for Hindi and English; the language is chosen per call (see speakAloud).
+            TtsKind.SUPERTONIC to { SupertonicSpeaker(app, requireVerified = !Engines.isDebuggable(app), sid = selection.ttsVoice) },
         ),
     )
     private val recorder = MicRecorder(app)
     // Speech output: the Android voice always exists (it is the fallback); Piper only when asked for with `--es tts PIPER`.
     // The label on the proof strip comes from the engine that really spoke (RoutingSpeaker.last), never from the request.
     private val speaker = RoutingSpeaker(
-        primary = if (selection.tts == TtsKind.PIPER) runCatching { factory.tts(TtsKind.PIPER) }.getOrNull() else null,
+        primary = if (selection.tts != TtsKind.ANDROID) runCatching { factory.tts(selection.tts) }.getOrNull() else null,
         fallback = factory.tts(TtsKind.ANDROID),
         language = { speechLanguage() },
     )
@@ -216,7 +220,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
                 if (local.value.listening) return@collect
                 local.update { it.copy(speaking = true) }
                 val started = System.nanoTime()
-                speaker.speak(say.text)
+                speakAloud(say.text)
                 val used = speaker.last
                 local.update { it.copy(speaking = false, ttsOffline = used?.offline, ttsNote = used?.note()) }
                 used?.note()?.let { android.util.Log.w(TAG, "tts fallback: $it") }
@@ -558,7 +562,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
 
     fun hearAgain() {
         val text = session.ui.value.spokenSummary ?: return
-        viewModelScope.launch { local.update { it.copy(speaking = true) }; speaker.speak(text); local.update { it.copy(speaking = false) } }
+        viewModelScope.launch { local.update { it.copy(speaking = true) }; speakAloud(text); local.update { it.copy(speaking = false) } }
     }
 
     fun stopSpeaking() { speaker.stop(); local.update { it.copy(speaking = false) } }
@@ -621,7 +625,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         if (!Engines.isDebuggable(getApplication())) return
         viewModelScope.launch {
             val t0 = System.nanoTime()
-            speaker.speak(text)
+            speakAloud(text)
             val used = speaker.last
             android.util.Log.i(
                 TAG,
@@ -629,6 +633,24 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
                     "ms=${(System.nanoTime() - t0) / 1_000_000} fallback=${used?.fallbackReason ?: "none"}",
             )
         }
+    }
+
+    /**
+     * Says [text] aloud. In the Hindi lane with the Supertonic voice ready, the app's English sentences are spoken in Hindi
+     * ([HindiPhrases]: the reporter's own words and Latin-script place names are kept as they are, an unknown sentence stays
+     * English). Anything else, including a Supertonic voice that is not available, speaks the text exactly as before.
+     * The screen text is never changed: labels and questions stay English on screen.
+     */
+    private suspend fun speakAloud(text: String) {
+        if (local.value.hindi && selection.tts == TtsKind.SUPERTONIC) {
+            val reason = speaker.primaryUnavailableReason("hi")
+            if (reason == null) {
+                speaker.speakAll(HindiPhrases.segments(text))
+                return
+            }
+            android.util.Log.w(TAG, "tts: Hindi speech not used: $reason")
+        }
+        speaker.speak(text)
     }
 
     private fun say(message: String) = local.update { it.copy(message = message) }
