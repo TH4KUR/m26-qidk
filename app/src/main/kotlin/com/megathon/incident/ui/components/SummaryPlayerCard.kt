@@ -37,6 +37,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import com.megathon.incident.ui.SummaryAudio
 import com.megathon.incident.ui.SummaryPhase
+import com.megathon.incident.ui.i18n.isHindi
+import com.megathon.incident.ui.i18n.tr
 import com.megathon.incident.ui.theme.Size
 import com.megathon.incident.ui.theme.Space
 import com.megathon.incident.ui.theme.Theme
@@ -48,7 +50,9 @@ import com.megathon.incident.ui.theme.Theme
 @Composable
 fun SummaryPlayerCard(audio: SummaryAudio, onToggle: () -> Unit, onSeek: (Int) -> Unit, modifier: Modifier = Modifier) {
     val c = Theme.colors
-    Panel("Spoken summary", modifier) {
+    val hindi = isHindi()
+    val positionLabel = tr("Summary position", "सारांश की स्थिति")
+    Panel(tr("Spoken summary", "बोला गया सारांश"), modifier) {
         Column(Modifier.fillMaxWidth().padding(vertical = Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
             Text(audio.text, style = MaterialTheme.typography.bodyLarge, color = c.ink)
             when (audio.phase) {
@@ -57,16 +61,17 @@ fun SummaryPlayerCard(audio: SummaryAudio, onToggle: () -> Unit, onSeek: (Int) -
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3),
                 ) {
                     WorkingBar(width = 40.dp)
-                    Text("Preparing the audio…", style = MaterialTheme.typography.bodyMedium, color = c.ink2)
+                    Text(tr("Preparing the audio…", "ऑडियो तैयार हो रहा है…"), style = MaterialTheme.typography.bodyMedium, color = c.ink2)
                 }
                 SummaryPhase.UNAVAILABLE -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Audio is not available for this voice.", style = MaterialTheme.typography.bodyMedium, color = c.ink3, modifier = Modifier.weight(1f))
-                    TextAction("Try again", onToggle)
+                    Text(tr("Audio is not available for this voice.", "इस आवाज़ में ऑडियो उपलब्ध नहीं है।"), style = MaterialTheme.typography.bodyMedium, color = c.ink3, modifier = Modifier.weight(1f))
+                    TextAction(tr("Try again", "फिर कोशिश करें"), onToggle)
                 }
                 SummaryPhase.PLAYING, SummaryPhase.PAUSED -> {
                     val playing = audio.phase == SummaryPhase.PLAYING
                     var dragging by remember { mutableStateOf<Float?>(null) }
                     val shown = dragging ?: audio.positionMs.toFloat()
+                    val state = tr("${clock(shown.toInt(), false)} of ${clock(audio.durationMs, false)}", "${clock(audio.durationMs, true)} में से ${clock(shown.toInt(), true)}")
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
                         PlayPauseButton(playing, onToggle)
                         Column(Modifier.weight(1f)) {
@@ -79,13 +84,13 @@ fun SummaryPlayerCard(audio: SummaryAudio, onToggle: () -> Unit, onSeek: (Int) -
                                     thumbColor = c.accent, activeTrackColor = c.accent, inactiveTrackColor = c.line,
                                 ),
                                 modifier = Modifier.semantics {
-                                    contentDescription = "Summary position"
-                                    stateDescription = "${clock(shown.toInt())} of ${clock(audio.durationMs)}"
+                                    contentDescription = positionLabel
+                                    stateDescription = state
                                 },
                             )
                             Row(Modifier.fillMaxWidth()) {
-                                Text(clock(shown.toInt()), style = TIME, color = c.ink2, modifier = Modifier.weight(1f))
-                                Text(clock(audio.durationMs), style = TIME, color = c.ink3)
+                                Text(clock(shown.toInt(), hindi), style = TIME, color = c.ink2, modifier = Modifier.weight(1f))
+                                Text(clock(audio.durationMs, hindi), style = TIME, color = c.ink3)
                             }
                         }
                     }
@@ -98,21 +103,24 @@ fun SummaryPlayerCard(audio: SummaryAudio, onToggle: () -> Unit, onSeek: (Int) -
 private val TIME: TextStyle
     @Composable get() = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum")
 
-private fun clock(ms: Int): String {
+/** m:ss; in Hindi the digits are Devanagari numerals. */
+private fun clock(ms: Int, hindi: Boolean): String {
     val total = (ms / 1000).coerceAtLeast(0)
-    return "%d:%02d".format(total / 60, total % 60)
+    val text = "%d:%02d".format(java.util.Locale.ROOT, total / 60, total % 60)
+    return if (hindi) text.map { if (it in '0'..'9') '\u0966' + (it - '0') else it }.joinToString("") else text
 }
 
 /** A 48 dp round button; the glyph is drawn so it never depends on an extra icon set. */
 @Composable
 private fun PlayPauseButton(playing: Boolean, onClick: () -> Unit) {
     val c = Theme.colors
+    val description = if (playing) tr("Pause summary", "सारांश रोकें") else tr("Play summary", "सारांश चलाएं")
     Canvas(
         Modifier
             .size(Size.touch)
             .clip(CircleShape)
             .background(c.accent)
-            .semantics { role = Role.Button; contentDescription = if (playing) "Pause summary" else "Play summary" }
+            .semantics { role = Role.Button; contentDescription = description }
             .clickable(onClick = onClick),
     ) {
         glyph(playing, c.onAccent)
