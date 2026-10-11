@@ -34,3 +34,16 @@ fun StopGlyph(color: Color, modifier: Modifier = Modifier, size: Dp = 24.dp) {
         drawRoundRect(color, Offset(w * 0.22f, w * 0.22f), Size(w * 0.56f, w * 0.56f), CornerRadius(w * 0.1f))
     }
 }
+
+/** Three lines with a dot each: the list of saved reports. Decorative; the tab carries the label. */
+@Composable
+fun ListGlyph(color: Color, modifier: Modifier = Modifier, size: Dp = 24.dp) {
+    Canvas(modifier.size(size)) {
+        val w = this.size.width
+        val stroke = w * 0.085f
+        listOf(0.26f, 0.5f, 0.74f).forEach { y ->
+            drawCircle(color, w * 0.055f, Offset(w * 0.2f, w * y))
+            drawLine(color, Offset(w * 0.34f, w * y), Offset(w * 0.82f, w * y), stroke, StrokeCap.Round)
+        }
+    }
+}

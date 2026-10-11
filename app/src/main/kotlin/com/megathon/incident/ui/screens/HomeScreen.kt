@@ -82,6 +82,7 @@ fun HomeScreen(ui: AppUi, vm: AppViewModel) {
     Scaffold(
         containerColor = c.canvas,
         topBar = { AppTopBar(stringResource(R.string.app_tagline), onProof = vm::openProof, brand = true, simulatedNote = ui.simulatedNote) },
+        bottomBar = { if (!ui.listening && !ui.processing) AppTabs(selected = 0, onNewReport = {}, onReports = vm::openReports) },
     ) { pad ->
         Column(Modifier.fillMaxSize().padding(pad)) {
             if (landscape) {

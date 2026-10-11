@@ -24,6 +24,9 @@ import com.megathon.incident.session.QuickReply
 import com.megathon.incident.session.ReportSession
 import com.megathon.incident.session.SessionState
 import com.megathon.incident.session.SessionUi
+import com.megathon.incident.domain.IncidentReport
+import com.megathon.incident.session.ReportList
+import com.megathon.incident.session.ReportListRow
 import com.megathon.incident.session.StageRecord
 import com.megathon.incident.suggest.Homophones
 import com.megathon.incident.suggest.RuleSuggestionEngine
@@ -82,7 +85,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 
-enum class Screen { HOME, REPORT, CHECK, SENT }
+enum class Screen { HOME, REPORT, CHECK, SENT, REPORTS, SAVED }
 
 /** Whether the on-device models (language model and, with the resident worker, speech) are loaded. Loading moves earlier (at launch); it is not removed. */
 enum class Readiness { NOT_NEEDED, LOADING, READY, FAILED }
@@ -136,6 +139,10 @@ data class AppUi(
     val scriptNote: String? = null,
     /** The saved report's spoken summary as pausable, seekable audio; null until a report has been saved. */
     val summaryAudio: SummaryAudio? = null,
+    /** The saved reports on this device, newest first (loaded when the Reports tab opens). */
+    val savedReports: List<ReportListRow> = emptyList(),
+    /** The saved report open for reading; null otherwise. Read-only: nothing on that screen changes it. */
+    val openedReport: IncidentReport? = null,
 )
 
 private data class Local(
@@ -162,6 +169,8 @@ private data class Local(
     val readiness: Readiness = Readiness.NOT_NEEDED,
     val hindi: Boolean = false,
     val summaryAudio: SummaryAudio? = null,
+    val savedReports: List<ReportListRow> = emptyList(),
+    val openedReport: IncidentReport? = null,
 )
 
 class AppViewModel(app: Application, private val selection: EngineSelection) : AndroidViewModel(app) {
@@ -253,6 +262,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             voiceTags = l.voiceTags, voiceTagsNote = l.voiceTagsNote, liveText = l.liveText, readiness = l.readiness,
             hindiLane = l.hindi,
             summaryAudio = l.summaryAudio,
+            savedReports = l.savedReports, openedReport = l.openedReport,
             scriptNote = TranscriptScriptNote.forTexts(s.transcripts + listOfNotNull(l.heardNow)),
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, AppUi(
@@ -783,6 +793,30 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
 
     fun goCheck() { speaker.stop(); local.update { it.copy(screen = Screen.CHECK, speaking = false) } }
     fun backToReport() = local.update { it.copy(screen = Screen.REPORT) }
+
+    // --- The Reports tab: what is saved on this device, read-only ----------------------------------------------------------
+
+    private val reportStore = FileReportStore(app)
+    private var savedById: Map<String, IncidentReport> = emptyMap()
+
+    fun openReports() {
+        if (local.value.listening || local.value.processing) return // the tab never interrupts a recording or a turn
+        viewModelScope.launch {
+            val today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata"))
+            val reports = reportStore.list()
+            savedById = reports.associateBy { it.id }
+            local.update { it.copy(screen = Screen.REPORTS, savedReports = ReportList.rows(reports, today), openedReport = null) }
+        }
+    }
+
+    fun closeReports() = local.update { it.copy(screen = Screen.HOME, openedReport = null) }
+
+    fun openSavedReport(id: String) {
+        val report = savedById[id] ?: return
+        local.update { it.copy(screen = Screen.SAVED, openedReport = report) }
+    }
+
+    fun closeSavedReport() = local.update { it.copy(screen = Screen.REPORTS, openedReport = null) }
 
     fun send() {
         viewModelScope.launch {

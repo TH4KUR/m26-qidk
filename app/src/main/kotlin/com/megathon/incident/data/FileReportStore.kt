@@ -11,11 +11,18 @@ import java.io.File
 /** One JSON file per report under `filesDir/reports/` (spec D12). Stays on the device. */
 class FileReportStore(context: Context) : ReportStore {
     private val dir = File(context.filesDir, "reports").apply { mkdirs() }
-    private val json = Json { prettyPrint = true; encodeDefaults = true }
+    private val json = Json { prettyPrint = true; encodeDefaults = true; ignoreUnknownKeys = true }
 
     override suspend fun save(report: IncidentReport) {
         withContext(Dispatchers.IO) {
             File(dir, "${report.id}.json").writeText(json.encodeToString(IncidentReport.serializer(), report))
         }
+    }
+
+    /** Every saved report on this device, newest first. A file that cannot be read is skipped, never fatal. */
+    suspend fun list(): List<IncidentReport> = withContext(Dispatchers.IO) {
+        dir.listFiles { f -> f.isFile && f.extension == "json" }.orEmpty()
+            .mapNotNull { f -> runCatching { json.decodeFromString(IncidentReport.serializer(), f.readText()) }.getOrNull() }
+            .sortedByDescending { it.createdAtEpochMs }
     }
 }

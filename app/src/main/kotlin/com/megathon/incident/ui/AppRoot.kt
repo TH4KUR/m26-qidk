@@ -32,6 +32,8 @@ import com.megathon.incident.session.SessionState
 import com.megathon.incident.ui.components.ProofSheet
 import com.megathon.incident.ui.screens.CheckScreen
 import com.megathon.incident.ui.screens.HomeScreen
+import com.megathon.incident.ui.screens.ReportsScreen
+import com.megathon.incident.ui.screens.SavedReportScreen
 import com.megathon.incident.ui.screens.ReportScreen
 import com.megathon.incident.ui.screens.SentScreen
 import com.megathon.incident.ui.theme.LocalReduceMotion
@@ -59,6 +61,8 @@ fun AppRoot(vm: AppViewModel) {
 
     BackHandler(enabled = ui.showProof) { vm.closeProof() }
     BackHandler(enabled = ui.screen == Screen.CHECK && !ui.showProof) { vm.backToReport() }
+    BackHandler(enabled = ui.screen == Screen.SAVED && !ui.showProof) { vm.closeSavedReport() }
+    BackHandler(enabled = ui.screen == Screen.REPORTS && !ui.showProof) { vm.closeReports() }
 
     Surface(Modifier.fillMaxSize().imePadding(), color = Theme.colors.canvas) {
         AnimatedContent(
@@ -85,6 +89,8 @@ fun AppRoot(vm: AppViewModel) {
                 Screen.REPORT -> ReportScreen(screenUi, vm)
                 Screen.CHECK -> CheckScreen(screenUi, vm)
                 Screen.SENT -> SentScreen(screenUi, vm)
+                Screen.REPORTS -> ReportsScreen(screenUi, vm)
+                Screen.SAVED -> SavedReportScreen(screenUi, vm)
             }
         }
         if (ui.showProof) ProofSheet(ui, onClose = vm::closeProof)
