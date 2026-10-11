@@ -11,6 +11,7 @@ import com.megathon.incident.domain.Signal
 import com.megathon.incident.domain.Suggestion
 import com.megathon.incident.domain.ValueStatus
 import com.megathon.incident.llm.LlmEngine
+import com.megathon.incident.llm.LlmResult
 import com.megathon.incident.llm.ParseResult
 import com.megathon.incident.llm.PayloadValidator
 import com.megathon.incident.llm.ToolCallParser
@@ -76,6 +77,20 @@ class ReportSession(
     private var sayCounter = 0
     private var spokenSummary: String? = null
 
+    /** A recording in progress: the report as it was when it began (the base every preview is built on). */
+    private class Active(val id: Long, var baseline: IncidentReport, var earlier: List<String>, var clarify: Set<Field>)
+
+    /** The model's reply for one transcript, parsed, with the exact inputs it answered so Stop can tell whether it still applies. */
+    private class Proposed(val result: LlmResult, val parsed: ParseResult)
+    private class Cached(val recordingId: Long, val transcript: String, val baseline: IncidentReport, val proposed: Proposed)
+
+    private var active: Active? = null
+    private var recordings = 0L
+    private var previewSeq = 0
+    private var appliedSeq = 0
+    private var cached: Cached? = null
+    private var preview: ProvisionalPreview? = null
+
     private val _ui = MutableStateFlow(build())
     val ui: StateFlow<SessionUi> = _ui.asStateFlow()
 
@@ -86,27 +101,33 @@ class ReportSession(
      * voice tags heard in the same audio; they go to the advisor, whose rules alone decide what they mean. [capturedAt] is the
      * device-clock instant the reporter stopped speaking (defaults to the session clock now).
      */
-    suspend fun onUtterance(text: String, stt: StageRecord? = null, signals: List<Signal> = emptyList(), capturedAt: Instant? = null) {
+    suspend fun onUtterance(
+        text: String,
+        stt: StageRecord? = null,
+        signals: List<Signal> = emptyList(),
+        capturedAt: Instant? = null,
+        recording: Long? = null,
+    ) {
         if (text.isBlank()) {
             fail("I didn't catch that. Try again, a little closer to the microphone.")
             return
         }
         val said = text.trim()
         val at = capturedAt ?: clock.instant() // when the reporter stopped speaking: "right now" and "10 minutes ago" are relative to this
+        // A proposal made during recording is reused only for exactly this transcript on exactly this report, and only if it parsed.
+        val reusable = cached?.takeIf {
+            recording != null && it.recordingId == recording && it.transcript == said && it.baseline == report && it.proposed.parsed is ParseResult.Ok
+        }?.proposed
+        endRecording()
         remember() // one voice turn is one undoable step
         transcripts += said
         stt?.let(::record)
         state = SessionState.Extracting
         publish()
 
-        var request = prompts.build(said, report, earlier = transcripts.dropLast(1).takeLast(2))
-        var result = llm.complete(request)
-        var parsed = ToolCallParser.parse(result.text)
-        if (parsed is ParseResult.Failure) {
-            request = prompts.repair(request, (parsed as ParseResult.Failure).detail)
-            result = llm.complete(request)
-            parsed = ToolCallParser.parse(result.text)
-        }
+        val proposed = reusable ?: propose(said, report, transcripts.dropLast(1))
+        val result = proposed.result
+        val parsed = proposed.parsed
         record(StageRecord("Read", llm.name, result.compute, result.elapsedMs))
         if (parsed !is ParseResult.Ok) {
             fail("I couldn't make sense of that one. Please say it again.")
@@ -115,7 +136,7 @@ class ReportSession(
         log("update_report", result.text.trim())
 
         val before = report
-        val validation = validator.validate(withNowPhrase(parsed.payload, said), transcripts.joinToString(" "), at)
+        val validation = synchronized(validator) { validator.validate(withNowPhrase(parsed.payload, said, report), transcripts.joinToString(" "), at) }
         val merged = ReportMerge.apply(report, validation, MergeContext(said, at, zone, clock.millis()))
         report = merged.report
         journal += merged.journal
@@ -134,10 +155,81 @@ class ReportSession(
      * as the capture time, so when the model left the time out and the report has none yet, take the phrase from the words.
      * Never replaces a time the model gave or one already in the report.
      */
-    private fun withNowPhrase(payload: ExtractionPayload, said: String): ExtractionPayload {
-        if (!payload.date_time_text.isNullOrBlank() || report.isFilled(Field.DATE_TIME)) return payload
+    private fun withNowPhrase(payload: ExtractionPayload, said: String, base: IncidentReport): ExtractionPayload {
+        if (!payload.date_time_text.isNullOrBlank() || base.isFilled(Field.DATE_TIME)) return payload
         val phrase = NOW_PHRASE.find(said)?.value ?: return payload
         return payload.copy(date_time_text = phrase, evidence = payload.evidence + ("date_time_text" to phrase))
+    }
+
+    // ---- while the reporter is still speaking -------------------------------------------------------------------
+
+    /**
+     * Recording started: remember the report as it is. Previews are built on this, never on an earlier preview, so a value a
+     * later preview leaves out disappears. Returns the id the rest of this recording's calls must carry.
+     */
+    fun beginRecording(): Long {
+        val id = ++recordings
+        active = Active(id, report, transcripts.toList(), clarify)
+        cached = null
+        preview = null
+        _ui.value = build()
+        return id
+    }
+
+    /**
+     * What [transcript] (everything heard so far) would fill in. Changes only [SessionUi.provisional]: no report, journal, undo,
+     * priority, question or spoken line. A reply that finishes after the recording ended, after a newer preview, or after the
+     * report changed underneath it is dropped, and an unreadable reply leaves the overlay as it was.
+     */
+    suspend fun previewRecording(id: Long, transcript: String) {
+        val said = transcript.trim()
+        val rec = active?.takeIf { it.id == id } ?: return
+        if (said.isEmpty()) return
+        val seq = ++previewSeq
+        val base = rec.baseline
+        val proposed = propose(said, base, rec.earlier)
+        val ok = proposed.parsed as? ParseResult.Ok ?: return
+        val now = active
+        if (now == null || now.id != id || now.baseline != base || seq < appliedSeq) return
+        appliedSeq = seq
+        val at = clock.instant()
+        val validation = synchronized(validator) { validator.validate(withNowPhrase(ok.payload, said, base), (rec.earlier + said).joinToString(" "), at) }
+        val merged = ReportMerge.apply(base, validation, MergeContext(said, at, zone, clock.millis()))
+        cached = Cached(id, said, base, proposed)
+        preview = ProvisionalPreview(id, said, provisionalFields(base, merged.report, rec.clarify + merged.clarify))
+        _ui.value = build()
+    }
+
+    /** The recording was abandoned (cancelled, navigated away): the provisional fields go and the committed report is as it was. */
+    fun cancelRecording(id: Long) {
+        if (active?.id != id) return
+        endRecording()
+        _ui.value = build()
+    }
+
+    private fun endRecording() {
+        active = null
+        cached = null
+        preview = null
+    }
+
+    /** The model's reply for one transcript: one request, one repair attempt when the first reply is unreadable. */
+    private suspend fun propose(said: String, base: IncidentReport, earlier: List<String>): Proposed {
+        var request = prompts.build(said, base, earlier = earlier.takeLast(2))
+        var result = llm.complete(request)
+        var parsed = ToolCallParser.parse(result.text)
+        if (parsed is ParseResult.Failure) {
+            request = prompts.repair(request, parsed.detail)
+            result = llm.complete(request)
+            parsed = ToolCallParser.parse(result.text)
+        }
+        return Proposed(result, parsed)
+    }
+
+    private fun provisionalFields(base: IncidentReport, proposed: IncidentReport, clarifyFields: Set<Field>): List<ProvisionalField> {
+        val views = fieldViews(proposed, clarifyFields).associateBy { it.field }
+        return Labels.ORDER.filter { it != Field.DESCRIPTION && it != Field.RECOMMENDED_FOLLOW_UP && proposed.value(it) != base.value(it) }
+            .mapNotNull { f -> views[f]?.let { ProvisionalField(f, it.label, it.value, it.status, it.evidence) } }
     }
 
     // ---- taps and edits -----------------------------------------------------------------------------------------
@@ -253,6 +345,7 @@ class ReportSession(
         clarify = emptySet()
         chipDecisions = emptyList(); transcripts.clear(); toolLog.clear(); journal.clear(); stages.clear(); asked.clear(); undoStack.clear()
         priority = null; deescalation = null; say = null; spokenSummary = null
+        endRecording()
         state = SessionState.Idle
         publish()
     }
@@ -353,6 +446,16 @@ class ReportSession(
 
     private fun publish() {
         refreshDerived()
+        // The report changed during a recording (a tap, an edit, an undo): the preview was built on a stale base.
+        active?.let {
+            if (it.baseline != report) {
+                it.baseline = report
+                it.earlier = transcripts.toList()
+                it.clarify = clarify
+                cached = null
+                preview = null
+            }
+        }
         _ui.value = build()
     }
 
@@ -389,9 +492,10 @@ class ReportSession(
         canSubmitNow = state !is SessionState.Submitted && advisor.lane().offerSubmitNow,
         deescalation = deescalation,
         suggestions = chips(),
+        provisional = preview,
     )
 
-    private fun fieldViews(): List<FieldView> {
+    private fun fieldViews(report: IncidentReport = this.report, clarify: Set<Field> = this.clarify): List<FieldView> {
         val today = today()
         return Labels.ORDER.map { f ->
             val v = report.value(f)
