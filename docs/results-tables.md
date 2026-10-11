@@ -72,6 +72,7 @@ Build `424c092`. The two prompts cannot be separated at n = 13. Dev gave v11 74%
 - **Gates:**
   - **probe:** passes E/014's pre-registered gate; fails A's stricter gate (3 false alarms > 2, 2 wrong > 1), so A's verdict is "off by default", pending the user.
   - **D's action chips:** 13 right, 0 wrong, 8 missed, 0 false alarms (D/005).
+- **Decision (user, 10:00, A/040):** keep the 4B probe (item, action, people), ON by default. The 1.7B is **not shipped**: report it as "laptop result (17/19 dev equipment, 106/115 on B's 134) and kit measurement of the plain 1.7B Q4_0 (62–64% recall, 2.4 s median, CPU via llama.cpp, NPU use unproven)".
 - **The probe is ON by default on master** (`b0d42af`: `Pipeline.newSession(useProbe = true)`), run after each turn.
 - Chips do not raise the headline recall unless accepted.
 
