@@ -82,7 +82,11 @@ fun AppTopBar(title: String, onProof: (() -> Unit)?, onBack: (() -> Unit)? = nul
 @Composable
 fun PrivacyLine(network: NetworkProof, modifier: Modifier = Modifier) {
     val c = Theme.colors
-    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+    // Centred under the content: it is a statement about the whole screen, not a label for the row above it.
+    Row(
+        modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Space.s2, Alignment.CenterHorizontally),
+    ) {
         Icon(Icons.Rounded.Lock, contentDescription = null, tint = c.ink2, modifier = Modifier.size(16.dp))
         val hindi = isHindi()
         val net = when {
