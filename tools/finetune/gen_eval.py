@@ -48,7 +48,7 @@ def main():
 
     system = Path(a.prompt).read_text(encoding="utf-8").strip()
     tok = AutoTokenizer.from_pretrained(a.model)
-    model = AutoModelForCausalLM.from_pretrained(a.model, torch_dtype=torch.bfloat16).to("cuda")
+    model = AutoModelForCausalLM.from_pretrained(a.model, dtype=torch.bfloat16).to("cuda")
     if a.adapter:
         from peft import PeftModel
         model = PeftModel.from_pretrained(model, a.adapter).merge_and_unload()

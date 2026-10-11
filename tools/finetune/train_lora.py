@@ -99,7 +99,7 @@ def main():
     lens = sorted(len(i) for i, _ in train)
     print(f"train {len(train)} val {len(val)}  tokens/row median {lens[len(lens)//2]} max {lens[-1]}", flush=True)
 
-    model = AutoModelForCausalLM.from_pretrained(a.base, torch_dtype=torch.bfloat16).to(device)
+    model = AutoModelForCausalLM.from_pretrained(a.base, dtype=torch.bfloat16).to(device)
     model.config.use_cache = False
     cfg = LoraConfig(
         r=a.rank, lora_alpha=2 * a.rank, lora_dropout=0.05, task_type="CAUSAL_LM",
@@ -171,7 +171,7 @@ def main():
     if not a.no_merge:
         del model, opt
         torch.cuda.empty_cache()
-        base = AutoModelForCausalLM.from_pretrained(a.base, torch_dtype=torch.bfloat16)
+        base = AutoModelForCausalLM.from_pretrained(a.base, dtype=torch.bfloat16)
         merged = PeftModel.from_pretrained(base, str(out / "adapter_best")).merge_and_unload()
         merged.save_pretrained(out / "merged", safe_serialization=True)
         tok.save_pretrained(out / "merged")
