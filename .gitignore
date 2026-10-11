@@ -38,3 +38,7 @@ captures/
 # Speech bundle staged by app/scripts/speech_bundle.sh (native libraries, not committed)
 app/src/speech/
 .env
+
+# generated Python bytecode (embeds absolute paths of whoever ran it)
+__pycache__/
+*.pyc
