@@ -50,6 +50,8 @@ class ReportSession(
     private val newId: () -> String,
     /** D's chip engine (spec D16); null means no chips. It only proposes; the reporter's tap is the only thing that changes a field. */
     private val suggestions: SuggestionEngine? = null,
+    /** The focused second look at fields the first pass left empty; it only proposes chips, and only [probeMissing] runs it. */
+    private val probe: FocusedProbe? = null,
 ) {
     private data class Snapshot(
         val report: IncidentReport,
@@ -67,6 +69,9 @@ class ReportSession(
     private val journal = mutableListOf<JournalEntry>()
     /** Accepted and rejected chips, in D's journal type: this is how a dismissed chip stays dismissed. */
     private var chipDecisions: List<com.megathon.incident.domain.JournalEntry> = emptyList()
+    /** Chips from [probe]: kept until the reporter speaks again, shown only while they still apply. */
+    private var probeChips: List<Suggestion> = emptyList()
+    private val probeDecisions = com.megathon.incident.suggest.ChipDecisions(clock)
     private val stages = mutableListOf<StageRecord>()
     private val asked = mutableListOf<Set<Field>>()
     /** The open mandatory fields when the last question was chosen: a change means an answer made progress. */
@@ -98,6 +103,7 @@ class ReportSession(
         val said = text.trim()
         val at = capturedAt ?: clock.instant() // when the reporter stopped speaking: "right now" and "10 minutes ago" are relative to this
         remember() // one voice turn is one undoable step
+        probeChips = emptyList()
         transcripts += said
         stt?.let(::record)
         state = SessionState.Extracting
@@ -200,9 +206,8 @@ class ReportSession(
      * heard stays in the journal, and Undo brings it back. A chip made for a value that has since changed does nothing.
      */
     fun acceptSuggestion(chip: Suggestion) {
-        val engine = suggestions ?: return
         val now = chipState()
-        val after = engine.accept(now, chip)
+        val after = if (chip in probeChips) probeDecisions.accept(now, chip) else (suggestions ?: return).accept(now, chip)
         if (after == now) return
         remember()
         chipDecisions = after.journal
@@ -212,9 +217,8 @@ class ReportSession(
 
     /** The reporter dismissed a chip: the field is untouched and the same chip is not offered again. */
     fun rejectSuggestion(chip: Suggestion) {
-        val engine = suggestions ?: return
         val now = chipState()
-        val after = engine.reject(now, chip)
+        val after = if (chip in probeChips) probeDecisions.reject(now, chip) else (suggestions ?: return).reject(now, chip)
         if (after == now) return
         remember()
         chipDecisions = after.journal
@@ -274,7 +278,7 @@ class ReportSession(
         advisor = newAdvisor()
         report = IncidentReport.empty(newId(), clock.millis())
         clarify = emptySet()
-        chipDecisions = emptyList(); transcripts.clear(); toolLog.clear(); journal.clear(); stages.clear(); asked.clear(); lastOpen = emptySet(); undoStack.clear()
+        chipDecisions = emptyList(); probeChips = emptyList(); transcripts.clear(); toolLog.clear(); journal.clear(); stages.clear(); asked.clear(); lastOpen = emptySet(); undoStack.clear()
         priority = null; deescalation = null; say = null; spokenSummary = null; stagedEmergency = null
         state = SessionState.Idle
         publish()
@@ -402,14 +406,36 @@ class ReportSession(
      * A failing engine costs the chips, never the session.
      */
     private fun chips(): List<Suggestion> {
-        val engine = suggestions ?: return emptyList()
         if (state is SessionState.Submitted) return emptyList()
-        val found = try {
-            engine.suggest(chipState(), transcripts.joinToString(" "))
-        } catch (e: Exception) {
-            emptyList()
-        }
-        return found.filterNot { it.field == Field.SEVERITY && report.value(Field.SEVERITY).status == ValueStatus.SUGGESTED }
+        val found = suggestions?.let { engine ->
+            try {
+                engine.suggest(chipState(), transcripts.joinToString(" "))
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }.orEmpty().filterNot { it.field == Field.SEVERITY && report.value(Field.SEVERITY).status == ValueStatus.SUGGESTED }
+        val decided = chipState()
+        // A probe chip counts only while the field is still what it was made for, nothing else proposes that field, and it was not dismissed.
+        val live = probeChips.filter { c -> found.none { it.field == c.field } && (report.value(c.field).text ?: "") == c.original && !decided.hasDecided(c) }
+        return found + live
+    }
+
+    /**
+     * The second look (see [FocusedProbe]): call it AFTER a turn has finished, while the reply is being spoken, never inside the
+     * turn, so it adds nothing to the turn time. The chips appear when it returns. If the reporter spoke or submitted meanwhile,
+     * the result is dropped as stale.
+     */
+    suspend fun probeMissing() {
+        val p = probe ?: return
+        if (state is SessionState.Submitted || state is SessionState.Extracting) return
+        val heard = transcripts.size
+        val said = transcripts.joinToString(" ")
+        if (said.isBlank()) return
+        val taken = suggestions?.let { runCatching { it.suggest(chipState(), said) }.getOrNull() }.orEmpty().map { it.field }.toSet()
+        val found = p.propose(report, said, skip = taken)
+        if (found.isEmpty() || transcripts.size != heard || state is SessionState.Submitted) return
+        probeChips = probeChips.filterNot { c -> found.any { it.field == c.field } } + found
+        publish()
     }
 
     private fun build() = SessionUi(

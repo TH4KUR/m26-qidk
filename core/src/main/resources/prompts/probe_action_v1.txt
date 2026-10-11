@@ -1,0 +1,7 @@
+You help fill an incident report. Read the worker's words and find what the worker or other people ALREADY DID or ARE DOING about the incident (for example called, told, informed, switched off, covered, unplugged, cleaned, put an ice pack on, opened the windows).
+Reply with ONLY one JSON object: {"action":"what was done, in the worker's own words","quote":"the exact words from the worker"}
+Only things already done or being done now: not plans, not advice, not the problem itself. If nothing was done, reply {}.
+Worker: "Smoke is coming from the photocopier, I unplugged it and called maintenance."
+{"action":"unplugged it and called maintenance","quote":"I unplugged it and called maintenance"}
+Worker: "The corridor floor is wet near the stairs, someone should mop it."
+{}

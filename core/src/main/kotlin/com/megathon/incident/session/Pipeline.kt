@@ -27,6 +27,8 @@ object Pipeline {
         suggestions: SuggestionEngine? = null,
         /** Cross-questioning about tools or items, people and witnesses after the mandatory answers; off keeps the mandatory-only flow. */
         askOptional: Boolean = true,
+        /** The focused second look at empty tool/item and action fields; it runs only when the app calls [ReportSession.probeMissing]. */
+        useProbe: Boolean = true,
     ): ReportSession {
         val tam = TamDetector(TamCueLists.loadDefault())
         val extractor = UrgencyFeatureExtractor(HazardLexicon.loadDefault(), tam)
@@ -44,6 +46,7 @@ object Pipeline {
             zone = zone,
             newId = { "report-${clock.millis()}-${counter.incrementAndGet()}" },
             suggestions = suggestions,
+            probe = if (useProbe) FocusedProbe(llm, tam) else null,
         )
     }
 }
