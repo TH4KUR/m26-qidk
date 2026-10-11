@@ -34,6 +34,16 @@ class TamDetector(val lists: TamCueLists) {
         return splitClauses(normalized).map { analyzeClause(it) }
     }
 
+    /**
+     * [text] (any case) with stated severities and failure states ("no harm", "without an injury", "is not working",
+     * "rate this as none") blanked out, same length. For callers that scan for negation words themselves.
+     */
+    fun maskStatedStates(text: String): String {
+        val t = text.lowercase()
+        val hits = CueMatching.find(t, SEVERITY_ABSENCE) + SEVERITY_NONE.findAll(t).map { CueHit("none", it.groups[1]!!.range) }
+        return CueMatching.mask(t, hits)
+    }
+
     // ---- clause splitting ----------------------------------------------------------------------
 
     private val breakRegex: Regex? = lists.clauseBreaks.takeIf { it.isNotEmpty() }?.let { words ->
@@ -55,13 +65,17 @@ class TamDetector(val lists: TamCueLists) {
     // ---- clause analysis -----------------------------------------------------------------------
 
     private fun analyzeClause(clause: String): TamClause {
-        val t = clause.lowercase()
+        val t = withoutNames(clause).lowercase()
 
         val hedged = CueMatching.find(t, lists.hedged)
         val completed = CueMatching.find(t, lists.completed)
         // Mask phrases that contain a negation word ("not sure", "no longer", "pata nahi") so they are
         // not read as negation; a leftover "not" ("has not been fixed") still negates.
-        val masked = CueMatching.mask(t, hedged + completed)
+        // A stated severity ("no harm", "not serious", "I rate this as none") says how bad it was, not that the rest of the
+        // clause did not happen: in a fragment without punctuation it must not negate "we closed the valve".
+        val statedSeverity = CueMatching.find(t, SEVERITY_ABSENCE) +
+            SEVERITY_NONE.findAll(t).map { CueHit("none", it.groups[1]!!.range) }
+        val masked = CueMatching.mask(t, hedged + completed + statedSeverity)
         val negated = CueMatching.negations(masked, lists.negated)
         val planned = CueMatching.find(t, lists.planned)
         val explicitHits = CueMatching.find(t, lists.ongoing)
@@ -109,6 +123,17 @@ class TamDetector(val lists: TamCueLists) {
         )
     }
 
+    /**
+     * A capitalised "Bina" (without), "Diya" (did), "Will" or "May" is a person, not a cue. The clause keeps its text; only
+     * the cue view is blanked, with the same length so every range stays aligned. "Will" and "May" at the very start of a
+     * clause stay cues ("Will call the plumber"): there the capital letter says nothing.
+     */
+    private fun withoutNames(clause: String): String =
+        NAME_LIKE.replace(clause) { m ->
+            val atStart = m.range.first == 0
+            if (atStart && m.value in MODAL_NAMES) m.value else "x".repeat(m.value.length)
+        }
+
     /** "is leaking", "are flooding", "has been leaking": present progressive, excluding noun look-alikes. */
     private fun progressive(text: String): List<CueHit> =
         PROGRESSIVE.findAll(text)
@@ -118,6 +143,24 @@ class TamDetector(val lists: TamCueLists) {
 
     private companion object {
         val DEVANAGARI = 0x0900..0x097F
+
+        // Case-sensitive on purpose: only the capitalised spelling is read as a name.
+        val NAME_LIKE = Regex("(?<![\\p{L}\\p{N}'])(Bina|Diya|Will|May)(?![\\p{L}\\p{N}'])")
+        val MODAL_NAMES = setOf("Will", "May")
+
+        // Said about how bad it was, or in what state a thing is: neither says the rest of the clause did not happen.
+        val SEVERITY_ABSENCE = listOf(
+            "no harm", "no damage", "nothing serious", "not serious",
+            "without an injury", "without any injury", "without injury", "without injuries", "without any injuries",
+            "without harm", "without any harm", "without damage", "without any damage", "without a scratch",
+            // a failure state: "the reader is not working" reports a fault, it does not deny the report
+            "not working", "isn't working", "is not working", "not functioning", "isn't functioning", "not responding",
+            "isn't responding", "doesn't work", "does not work", "won't start", "will not start", "not starting",
+            "not opening", "not charging", "not turning on", "not coming on",
+            "kaam nahi kar raha", "kaam nahi kar rahi", "chal nahi raha", "chal nahi rahi",
+            "काम नहीं कर रहा", "काम नहीं कर रही", "चल नहीं रहा", "चल नहीं रही",
+        )
+        val SEVERITY_NONE = Regex("(?:severity|rating|rated?|rates)\\b(?:\\W+\\w+){0,4}?\\W+(none)(?![\\p{L}\\p{N}])")
 
         val SENTENCE_END = Regex("[!?;।]+|\\.(?=\\s+[\\p{Lu}\\p{Lo}])|\\.\\s*$")
         val PROGRESSIVE = Regex(

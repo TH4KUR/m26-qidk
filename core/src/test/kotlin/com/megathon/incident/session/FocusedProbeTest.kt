@@ -106,11 +106,13 @@ class FocusedProbeTest {
     @Test fun `only fields that are still empty are asked about, and skipped ones are not`() {
         val llm = ProbeLlm()
         propose(llm, report = empty.with(Field.EQUIPMENT_ASSET, FieldValue("drill", ValueStatus.REPORTED, "drill")))
-        assertEquals(1, llm.systems.size)
-        assertTrue("ALREADY DID" in llm.systems.single())
+        // the item and action probes are one call per empty field; the people probe is one more call for both people fields
+        val itemAndAction = llm.systems.filter { "NAMED people" !in it }
+        assertEquals(1, itemAndAction.size)
+        assertTrue("ALREADY DID" in itemAndAction.single())
 
         val skipped = ProbeLlm()
-        propose(skipped, skip = setOf(Field.EQUIPMENT_ASSET, Field.IMMEDIATE_ACTIONS))
+        propose(skipped, skip = setOf(Field.EQUIPMENT_ASSET, Field.IMMEDIATE_ACTIONS, Field.WITNESSES, Field.PERSONS_INVOLVED))
         assertTrue(skipped.systems.isEmpty())
     }
 

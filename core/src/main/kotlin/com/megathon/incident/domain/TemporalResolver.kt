@@ -2,6 +2,7 @@ package com.megathon.incident.domain
 
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
 import java.text.Normalizer
@@ -46,6 +47,7 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
      */
     fun resolve(text: String, capturedAt: Instant): TemporalValue? {
         val t = canonical(text) ?: return null
+        anchoredOffset(t, text, capturedAt)?.let { return it }
         val clauses = TemporalLexicon.clauses(t)
         if (clauses.size > 1) {
             val timed = clauses.indices.mapNotNull { i ->
@@ -74,7 +76,43 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
             val i = clauses.indexOfFirst { it.contains(p) }
             if (i >= 0) TemporalLexicon.tenseAt(clauses, i) else TemporalLexicon.tenseOf(s)
         }
-        return resolveOne(p, phrase, capturedAt, tense)
+        // "on 9 October 2026 at about 11 AM": the model often keeps only the time; the date said in the same clause is part of it.
+        val withDate = if (s != null && calendarDate(p, capturedAt.atZone(zone).toLocalDate()) == null) {
+            val clause = TemporalLexicon.clauses(s).firstOrNull { it.contains(p) } ?: s
+            CALENDAR_DATE.find(clause)?.let { it.value.trim() + " " + p }
+        } else null
+        return resolveOne(withDate ?: p, phrase, capturedAt, tense)
+    }
+
+    /**
+     * "five minutes before 9 AM today", "two hours after the 9 AM class": the anchor is a clock time said in the same phrase, so the
+     * incident is that clock time moved by the offset. No clock time in the anchor ("ten minutes after the alarm") is not this case.
+     */
+    private fun anchoredOffset(t: String, text: String, capturedAt: Instant): TemporalValue? {
+        val m = BEFORE_AFTER.find(t) ?: return null
+        val token = m.groupValues[1]
+        val number = token.toLongOrNull() ?: NUMBER_WORDS[token] ?: return null
+        val minutes = number * if (m.groupValues[2] in HOUR_UNITS) 60L else 1L
+        val anchorText = m.groupValues[4]
+        val anchor = resolveOne(anchorText, anchorText, capturedAt, ClauseTense.NONE) ?: return null
+        val date = anchor.date ?: return null
+        val time = anchor.time ?: return null
+        if (anchor.ambiguous) return null
+        val then = LocalDateTime.of(date, time).let { if (m.groupValues[3].lowercase() == "before") it.minusMinutes(minutes) else it.plusMinutes(minutes) }
+        return TemporalValue(then.toLocalDate(), then.toLocalTime(), null, isApproximate(t), false, text)
+    }
+
+    /** "9 October 2026", "9th of October", "October 9", "20 Dec": without a year, the most recent such date that is not in the future. */
+    private fun calendarDate(t: String, today: LocalDate): LocalDate? {
+        val m = CALENDAR_DATE.find(t) ?: return null
+        val g = m.groupValues
+        val day = (g[1].ifEmpty { g[5] }).toIntOrNull() ?: return null
+        val month = MONTHS[(g[2].ifEmpty { g[4] }).lowercase().take(3)] ?: return null
+        val explicitYear = g[3].ifEmpty { g[6] }.toIntOrNull()
+        fun at(year: Int) = runCatching { LocalDate.of(year, month, day) }.getOrNull()
+        if (explicitYear != null) return at(explicitYear)
+        val thisYear = at(today.year) ?: return null
+        return if (thisYear.isAfter(today)) at(today.year - 1) else thisYear
     }
 
     private fun canonical(text: String): String? {
@@ -86,6 +124,7 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
         val now = capturedAt.atZone(zone)
         if (tense == ClauseTense.FUTURE && !TemporalLexicon.hasPastAnchor(t)) return null
 
+        anchoredOffset(t, text, capturedAt)?.let { return it }
         relativeOffset(t)?.let { minutes ->
             val then = now.minusMinutes(minutes)
             return TemporalValue(then.toLocalDate(), then.toLocalTime().truncatedTo(ChronoUnit.MINUTES), null, isApproximate(t), false, text)
@@ -111,8 +150,10 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
         }
         // "3 days ago" and a weekday name ("on Tuesday", "pichhle shukravaar") each name one calendar date.
         val daysAgo = TemporalLexicon.daysAgo(t)
-        val weekday = if (day == null && daysAgo == null) TemporalLexicon.weekday(t) else null
+        val calendar = if (day == null && daysAgo == null) calendarDate(t, today) else null
+        val weekday = if (day == null && daysAgo == null && calendar == null) TemporalLexicon.weekday(t) else null
         val namedDate: LocalDate? = when {
+            calendar != null -> calendar
             daysAgo != null -> today.minusDays(daysAgo)
             weekday != null -> weekdayDate(weekday, t, today)
             else -> null
@@ -382,6 +423,20 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
                 "ek|do|teen|char|paanch|chhe|chhah|saat|aath|nau|das)\\s*" +
                 "(hours?|hrs?|minutes?|mins?|ghante|ghanta|ghantey|ghanto|मिनट|घंटे|घंटा)\\s*(ago|pehle|pahle|पहले)",
         )
+        /** "5 minutes before 9 AM" / "two hours after the 9 AM class": groups are count, unit, before|after, anchor text. */
+        val BEFORE_AFTER = Regex(
+            NB + "(\\d{1,3}|an|a|one|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty|thirty)\\s*(hours?|hrs?|minutes?|mins?)\\s+(before|after)\\s+(?:the\\s+)?(.+)$",
+            RegexOption.IGNORE_CASE,
+        )
+        private const val MONTH_NAMES =
+            "january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sept|sep|oct|nov|dec"
+        private val MONTHS = listOf("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec").withIndex().associate { (i, m) -> m to i + 1 }
+        /** Day-first ("9 October 2026", "9th of October") or month-first ("October 9, 2026"); groups: 1 day, 2 month, 3 year | 4 month, 5 day, 6 year. */
+        val CALENDAR_DATE = Regex(
+            "(?:(?:on|dated?)\\s+)?(?:the\\s+)?(?:(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?($MONTH_NAMES)\\.?(?:,?\\s+(\\d{4}))?" +
+                "|($MONTH_NAMES)\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s+(\\d{4}))?)(?![\\p{L}\\p{N}])",
+            RegexOption.IGNORE_CASE,
+        )
         val MERIDIEM = Regex(NB + "(\\d{1,2})(?::(\\d{2}))?\\s*(a\\.?m\\.?|p\\.?m\\.?)(?![\\p{L}])")
         val COLON = Regex(NB + "(\\d{1,2}):(\\d{2})(?![\\p{N}])")
         val BAJE = Regex(NB + "(\\d{1,2})\\s*(?:baje|बजे|o'clock|oclock)")
@@ -390,6 +445,7 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
         private const val DAYWORD = "(?:yesterday|last night|tonight|today|this morning|this afternoon|this evening)"
         val FINDERS: List<Regex> by lazy {
             listOf(
+                Regex(CALENDAR_DATE.pattern, RegexOption.IGNORE_CASE),
                 Regex(PRE + OFFSET.pattern, RegexOption.IGNORE_CASE),
                 Regex(PRE + MERIDIEM.pattern, RegexOption.IGNORE_CASE),
                 Regex(PRE + COLON.pattern),
