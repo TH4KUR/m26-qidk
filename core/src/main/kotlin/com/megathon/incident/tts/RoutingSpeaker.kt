@@ -72,9 +72,18 @@ class RoutingSpeaker(
     @Volatile
     private var primaryDisabled: String? = null
 
-    override suspend fun speak(text: String) {
+    /** Counts [stop] calls, so a run of segments can tell that it was interrupted. */
+    private val stops = java.util.concurrent.atomic.AtomicInteger(0)
+
+    override suspend fun speak(text: String) = speak(text, language())
+
+    /** Why the preferred voice cannot speak [language] right now; null when it can. Speaks nothing. */
+    suspend fun primaryUnavailableReason(language: String): String? =
+        if (primary == null) "no preferred voice was selected" else primaryDisabled ?: primary.unavailableReason(language)
+
+    /** [speak] in an explicit language, for text whose language differs from the session's (a Hindi sentence, an English place). */
+    suspend fun speak(text: String, lang: String) {
         if (text.isBlank()) return
-        val lang = language()
         var reason: String? = null
         if (primary != null) {
             reason = primaryDisabled ?: primary.unavailableReason(lang)
@@ -100,7 +109,17 @@ class RoutingSpeaker(
         last = SpokenWith(fallback.label(lang), fallback.compute, fallback.offline, reason)
     }
 
+    /** Speaks [segments] one after the other, each in its own language; a [stop] during one silences the rest. */
+    suspend fun speakAll(segments: List<SpokenSegment>) {
+        val mine = stops.get()
+        for (segment in segments) {
+            if (stops.get() != mine) return
+            speak(segment.text, segment.language)
+        }
+    }
+
     fun stop() {
+        stops.incrementAndGet()
         primary?.stop()
         fallback.stop()
     }

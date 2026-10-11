@@ -36,6 +36,47 @@ class RoutingSpeakerTest {
     private val piper = FakeBackend(Compute.CPU, "Piper")
 
     @Test
+    fun anExplicitLanguageIsUsedForTheAvailabilityCheckAndTheSpeech() = runBlocking {
+        val s = RoutingSpeaker(piper, android)
+        s.speak("यह कब हुआ था?", "hi")
+        assertEquals(listOf("hi" to "यह कब हुआ था?"), piper.spoken)
+        assertEquals("Piper/hi", s.last?.engine)
+    }
+
+    @Test
+    fun theHindiReasonIsAskedForWithoutSpeakingAnything() = runBlocking {
+        piper.unavailable = "voice files missing"
+        val s = RoutingSpeaker(piper, android)
+        assertEquals("voice files missing", s.primaryUnavailableReason("hi"))
+        assertTrue(piper.spoken.isEmpty() && android.spoken.isEmpty())
+    }
+
+    @Test
+    fun speakAllReadsEachSegmentInItsOwnLanguageInOrder() = runBlocking {
+        val s = RoutingSpeaker(piper, android)
+        s.speakAll(listOf(SpokenSegment("Conference Room 2", "en"), SpokenSegment("में आग।", "hi")))
+        assertEquals(listOf("en" to "Conference Room 2", "hi" to "में आग।"), piper.spoken)
+    }
+
+    @Test
+    fun stoppingWhileASegmentPlaysSilencesTheRestOfTheSegments() = runBlocking {
+        lateinit var s: RoutingSpeaker
+        val stopper = object : TtsBackend by piper {
+            override suspend fun speak(text: String, language: String) { piper.spoken += language to text; s.stop() }
+        }
+        s = RoutingSpeaker(stopper, android)
+        s.speakAll(listOf(SpokenSegment("one", "hi"), SpokenSegment("two", "hi"), SpokenSegment("three", "en")))
+        assertEquals(listOf("hi" to "one"), piper.spoken)
+        assertTrue(android.spoken.isEmpty())
+    }
+
+    @Test
+    fun withoutAPrimaryThereIsAReasonToo() = runBlocking {
+        assertNotNull(RoutingSpeaker(null, android).primaryUnavailableReason("hi"))
+        Unit
+    }
+
+    @Test
     fun withoutAPrimaryTheFallbackSpeaksAndIsReported() = runBlocking {
         val s = RoutingSpeaker(primary = null, fallback = android)
         s.speak("Hello.")
