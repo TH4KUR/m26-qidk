@@ -17,12 +17,13 @@ import com.megathon.incident.ui.i18n.tr
 import com.megathon.incident.ui.theme.Space
 import com.megathon.incident.ui.theme.Theme
 
-/** The team label for the double-blind review, the product name, and what runs on this device. */
-const val TEAM_LABEL = "Team 087"
+/** The team line shown under About. Decided by the user: the team number and the team name, both. */
+const val TEAM_LABEL = "Team 087 - ReadyOrNot"
 
 /**
- * About: who made it (the anonymous team label only: the review is double-blind, so no team name, member names or college),
- * the product, and the components that do the work on this device. Everything listed here is what the app actually uses.
+ * About: who made it (the team number and name, as the team asked), the product, and the components that do the work on this
+ * device. Everything listed here is what the app actually uses. Note for the submission mirror: the team name is on
+ * tools/blindcheck.words, so `tools/mirror_to_submission.sh` refuses this file until that is resolved.
  */
 @Composable
 fun AboutSection(modifier: Modifier = Modifier) {
