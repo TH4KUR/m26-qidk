@@ -72,6 +72,7 @@ Build `424c092`. The two prompts cannot be separated at n = 13. Dev gave v11 74%
 - **Gates:**
   - **probe:** passes E/014's pre-registered gate; fails A's stricter gate (3 false alarms > 2, 2 wrong > 1), so A's verdict is "off by default", pending the user.
   - **D's action chips:** 13 right, 0 wrong, 8 missed, 0 false alarms (D/005).
+- **The probe is ON by default on master** (`b0d42af`: `Pipeline.newSession(useProbe = true)`), run after each turn.
 - Chips do not raise the headline recall unless accepted.
 
 ## 5. Place names (gazetteer snapper, D; dev text)
@@ -90,9 +91,9 @@ The LLM copies sound-alikes rather than repairing them: place recall 7/8 on clea
 | Whisper-Small on the kit NPU (sherpa-onnx QNN), one clip | decode 3.18 s, real-time factor 0.48; recognizer creation 0.71 s | `A-20261010-sherpa-onnx-qnn-speech-on-kit` |
 | App child process, one English sample, end to end | 5,078 ms, same transcript as the CLI | B/009 |
 | Indian-accent public proxy (80 clips, 19 speakers, 829 words; GPU, fp32) | base.en **12.30%** WER (8.6–16.5), fine-tuned Small 13.51%, tiny.en 16.65%, fine-tuned Tiny 24.73% | `B-20261011-accent-contest-public-proxy` |
-| **Our phone recordings** (34 clips, 2 speakers, 16 kHz; 26 dev, 8 held-out) | **pending**: B needs the WAVs downloaded (B/021) | E/010, B/021 |
+| **Our phone recordings**, read-aloud dev clips (10 clips, 298 words, 2 speakers, phone mic, 16 kHz; B's laptop, not the kit) | **base.en 8.72%** (26/298), fine-tuned Small 10.74%, tiny.en 11.41%, fine-tuned Tiny 14.09% | B/023, `B-20261011-phone-clips-contest` (`b/speech-engines`) |
 
-The proxy is read speech from a public set, not incident speech on the kit microphone. Hindi/Telugu speech numbers: none yet (A/021 not started). Do not quote hi/te WER from `wer.py` until its Indic fix lands (A/033).
+Both are small samples: the phone ordering rests on 16 errors between the best and the worst model; the Indian-English fine-tunes did not beat stock base.en on either set. Neither is the kit's Whisper-Small QNN; a kit run of the 26 dev phone clips is the missing end-to-end number. The proxy is read speech from a public set, not incident speech on the kit microphone. Hindi/Telugu speech numbers: none yet (A/021 not started). Do not quote hi/te WER from `wer.py` until its Indic fix lands (A/033).
 
 ## 7. Speed on the kit
 | stage | value | source |
