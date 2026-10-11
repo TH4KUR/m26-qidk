@@ -79,7 +79,7 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
 
     private fun canonical(text: String): String? {
         val normalized = EnumNormalizer.normalize(text) ?: return null
-        return spokenHoursAsDigits(TemporalLexicon.canonicalize(normalized))
+        return TemporalLexicon.withoutEndTimes(spokenHoursAsDigits(TemporalLexicon.canonicalize(normalized)))
     }
 
     private fun resolveOne(t: String, text: String, capturedAt: Instant, tense: ClauseTense): TemporalValue? {
@@ -207,7 +207,9 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
             val ranges = TemporalLexicon.clauseRanges(lower)
             val texts = ranges.map { lower.substring(it) }
             val found = ranges.indices.mapNotNull { i ->
-                val main = ALL_FINDERS.flatMap { r -> r.findAll(texts[i]).map { it.range }.toList() }
+                val ends = TemporalLexicon.endTimeRanges(texts[i])
+                val main = (ALL_FINDERS + TemporalLexicon.anchoredFinders(texts[i])).flatMap { r -> r.findAll(texts[i]).map { it.range }.toList() }
+                    .filter { m -> ends.none { e -> m.first <= e.last && e.first <= m.last } }
                 // A trailing "at night" / "after midnight" completes a time that was found; it never starts one.
                 val first = main.minOfOrNull { it.first }
                 val spans = if (first == null) main else main + TemporalLexicon.MODIFIER_FINDERS
@@ -219,7 +221,14 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
             val (_, offset, spans) = found.firstOrNull { !TemporalLexicon.isResponse(texts[it.first]) } ?: found.firstOrNull() ?: continue
             val first = spans.minOf { it.first }
             // Join neighbours that are part of the same expression ("8:30" + "tonight"), not a later sentence part.
-            val joined = spans.filter { it.first - first <= 30 }
+            var joined = spans.filter { it.first - first <= 30 }
+            // ... and a part of day / day that follows right after the expression ("... three in the afternoon yesterday").
+            while (true) {
+                val reach = joined.maxOf { it.last }
+                val more = spans.filter { it !in joined && it.first > reach && it.first - reach <= 12 }
+                if (more.isEmpty()) break
+                joined = joined + more
+            }
             val start = offset + joined.minOf { it.first }
             val end = offset + joined.maxOf { it.last }
             return s.substring(start, end + 1).trim(' ', ',', '.')
@@ -253,6 +262,10 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
             val n = token.toLongOrNull() ?: NUMBER_WORDS[token] ?: return null
             return Week(today.minusWeeks(n), null, null)
         }
+        TemporalLexicon.monthsAgo(t)?.let { return Week(today.minusMonths(it), null, null) }
+        val firstOfMonth = today.withDayOfMonth(1)
+        if (TemporalLexicon.lastMonth(t)) return Week(null, firstOfMonth.minusMonths(1), firstOfMonth.minusDays(1))
+        if (TemporalLexicon.thisMonth(t)) return Week(null, firstOfMonth, today)
         val monday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
         return when {
             LAST_WEEK.any { has(t, it) } -> Week(null, monday.minusWeeks(1), monday.minusDays(1))
@@ -395,7 +408,7 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
         )
         val BARE_HOUR = Regex(
             "(?<![\\p{L}\\p{N}])(?:at|around|about|approximately|approx|roughly)\\s+(\\d{1,2})(?![\\p{L}\\p{N}:])" +
-                "(?!\\s*(?:hours?|minutes?|mins?|people|persons|pm|am|met(?:er|re)s?|m\\b|km|cm|mm|feet|foot|ft|inch(?:es)?|kgs?|kilos?|tons?|tonnes?|" +
+                "(?!\\s*(?:hours?|minutes?|mins?|days?|weeks?|months?|years?|people|persons|pm|am|met(?:er|re)s?|m\\b|km|cm|mm|feet|foot|ft|inch(?:es)?|kgs?|kilos?|tons?|tonnes?|" +
                 "degrees?|percent|%|bars?|psi|volts?|amps?|lit(?:er|re)s?|workers|students|employees|times|floors?|storeys?|units?))",
         )
     }

@@ -27,17 +27,18 @@ internal object TemporalLexicon {
     // ---- vocabulary: canonical Roman form -> other spellings (Roman variants and Devanagari) -----------------------------
 
     private val DAY_WORDS = mapOf(
-        "kal" to listOf("कल"), "aaj" to listOf("आज"),
-        "parso" to listOf("parson", "parsoon", "परसों", "परसो"), "narso" to listOf("narson", "narsoon", "नरसों", "नरसो"),
+        "kal" to listOf("कल"), "aaj" to listOf("आज", "aj"),
+        "parso" to listOf("parson", "parsoon", "parsu", "parsho", "परसों", "परसो"), "narso" to listOf("narson", "narsoon", "नरसों", "नरसो"),
     )
     private val POD_WORDS = mapOf(
-        "subah" to listOf("savere", "सुबह", "सवेरे"), "dopahar" to listOf("dophar", "दोपहर"),
-        "shaam" to listOf("sham", "शाम"), "raat" to listOf("रात"),
+        "subah" to listOf("subha", "subeh", "savere", "सुबह", "सवेरे"), "dopahar" to listOf("dophar", "dupahar", "dopehar", "दोपहर"),
+        "shaam" to listOf("sham", "saam", "शाम"), "raat" to listOf("रात"),
     )
     private val UNIT_WORDS = mapOf(
         "baje" to listOf("बजे"), "pehle" to listOf("pahle", "pehele", "पहले"),
         "ghante" to listOf("ghantey", "ghanto", "घंटे", "घण्टे", "घंटों"), "ghanta" to listOf("घंटा", "घण्टा"),
-        "minute" to listOf("mint", "minat", "मिनट"), "din" to listOf("दिन"),
+        "minute" to listOf("mint", "minat", "minit", "minut", "मिनट"), "din" to listOf("दिन"),
+        "mahine" to listOf("mahina", "mahino", "महीने", "महीना", "महिने", "माह"),
         "hafte" to listOf("हफ्ते", "हफ़्ते", "सप्ताह"), "hafta" to listOf("हफ्ता", "हफ़्ता"),
         "pichhle" to listOf("pichle", "pichhla", "पिछले"), "is" to listOf("इस"),
     )
@@ -52,9 +53,10 @@ internal object TemporalLexicon {
     )
     private val FRACTIONS = mapOf(
         "aadha" to listOf("aadhe", "adha", "adhe", "aadhi", "आधा", "आधे", "आधी"),
-        "dedh" to listOf("derh", "डेढ़", "डेढ"), "dhai" to listOf("dhaai", "dhayi", "dhaayi", "ढाई"),
-        "sava" to listOf("sawa", "सवा"), "saadhe" to listOf("saade", "sadhe", "saadhey", "साढ़े", "साढे", "साड़े"),
-        "paune" to listOf("paone", "pone", "paunay", "पौने"),
+        "dedh" to listOf("derh", "dhed", "dedha", "dhedh", "डेढ़", "डेढ"), "dhai" to listOf("dhaai", "dhayi", "dhaayi", "dhae", "ढाई"),
+        "sava" to listOf("sawa", "savaa", "sawaa", "सवा"),
+        "saadhe" to listOf("saade", "sade", "sadhe", "saadhey", "saadey", "sarhe", "साढ़े", "साढे", "साड़े"),
+        "paune" to listOf("paone", "pone", "paun", "paunay", "pauney", "पौने"),
     )
     private val WEEKDAYS: Map<DayOfWeek, List<String>> = mapOf(
         DayOfWeek.MONDAY to listOf("monday", "somvaar", "somvar", "somwar", "सोमवार"),
@@ -68,14 +70,15 @@ internal object TemporalLexicon {
 
     /** canonical Roman number word -> value, with its other spellings. */
     private val NUMBERS: List<Triple<String, Int, List<String>>> = listOf(
-        Triple("ek", 1, listOf("एक")), Triple("do", 2, listOf("दो")), Triple("teen", 3, listOf("तीन")),
-        Triple("char", 4, listOf("chaar", "चार")), Triple("paanch", 5, listOf("panch", "paach", "पांच", "पाँच")),
-        Triple("chhe", 6, listOf("chhah", "che", "chah", "chhai", "छह", "छः", "छे", "छ")), Triple("saat", 7, listOf("सात")),
-        Triple("aath", 8, listOf("aat", "आठ")), Triple("nau", 9, listOf("नौ")), Triple("das", 10, listOf("दस")),
-        Triple("gyarah", 11, listOf("gyaarah", "giyarah", "ग्यारह")), Triple("barah", 12, listOf("baarah", "बारह")),
+        Triple("ek", 1, listOf("एक")), Triple("do", 2, listOf("दो")), Triple("teen", 3, listOf("tin", "tiin", "तीन")),
+        Triple("char", 4, listOf("chaar", "चार")), Triple("paanch", 5, listOf("panch", "paach", "pach", "पांच", "पाँच")),
+        Triple("chhe", 6, listOf("chhah", "che", "chah", "chha", "cheh", "chhey", "chhai", "छह", "छः", "छे", "छ")), Triple("saat", 7, listOf("सात")),
+        Triple("aath", 8, listOf("aat", "ath", "आठ")), Triple("nau", 9, listOf("nao", "naun", "नौ")), Triple("das", 10, listOf("dus", "dass", "dasa", "दस")),
+        Triple("gyarah", 11, listOf("gyaarah", "giyarah", "gyara", "gyarha", "igyarah", "ग्यारह")),
+        Triple("barah", 12, listOf("baarah", "bara", "baraah", "barha", "बारह")),
         Triple("terah", 13, listOf("तेरह")), Triple("chaudah", 14, listOf("चौदह")), Triple("pandrah", 15, listOf("pandra", "पंद्रह", "पन्द्रह")),
         Triple("solah", 16, listOf("सोलह")), Triple("satrah", 17, listOf("सत्रह")), Triple("atharah", 18, listOf("athaarah", "अठारह")),
-        Triple("unnis", 19, listOf("unees", "उन्नीस")), Triple("bees", 20, listOf("बीस")),
+        Triple("unnis", 19, listOf("unees", "उन्नीस")), Triple("bees", 20, listOf("bis", "बीस")),
         Triple("pachchis", 25, listOf("pacchis", "pachis", "pachees", "पच्चीस")), Triple("tees", 30, listOf("तीस")), Triple("paintees", 35, listOf("पैंतीस")),
         Triple("chalis", 40, listOf("chaalis", "चालीस")), Triple("paintalis", 45, listOf("paitalis", "paintaalis", "पैंतालीस")),
         Triple("pachaas", 50, listOf("pachas", "पचास")),
@@ -99,18 +102,57 @@ internal object TemporalLexicon {
     private val FRAC_CLOCK = Regex("$LB(saadhe|sava|paune)\\s+$NUM\\s+baje$RB")
     private val DEDH_DHAI_CLOCK = Regex("$LB(dedh|dhai)\\s+baje$RB")
     private val FRAC_OFFSET = Regex("$LB(aadha|dedh|dhai|sava|paune)\\s+(?:ghante|ghanta)\\s+pehle$RB")
-    private val NUM_BEFORE_UNIT = Regex("$LB($NUMW)\\s+(?=(?:minutes?|mins?|ghante|ghanta|baje|din|hafte|hafta)$RB)")
+    private val NUM_BEFORE_UNIT = Regex("$LB($NUMW)\\s+(?=(?:minutes?|mins?|ghante|ghanta|baje|din|hafte|hafta|mahine)$RB)")
     private val EN_HOUR = "one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve"
     private val EN_HOUR_VALUE = EN_HOUR.split('|').withIndex().associate { it.value to it.index + 1 }
+    private fun countOf(token: String): Int = token.toIntOrNull() ?: NUMBER_VALUE[token] ?: EN_HOUR_VALUE[token] ?: 0
+
+    // "do teen ghante pehle", "two or three hours ago", "2-3 hours ago": the midpoint, and approximate ("around").
+    private val RANGE_OFFSET = Regex(
+        "$LB(\\d{1,2}|$NUMW|$EN_HOUR)\\s*(?:-|–|to|or|se|ya)?\\s*(\\d{1,2}|$NUMW|$EN_HOUR)\\s+" +
+            "(hours?|hrs?|ghante|ghanta|minutes?|mins?|din|days?)\\s+(?=(?:ago|pehle)$RB)",
+    )
+    private val COUPLE_OF = Regex("${LB}a couple of (hours?|hrs?|minutes?|mins?|days?)$RB")
     private val QUARTER_PAST = Regex("${LB}quarter\\s+past\\s+(\\d{1,2}|$EN_HOUR)$RB")
     private val QUARTER_TO = Regex("${LB}quarter\\s+to\\s+(\\d{1,2}|$EN_HOUR)$RB")
-    private val EN_MINUTE_WORDS = mapOf("fifteen" to 15, "twenty" to 20, "thirty" to 30, "forty five" to 45, "forty-five" to 45)
-    private val EN_MIN = EN_MINUTE_WORDS.keys.joinToString("|")
-    private val HOUR_MIN_AFTER_AT = Regex("$LB(at|around|about|by|since|until|till|from)\\s+(\\d{1,2}|$EN_HOUR)\\s+($EN_MIN)$RB")
-    private val HOUR_MIN_BEFORE_AMPM = Regex("$LB($EN_HOUR)\\s+($EN_MIN)\\s+(?=a\\.?m\\.?$RB|p\\.?m\\.?$RB)")
+    private val EN_MIN = "fifteen|twenty five|twenty-five|twenty|thirty five|thirty-five|thirty|forty five|forty-five|forty|fifty five|fifty-five|fifty"
 
-    private val NOON = Regex("$LB(?:at\\s+)?(?:noon|midday)$RB")
-    private val MIDNIGHT = Regex("(?<!after )(?<!past )$LB(?:at\\s+)?midnight(?!\\s+ke baad)$RB")
+    private val HOUR_MIN_AFTER_AMPM = Regex("$LB($EN_HOUR)\\s+($EN_MIN)\\s+(?=a\\.?m\\.?$RB|p\\.?m\\.?$RB)")
+    private val NOON = Regex("$LB(?:(at|until|till|by|up to|upto)\\s+)?(?:noon|midday)$RB")
+    private val MIDNIGHT = Regex("(?<!after )(?<!past )$LB(?:(at|until|till|by|up to|upto)\\s+)?midnight(?!\\s+ke baad)$RB")
+
+    // Spoken English clock forms. A bare "ten thirty" is a time only with a preposition before it or a part of day / am / pm after.
+    private val EN_MINUTE_VALUES = buildMap {
+        put("fifteen", 15); put("twenty", 20); put("twenty five", 25); put("twenty-five", 25); put("thirty", 30); put("thirty five", 35)
+        put("thirty-five", 35); put("forty", 40); put("forty five", 45); put("forty-five", 45); put("fifty", 50); put("fifty five", 55)
+        put("fifty-five", 55)
+        listOf("one", "two", "three", "four", "five", "six", "seven", "eight", "nine").forEachIndexed { i, w -> put("oh $w", i + 1); put("o $w", i + 1) }
+    }
+    private val EN_MIN_ALT = EN_MINUTE_VALUES.keys.sortedByDescending { it.length }.joinToString("|")
+    private const val PREP = "(?:at|around|about|by|since|until|till|from)"
+    private const val ANCHOR_AFTER =
+        "(?:a\\.?m\\.?|p\\.?m\\.?|last night|tonight|this (?:morning|afternoon|evening|night)|yesterday|today|in the (?:morning|afternoon|evening|night)|at night|o'clock)"
+    private val HOUR_MIN_PREP = Regex("$LB($PREP)\\s+(\\d{1,2}|$EN_HOUR)\\s+($EN_MIN_ALT)$RB")
+    private val HOUR_MIN_ANCHOR = Regex("$LB(\\d{1,2}|$EN_HOUR)\\s+($EN_MIN_ALT)\\s+(?=$ANCHOR_AFTER$RB)")
+    private val SMALL_MIN = mapOf("five" to 5, "ten" to 10, "twenty" to 20, "twenty five" to 25, "twenty-five" to 25, "quarter" to 15, "a quarter" to 15)
+    private val SMALL_ALT = (SMALL_MIN.keys + listOf("5", "10", "20", "25")).sortedByDescending { it.length }.joinToString("|")
+    private val MIN_PAST = Regex("$LB($SMALL_ALT) past (\\d{1,2}|$EN_HOUR)$RB")
+    private val MIN_TO_PREP = Regex("$LB($PREP) ($SMALL_ALT) to (\\d{1,2}|$EN_HOUR)$RB")
+    private val MIN_TO_ANCHOR = Regex("$LB($SMALL_ALT) to (\\d{1,2}|$EN_HOUR)\\s+(?=$ANCHOR_AFTER$RB)")
+    private fun smallMinutes(token: String) = token.toIntOrNull() ?: SMALL_MIN.getValue(token)
+
+    // A spoken hour ("at about eleven", "around five") is a time only when the text also names a part of day or a day, and the
+    // word is not the start of a count ("around five workers", "around one of the pipes").
+    private val EN_ANCHOR_ANY = Regex(
+        "${LB}(?:last night|tonight|yesterday|today|morning|afternoon|evening|night|monday|tuesday|wednesday|thursday|friday|saturday|sunday)$RB",
+    )
+    private const val NOT_A_COUNT =
+        "(?!\\s+(?:of|or|to|more|other|another)\\b)(?!\\s+(?!(?:was|is|has|this|its|his|as|us|yes)\\b)[a-z]+s\\b)"
+    private val SPOKEN_HOUR = Regex("$LB((?:(?:at|around|about|since)\\s+)+)($EN_HOUR)$RB$NOT_A_COUNT")
+
+    /** Finders for a spoken hour, to be used only for a clause that names a part of day or a day (see [anchoredFinders]). */
+    private val SPOKEN_HOUR_FINDER = Regex("$LB(?:(?:at|around|about|since)\\s+)+(?:$EN_HOUR)$RB$NOT_A_COUNT")
+    fun anchoredFinders(clause: String): List<Regex> = if (EN_ANCHOR_ANY.containsMatchIn(clause)) listOf(SPOKEN_HOUR_FINDER) else emptyList()
 
     private fun hourOf(token: String): Int = token.toIntOrNull() ?: EN_HOUR_VALUE[token] ?: NUMBER_VALUE[token] ?: 0
 
@@ -131,13 +173,28 @@ internal object TemporalLexicon {
             val minutes = when (m.groupValues[1]) { "aadha" -> 30; "dedh" -> 90; "dhai" -> 150; "sava" -> 75; else -> 45 }
             "$minutes minutes ago"
         }
+        s = RANGE_OFFSET.replace(s) { m ->
+            val a = countOf(m.groupValues[1])
+            val b = countOf(m.groupValues[2])
+            if (b <= a) m.value else when (m.groupValues[3]) {
+                "hour", "hours", "hr", "hrs", "ghante", "ghanta" -> "around ${(a + b) * 30} minutes "
+                "minute", "minutes", "min", "mins" -> "around ${(a + b) / 2} minutes "
+                else -> "around ${(a + b) / 2} days "
+            }
+        }
+        s = COUPLE_OF.replace(s) { m -> "around 2 ${m.groupValues[1]}" }
         s = NUM_BEFORE_UNIT.replace(s) { m -> NUMBER_VALUE.getValue(m.groupValues[1]).toString() + " " }
-        s = NOON.replace(s, "at 12:00 pm")
-        s = MIDNIGHT.replace(s, "at 12:00 am")
+        s = NOON.replace(s) { m -> m.groupValues[1].ifEmpty { "at" } + " 12:00 pm" }
+        s = MIDNIGHT.replace(s) { m -> m.groupValues[1].ifEmpty { "at" } + " 12:00 am" }
         s = QUARTER_PAST.replace(s) { "${hourOf(it.groupValues[1])}:15" }
         s = QUARTER_TO.replace(s) { m -> hourOf(m.groupValues[1]).let { h -> "${if (h == 1) 12 else h - 1}:45" } }
-        s = HOUR_MIN_AFTER_AT.replace(s) { m -> "${m.groupValues[1]} ${hourOf(m.groupValues[2])}:%02d".format(EN_MINUTE_WORDS.getValue(m.groupValues[3])) }
-        s = HOUR_MIN_BEFORE_AMPM.replace(s) { m -> "${hourOf(m.groupValues[1])}:%02d ".format(EN_MINUTE_WORDS.getValue(m.groupValues[2])) }
+        s = MIN_PAST.replace(s) { m -> "${hourOf(m.groupValues[2])}:%02d".format(smallMinutes(m.groupValues[1])) }
+        s = MIN_TO_PREP.replace(s) { m -> hourOf(m.groupValues[3]).let { h -> "${m.groupValues[1]} ${if (h == 1) 12 else h - 1}:%02d".format(60 - smallMinutes(m.groupValues[2])) } }
+        s = MIN_TO_ANCHOR.replace(s) { m -> hourOf(m.groupValues[2]).let { h -> "${if (h == 1) 12 else h - 1}:%02d ".format(60 - smallMinutes(m.groupValues[1])) } }
+        s = HOUR_MIN_PREP.replace(s) { m -> "${m.groupValues[1]} ${hourOf(m.groupValues[2])}:%02d".format(EN_MINUTE_VALUES.getValue(m.groupValues[3])) }
+        s = HOUR_MIN_ANCHOR.replace(s) { m -> "${hourOf(m.groupValues[1])}:%02d ".format(EN_MINUTE_VALUES.getValue(m.groupValues[2])) }
+        s = HOUR_MIN_AFTER_AMPM.replace(s) { m -> "${hourOf(m.groupValues[1])}:%02d ".format(EN_MINUTE_VALUES.getValue(m.groupValues[2])) }
+        if (EN_ANCHOR_ANY.containsMatchIn(s)) s = SPOKEN_HOUR.replace(s) { m -> m.groupValues[1] + hourOf(m.groupValues[2]) }
         return s
     }
 
@@ -161,11 +218,38 @@ internal object TemporalLexicon {
     /** "kuch der pehle": some time ago today; no clock time can be said. */
     fun shortWhileAgo(t: String) = SHORT_WHILE.containsMatchIn(t)
 
+    private val LAST_MONTH = Regex("${LB}(?:last|previous) month$RB|${LB}pichhle mahine$RB")
+    private val THIS_MONTH = Regex("${LB}(?:this month|is mahine)$RB")
+    private val MONTHS_AGO = Regex("$LB(\\d{1,2}|a|an|one|two|three|four|five|six)\\s*(?:months?|mahine)\\s*(?:ago|pehle)$RB")
+    fun lastMonth(t: String) = LAST_MONTH.containsMatchIn(t)
+    fun thisMonth(t: String) = THIS_MONTH.containsMatchIn(t)
+
+    /** "3 months ago", "teen mahine pehle" (canonical "3 mahine pehle"): the number of months, or null. */
+    fun monthsAgo(t: String): Long? = MONTHS_AGO.find(t)?.groupValues?.get(1)?.let { it.toLongOrNull() ?: EN_COUNT[it] ?: EN_HOUR_VALUE[it]?.toLong() }
+
     private val STRONG_NOW = Regex("${LB}(?:abhi abhi|just now|right now|just happened)$RB")
     fun strongNow(t: String) = STRONG_NOW.containsMatchIn(t)
 
     private val AFTER_MIDNIGHT = Regex("${LB}(?:after midnight|past midnight|midnight ke baad|aadhi raat ke baad)$RB|आधी रात के बाद")
     fun afterMidnight(t: String) = AFTER_MIDNIGHT.containsMatchIn(t)
+
+    // ---- end times ("10 baje tak", "until 10") -----------------------------------------------------------------------
+
+    /** A time that says when something stopped or by when, not when the incident happened. Matches both scripts and canonical text. */
+    private val END_TIME: Regex by lazy {
+        val en = "(?:\\d{1,2}(?::\\d{2})?(?:\\s*[ap]\\.?m\\.?)?|noon|midnight|midday|$EN_HOUR)"
+        Regex(
+            LB + "(?:" +
+                "(?:(?:$S_DAY)\\s+)?(?:(?:$S_POD)\\s+(?:(?:ke|के)\\s+)?)?(?:(?:$S_FRAC)\\s+)?(?:$S_NUM)(?::\\d{2})?\\s*(?:$S_BAJE)\\s+(?:tak|तक)" +
+                "|(?:$S_DAY)(?:\\s+(?:$S_POD))?\\s+(?:tak|तक)" +
+                "|(?:until|till|til|up to|upto|by)\\s+(?:at\\s+)?(?:(?:yesterday|today|tonight|this)\\s+)?$en(?:\\s+(?:this\\s+)?(?:morning|afternoon|evening|night))?" +
+                ")" + RB,
+            RegexOption.IGNORE_CASE,
+        )
+    }
+
+    fun endTimeRanges(text: String): List<IntRange> = END_TIME.findAll(text).map { it.range }.toList()
+    fun withoutEndTimes(t: String): String = END_TIME.replace(t, " ")
 
     // ---- tense, clauses, response verbs ---------------------------------------------------------------------------------
 
@@ -224,7 +308,7 @@ internal object TemporalLexicon {
     fun isResponse(clause: String) = RESPONSE.containsMatchIn(clause)
 
     private val CLAUSE_SPLIT = Regex(
-        "\\s*(?:[,;!?।|]|\\.(?=\\s|$)|\\s+(?:and|but|then|aur|और|lekin|magar|phir|फिर|लेकिन|मगर)\\s+)\\s*",
+        "\\s*(?:[,;!?।|]|\\.(?=\\s|$)|\\s+(?:and|but|then|aur|और|lekin|magar|phir|फिर|लेकिन|मगर)\\s+|\\s+after\\s+(?=(?:the|a|an|we|i|they|he|she|it|someone|everyone|my|our|that|this)\\s))\\s*",
     )
 
     /** The clause ranges of [text], in order; the separators are not part of any range. */
@@ -252,18 +336,16 @@ internal object TemporalLexicon {
     private val S_AASPAAS = surface(APPROX_WORDS.filterKeys { it == "aaspaas" })
     private val S_FRAC = surface(FRACTIONS)
     private val S_NUM = alt(NUMBERS.flatMap { listOf(it.first) + it.third }) + "|[0-9\\u0966-\\u096F]{1,2}"
-    private val S_UNITS = alt(
-        listOf("ghante", "ghanta", "ghantey", "ghanto", "घंटे", "घंटा", "घण्टे", "घंटों", "minute", "minat", "mint", "min", "मिनट", "din", "दिन",
-            "hafte", "hafta", "हफ्ते", "हफ़्ते", "हफ्ता", "सप्ताह"),
-    )
+    private val S_UNITS = surface(UNIT_WORDS.filterKeys { it in setOf("ghante", "ghanta", "minute", "din", "hafte", "hafta", "mahine") }) + "|min|mins"
     private val S_WEEKDAY = alt(WEEKDAYS.values.flatten())
-    private val S_WEEKWORD = alt(listOf("hafte", "hafta", "हफ्ते", "हफ़्ते", "हफ्ता", "सप्ताह", "week"))
+    private val S_WEEKWORD = alt(listOf("hafte", "hafta", "हफ्ते", "हफ़्ते", "हफ्ता", "सप्ताह", "week", "mahine", "mahina", "महीने", "महीना", "माह", "month"))
     private val EN_POD = "(?:\\s+(?:morning|afternoon|evening|night))?"
     private val HI_POD = "(?:\\s+(?:$S_POD|morning|afternoon|evening|night))?"
     private val KO = "(?:(?:ko|को|ke|के)\\s+)?"
     private val S_KAREEB = alt(listOf("kareeb", "kareib", "qareeb", "करीब"))
 
-    private val HI_CLOCK_CORE = "(?:(?:$S_FRAC)\\s+)?(?:$S_NUM)\\s*(?:$S_BAJE)|(?:dedh|derh|डेढ़|डेढ|dhai|dhaai|dhayi|ढाई)\\s+(?:$S_BAJE)"
+    private val S_DEDH_DHAI = surface(FRACTIONS.filterKeys { it == "dedh" || it == "dhai" })
+    private val HI_CLOCK_CORE = "(?:(?:$S_FRAC)\\s+)?(?:$S_NUM)\\s*(?:$S_BAJE)|(?:$S_DEDH_DHAI)\\s+(?:$S_BAJE)"
 
     /**
      * Words that only complete a time found by [FINDERS] ("half past eleven" + "at night", "last night" + "after midnight"); on their
@@ -284,7 +366,7 @@ internal object TemporalLexicon {
             // "kal shaam chhe baje", "रात ११ बजे के आसपास", "saadhe das baje", "dedh baje", "lagbhag das baje"
             Regex(LB + "(?:(?:$S_DAY)\\s+$KO)?(?:(?:$S_POD)\\s+$KO)?(?:(?:$S_APPROX)\\s+)?(?:$HI_CLOCK_CORE)(?:(?:\\s+(?:ke|के))?\\s+(?:$S_AASPAAS|$S_KAREEB))?" + RB),
             // "do ghante pehle", "aadha ghanta pehle", "२० मिनट पहले", "lagbhag teen ghante pehle", "do din pehle"
-            Regex(LB + "(?:(?:$S_APPROX)\\s+)?(?:$S_NUM|$S_FRAC)\\s+(?:$S_UNITS)\\s+(?:$S_PEHLE)" + RB),
+            Regex(LB + "(?:(?:$S_APPROX)\\s+)?(?:(?:$S_NUM|$S_FRAC)(?:\\s*(?:-|–|se|से|ya|या)\\s*|\\s+))?(?:$S_NUM|$S_FRAC)\\s+(?:$S_UNITS)\\s+(?:$S_PEHLE)" + RB),
             Regex(LB + "(?:kuch|thodi|कुछ|थोड़ी)\\s+(?:der|देर)\\s+(?:$S_PEHLE)" + RB),
             Regex(LB + "(?:abhi|अभी)\\s+(?:abhi|अभी)" + RB),
             // "kal shaam", "aaj subah", "parso", "नरसों रात"
@@ -297,7 +379,14 @@ internal object TemporalLexicon {
             // English additions
             Regex(LB + "(?:the\\s+)?day\\s+before\\s+yesterday$EN_POD" + RB),
             Regex(LB + "(?:yesterday|last night|tonight|today|this morning|this afternoon|this evening)$EN_POD" + RB),
-            Regex(LB + "(?:\\d{1,3}|a|an|one|two|three|four|five|six|seven|eight|nine|ten)\\s+(?:days?|weeks?)\\s+ago" + RB, RegexOption.IGNORE_CASE),
+            Regex(LB + "(?:\\d{1,3}|a|an|one|two|three|four|five|six|seven|eight|nine|ten)\\s+(?:days?|weeks?|months?)\\s+ago" + RB, RegexOption.IGNORE_CASE),
+            Regex(LB + "(?:\\d{1,2}|$EN_HOUR)\\s*(?:-|–|or|to)\\s*(?:\\d{1,2}|$EN_HOUR)\\s+(?:hours?|hrs?|minutes?|mins?|days?)\\s+ago" + RB, RegexOption.IGNORE_CASE),
+            Regex(LB + "a couple of (?:hours?|hrs?|minutes?|mins?|days?) ago" + RB, RegexOption.IGNORE_CASE),
+            // spoken English clock forms: "ten thirty last night", "at ten past eight", "twenty to nine this morning"
+            Regex(LB + "$PREP\\s+(?:\\d{1,2}|$EN_HOUR)\\s+(?:$EN_MIN_ALT)(?:\\s+(?:a\\.?m\\.?|p\\.?m\\.?))?" + RB, RegexOption.IGNORE_CASE),
+            Regex(LB + "(?:\\d{1,2}|$EN_HOUR)\\s+(?:$EN_MIN_ALT)(?=\\s+$ANCHOR_AFTER)" + RB, RegexOption.IGNORE_CASE),
+            Regex(LB + "(?:$PREP\\s+)?(?:$SMALL_ALT)\\s+past\\s+(?:\\d{1,2}|$EN_HOUR)" + RB, RegexOption.IGNORE_CASE),
+            Regex(LB + "(?:$PREP\\s+(?:$SMALL_ALT)\\s+to\\s+(?:\\d{1,2}|$EN_HOUR)|(?:$SMALL_ALT)\\s+to\\s+(?:\\d{1,2}|$EN_HOUR)(?=\\s+$ANCHOR_AFTER))" + RB, RegexOption.IGNORE_CASE),
             Regex(LB + "quarter\\s+(?:past|to)\\s+(?:\\d{1,2}|$EN_HOUR)" + RB, RegexOption.IGNORE_CASE),
             Regex(LB + "(?:at|around|about|by|since)\\s+(?:\\d{1,2}|$EN_HOUR)\\s+(?:$EN_MIN)(?:\\s+(?:a\\.?m\\.?|p\\.?m\\.?))?" + RB, RegexOption.IGNORE_CASE),
             Regex(LB + "(?:$EN_HOUR)\\s+(?:$EN_MIN)\\s+(?:a\\.?m\\.?|p\\.?m\\.?)" + RB, RegexOption.IGNORE_CASE),
