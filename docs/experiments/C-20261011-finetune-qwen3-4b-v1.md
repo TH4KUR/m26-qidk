@@ -41,3 +41,31 @@ Per field, correct of gold values (type, severity, location, date, persons, equi
 - **These are bf16 results on a GPU, not the kit.** A's kit run of the same model (quantised w4a16 bundle on the NPU, recall patch) scored 65% recall, 97% precision, 1% hallucination on the same 27 cases (A/015). The 23-point recall gap between 88% here and 65% there is not explained by the gold file (E/012: only location changed) and is worth a check by the app session: quantisation, sampling settings, the "report so far" context, or the engine. The same comparison for the 1.7B is 70% here against 62% for the Q4_0 GGUF.
 - `report so far` is rebuilt from the model's own earlier answers by applying patches, an approximation of the app's validator-and-merge state (same for both arms).
 - No quantisation or export was attempted (A/017 rule: only a checkpoint that beats its own base goes to export).
+
+## Addendum: uncertainty, paired comparison, and B's synthetic test split
+
+### Dev 27, 4B base against 4B tuned, with intervals (Wilson 95%)
+
+| measure | 4B base | 4B tuned |
+|---|---|---|
+| recall | 119/135 = 88.1% [81.6, 92.6] | 121/135 = 89.6% [83.3, 93.7] |
+| precision | 119/125 = 95.2% [89.9, 97.8] | 121/133 = 91.0% [84.9, 94.8] |
+| hallucination | 3/81 = 3.7% [1.3, 10.3] | 10/81 = 12.3% [6.8, 21.3] |
+| mandatory recall | 81/86 = 94.2% [87.1, 97.5] | 81/86 = 94.2% [87.1, 97.5] |
+| median completion tokens | 94 | 118 |
+
+Paired over the 216 (item, field) cells: the tuned model is right where the base is wrong in **11** cells and wrong where the base is right in **16** (two-sided sign test p = 0.44). On dev 27 the two models cannot be separated on accuracy; the direction on precision and hallucination is against the tune, and it is the same direction as the 1.7B run.
+
+### B's synthetic test split (100 rows, `data/synthetic_gold/v1/test.jsonl`), in-distribution, not a headline
+Field-level comparison with the row's target patch (`tools/finetune/score_test.py`; 71 of the 100 rows have worker words with 3-word-shingle Jaccard < 0.6 against every training row). Same `extract_v8.txt` prompt for every arm.
+
+| model | all 100 rows: recall | precision | halluc. | rows all fields right | Jaccard < 0.6 (71 rows): recall / precision |
+|---|---|---|---|---|---|
+| 1.7B base | 181/486 (37%) | 40% | 225/314 | 1 | 37% / 54% |
+| 1.7B tuned | 476/486 (98%) | 97% | 9/314 | 85 | 98% / 97% |
+| 4B base | 382/486 (79%) | 62% | 210/314 | 9 | 76% / 74% |
+| **4B tuned** | **478/486 (98%)** | **97%** | **5/314** | **88** | **98% / 97%** |
+
+Reading: the tune learns B's labelling convention almost perfectly (sparse patches that omit unchanged fields, the dataset's phrasing of locations and actions), which the prompted base does not follow: most of the base's "hallucinations" here are fields it re-emits although they are already saved in the report, which the app's `ReportMerge` ignores. So this table measures how well a model reproduces the synthetic convention. It says little about real reports: on E's gold (dev 27), where mandatory fields are sometimes missing, the same tuned model invents severities and equipment. Both numbers are true; the dev 27 is the one that matters for the app.
+
+Artefacts (not committed): raw outputs for both benchmarks and the replayed predictions are in the working copy's scratch folder; the merged 4B checkpoint (7.6 GB) is on the rented GPU box at `~/ft/run4b/merged` and not exported.
