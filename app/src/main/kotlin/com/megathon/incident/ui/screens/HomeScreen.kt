@@ -114,7 +114,8 @@ fun HomeScreen(ui: AppUi, vm: AppViewModel) {
                     HomeCopy(ui)
                     Spacer(Modifier.height(Space.s4))
                     StudioPanel(ui, vm)
-                    Spacer(Modifier.height(Space.s2))
+                    // The example row is a separate, lesser action: a clear gap keeps it from reading as part of the mic's label.
+                    Spacer(Modifier.height(Space.s8))
                     if (ui.listening || ui.processing) LiveDetails(ui) else ExampleNote()
                     Spacer(Modifier.height(Space.s4))
                 }
@@ -173,6 +174,8 @@ private fun StudioPanel(ui: AppUi, vm: AppViewModel, compact: Boolean = false) {
             ) {
                 MicButton(ui.listening, ui.processing, ui.levels.lastOrNull() ?: 0f, vm::onMicTapped, diameter = if (compact) 68.dp else 104.dp)
             }
+            // Air between the microphone and the words under it, so the instruction does not sit on the aura's outer ring.
+            Spacer(Modifier.height(if (compact) Space.s2 else Space.s6))
             if (status != null) {
                 Text(status, style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"), color = if (ui.listening) c.danger else c.accent)
                 Spacer(Modifier.height(Space.s1))
