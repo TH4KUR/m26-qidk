@@ -156,7 +156,11 @@ class PayloadValidator(
         val miss = missFor(wire, evidence, transcript, enumValue = true)
         val piece = pieceFor(clauses, evidence) ?: miss?.let { pieceFor(clauses, it.heard) }
         // "no power since 9 PM" does not negate "electrical": only a negation right at the quoted words does.
-        val negated = if (field == Field.INCIDENT_TYPE) evidence?.let { negatedNear(piece?.text ?: transcript, it) } == true else piece?.tam?.modality == Modality.NEGATED
+        val negated = when (field) {
+            Field.INCIDENT_TYPE -> evidence?.let { negatedNear(piece?.text ?: transcript, it) } == true
+            Field.SEVERITY -> severityNegated(wire, evidence, piece, transcript)
+            else -> piece?.tam?.modality == Modality.NEGATED
+        }
         if (negated) {
             rejections += Rejection(field, "negated in the transcript: \"${evidence ?: miss?.heard}\"", text, ReasonCode.NEGATED)
             return
@@ -173,6 +177,29 @@ class PayloadValidator(
             )
             else -> proposals += FieldProposal(field, FieldValue(wire, ValueStatus.REPORTED, evidence))
         }
+    }
+
+    /**
+     * A severity is negated only by a negation in front of its own cue ("not severe", "not none"). The cue words of "none"
+     * and "not serious" contain negation words themselves, and "nobody was hurt" in the same clause says nothing about a
+     * severity stated next to it, so the clause as a whole does not decide.
+     */
+    private fun severityNegated(wire: String, evidence: String?, piece: TamClause?, transcript: String): Boolean {
+        val sev = Severity.fromWire(wire)
+        val quote = evidence?.takeIf { it.isNotBlank() }
+        val cue = if (sev != null && quote != null) EnumNormalizer.severityCuesIn(sev, quote).firstOrNull() else null
+        if (cue != null) return negatedBefore(piece?.text ?: transcript, cue)
+        return piece?.tam?.modality == Modality.NEGATED
+    }
+
+    /** True when a negation word is among the three words before the first place [phrase] occurs in [text]. */
+    private fun negatedBefore(text: String, phrase: String): Boolean {
+        val lower = text.lowercase().replace('’', '\'')
+        val at = lower.indexOf(phrase.lowercase().trim())
+        if (at < 0) return false
+        val before = lower.substring(0, at).trimEnd().split(Regex("\\s+")).takeLast(3).joinToString(" ")
+        if (before.isBlank()) return false
+        return tam.lists.negated.any { Regex("(?<![\\p{L}\\p{N}])" + Regex.escape(it) + "(?![\\p{L}\\p{N}])").containsMatchIn(before) }
     }
 
     /** True when a negation word sits inside [phrase] or within three words before it, in the first place [phrase] occurs in [text]. */
