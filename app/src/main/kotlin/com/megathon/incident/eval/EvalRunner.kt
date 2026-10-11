@@ -1,5 +1,7 @@
 package com.megathon.incident.eval
 
+import com.megathon.incident.eval.EvalSplit
+import com.megathon.incident.eval.SplitFilter
 import com.megathon.incident.llm.LlmEngine
 import com.megathon.incident.llm.LlmRequest
 import com.megathon.incident.llm.LlmResult
@@ -46,19 +48,29 @@ class RecordingLlmEngine(private val inner: LlmEngine) : LlmEngine {
 }
 
 /**
- * Debug-only: runs the **dev** split of E's gold set through the app's real pipeline (prompt, model, parser, validator,
- * merge, planner) and writes what E's scorer reads: `raw.jsonl` and `predictions.jsonl`. Held-out cases are never run.
- * Output: `<filesDir>/eval/<runName>/`.
+ * Debug-only: runs one split of E's gold set through the app's real pipeline (prompt, model, parser, validator,
+ * merge, planner) and writes what E's scorer reads: `raw.jsonl` and `predictions.jsonl`.
+ * The split is [EvalSplit.DEV] unless the caller passes [EvalSplit.HOLDOUT], and the held-out items are only ever reached
+ * through `AppViewModel.debugHoldout`, which applies `HoldoutGuard` first. Output: `<filesDir>/eval/<runName>/`.
+ * [onSelected] receives the ids that are about to run, before the first model call (the held-out ledger is written there).
  */
 class EvalRunner(private val filesDir: File, private val engine: LlmEngine, private val warmUp: suspend () -> Long) {
     private val json = Json { prettyPrint = false; encodeDefaults = true }
 
-    suspend fun run(gold: File, prompts: PromptBuilder, runName: String, only: Set<String>?): File {
+    suspend fun run(
+        gold: File,
+        prompts: PromptBuilder,
+        runName: String,
+        only: Set<String>?,
+        split: EvalSplit = EvalSplit.DEV,
+        onSelected: (List<String>) -> Unit = {},
+    ): File {
         val outDir = File(filesDir, "eval/$runName").apply { mkdirs() }
-        val loadMs = warmUp()
         val items = gold.readLines().filter { it.isNotBlank() }.map { json.parseToJsonElement(it).jsonObject }
-            .filter { it["split"]?.jsonPrimitive?.contentOrNull == "dev" } // held-out cases are never touched
+            .filter { SplitFilter.selects(it["split"]?.jsonPrimitive?.contentOrNull, split) }
             .filter { only == null || it["id"]!!.jsonPrimitive.content in only }
+        onSelected(items.map { it["id"]!!.jsonPrimitive.content })
+        val loadMs = warmUp()
 
         val raw = StringBuilder()
         val preds = StringBuilder()

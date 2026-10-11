@@ -52,7 +52,7 @@ class ReportSessionTest {
         s.say(slide)
         val state = assertIs<SessionState.Asking>(s.ui.value.state)
         assertEquals(listOf(Field.DATE_TIME, Field.SEVERITY), state.question.asks.map { it.field }, "the time has no date, so the day is asked")
-        assertEquals("Was that today? How severe is it?", s.ui.value.say?.text)
+        assertEquals("Was that today? How bad is it?", s.ui.value.say?.text)
 
         assertEquals("Water leak or flood", s.field(Field.INCIDENT_TYPE).value)
         assertEquals(UiStatus.HEARD, s.field(Field.INCIDENT_TYPE).status)
@@ -144,7 +144,7 @@ class ReportSessionTest {
         s.say("   ")
         assertEquals(0, llm.calls)
         val failed = assertIs<SessionState.Failed>(s.ui.value.state)
-        assertTrue(failed.message.isNotBlank())
+        assertEquals("I didn't catch that. Could you say it again, a little closer to the microphone?", failed.message)
         assertTrue(failed.retryable)
     }
 
@@ -153,7 +153,7 @@ class ReportSessionTest {
         val s = session(llm)
         s.say(slide)
         assertEquals(2, llm.calls)
-        assertIs<SessionState.Failed>(s.ui.value.state)
+        assertEquals("I didn't quite get that. Could you say it again?", assertIs<SessionState.Failed>(s.ui.value.state).message)
         assertTrue(s.ui.value.fields.filter { it.mandatory }.all { it.status == UiStatus.NEEDED })
         assertEquals(listOf(slide), s.ui.value.transcripts, "what was heard is kept so the reporter can retry")
     }
@@ -235,6 +235,52 @@ class ReportSessionTest {
     private val nothing = update("{}")
     private val strange = "there is something strange in the basement"
     private val fireNoPlace = update("""{"incident_type":"fire_smoke","evidence":{"incident_type":"fire"}}""")
+
+    // ---- what the reporter stated raises the advice (PriorityAdvisor.onReport, C/008) -----------------------------
+
+    private val printerSaid = "The printer on the second floor stopped working and the severity is critical"
+    private val printerCritical = update(
+        """{"incident_type":"equipment_failure","severity":"critical","evidence":{"incident_type":"printer on the second floor stopped working","severity":"severity is critical"}}""",
+    )
+
+    @Test fun aSeverityTheReporterStatedRaisesThePriorityFloor() {
+        val s = session(Scripted(printerCritical))
+        s.say(printerSaid)
+        assertEquals("Critical", s.field(Field.SEVERITY).value)
+        assertEquals(UiStatus.HEARD, s.field(Field.SEVERITY).status)
+        assertEquals(Priority.URGENT, s.ui.value.priority?.level, "'critical' said by the reporter is URGENT")
+        assertTrue(s.ui.value.priority!!.reasons.any { it.contains("critical") }, "the reason names what was said: ${s.ui.value.priority!!.reasons}")
+    }
+
+    @Test fun aSeverityTheReporterTypesInReviewRaisesThePriorityFloor() {
+        val s = reviewed()
+        assertTrue(s.ui.value.priority!!.level < Priority.HIGH, "a minor, harmless leak starts below HIGH: ${s.ui.value.priority!!.level}")
+        s.edit(Field.SEVERITY, "severe")
+        assertEquals(Priority.HIGH, s.ui.value.priority?.level, "'severe' set by the reporter is HIGH")
+    }
+
+    @Test fun aStatedFloorIsNotLoweredByALaterUtteranceThatSaysNothingNew() {
+        val s = session(Scripted(printerCritical, nothing))
+        s.say(printerSaid)
+        s.say("Okay")
+        assertEquals(Priority.URGENT, s.ui.value.priority?.level, "raise-only: a later chunk must not undo the floor")
+    }
+
+    @Test fun aStatedCriticalSpeaksTheEmergencyLineBecauseTheFloorIsWhatMadeItUrgent() {
+        val s = session(Scripted(printerCritical))
+        s.say(printerSaid)
+        assertTrue(s.ui.value.say?.text.orEmpty().contains("call 112 now"), "the line must not be swallowed by the call that raised the floor: ${s.ui.value.say?.text}")
+    }
+
+    @Test fun aCriticalTheReporterTypesSpeaksTheEmergencyLineOnce() {
+        val s = reviewed()
+        s.edit(Field.SEVERITY, "critical")
+        assertEquals("If anyone is in danger, call 112 now.", s.ui.value.say?.text)
+        val sayId = s.ui.value.say!!.id
+        s.edit(Field.SEVERITY, "critical")
+        s.edit(Field.LOCATION, "Block C")
+        assertEquals(sayId, s.ui.value.say?.id, "the line is spoken once, however often the report is edited")
+    }
 
     @Test fun theModelsHintReachesTheAdvisorAndRaisesTheLevelButNotToUrgent() {
         val plain = session(Scripted(nothing)).also { it.say(strange) }

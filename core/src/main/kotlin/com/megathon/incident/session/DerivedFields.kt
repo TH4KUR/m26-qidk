@@ -91,15 +91,25 @@ object DerivedFields {
         return if (severe) "Escalate to the safety officer today. $base" else base
     }
 
-    /** What the device says aloud after a report is saved. */
+    /**
+     * What the device says aloud after a report is saved: short sentences, in the order the questions were asked.
+     * What is not known is left out; the day and time are read in words (see [DateTimeDisplay.spoken]).
+     */
     fun spoken(report: IncidentReport, today: LocalDate): String {
         fun v(f: Field) = Labels.display(f, report.value(f).text, today)
-        val parts = listOfNotNull(
-            v(Field.INCIDENT_TYPE),
-            v(Field.LOCATION)?.let { "at $it" },
-            v(Field.DATE_TIME)?.replaceFirstChar { it.lowercase() }?.replace(" · ", ", "),
-            v(Field.SEVERITY)?.let { "severity ${it.lowercase()}" },
-        )
-        return "Report saved on this device. " + parts.joinToString(", ") + "."
+        val type = v(Field.INCIDENT_TYPE)
+        val location = v(Field.LOCATION)
+        val whatAndWhere = when {
+            type != null && location != null -> "$type at $location."
+            type != null -> "$type."
+            location != null -> "At $location."
+            else -> null
+        }
+        val whenText = report.value(Field.DATE_TIME).text?.takeIf { it.isNotBlank() }
+            ?.let { "That was ${DateTimeDisplay.spoken(it, today)}." }
+        val severity = v(Field.SEVERITY)?.let {
+            if (Severity.fromWire(report.value(Field.SEVERITY).text) == Severity.NONE) "No harm done." else "Severity is ${it.lowercase()}."
+        }
+        return listOfNotNull("Your report is saved on this device.", whatAndWhere, whenText, severity).joinToString(" ")
     }
 }

@@ -40,8 +40,8 @@ class HandsFreeLoop(
     private val language: () -> String,
     private val segmenter: UtteranceSegmenter = UtteranceSegmenter(),
     private val graceMs: Long = 400,
-    private val blankPrompt: String = "Sorry, I didn't catch that.",
-    private val failurePrompt: String = "Sorry, I couldn't process that. Please say it again.",
+    private val blankPrompt: String = "I didn't catch that. Could you say it again?",
+    private val failurePrompt: String = "Something went wrong on my side. Could you say it again?",
 ) {
     private val failed = ArrayDeque<String>()
 

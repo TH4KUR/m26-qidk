@@ -63,7 +63,7 @@ class HandsFreeLoopTest {
     fun aBlankTranscriptSpeaksThePromptAndNeverCallsTheHandler() = runBlocking {
         loop(engine = FakeSpeechEngine(defaultText = "   ")).run(mic(silence(500), tone(1000), silence(1500)))
 
-        assertEquals(listOf("mute", "speak:Sorry, I didn't catch that.", "unmute"), log.toList())
+        assertEquals(listOf("mute", "speak:I didn't catch that. Could you say it again?", "unmute"), log.toList())
     }
 
     @Test
@@ -102,7 +102,7 @@ class HandsFreeLoopTest {
 
         assertEquals(
             listOf(
-                "mute", "speak:Sorry, I couldn't process that. Please say it again.", "unmute",
+                "mute", "speak:Something went wrong on my side. Could you say it again?", "unmute",
                 "handle:second try", "mute", "speak:Got it.", "unmute",
             ),
             log.toList(),
