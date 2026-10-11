@@ -35,6 +35,7 @@ def sheet_clip_id(name: str) -> str:
 
 def build(folder: Path) -> list[dict]:
     plan = {r["clip_id"]: r for r in (json.loads(l) for l in (EVAL / "manifest.jsonl").read_text(encoding="utf-8").splitlines() if l.strip())}
+    split = {g["id"]: g["split"] for g in (json.loads(l) for l in (EVAL / "gold_v1.jsonl").read_text(encoding="utf-8").splitlines() if l.strip())}
     rows = []
     for wav in sorted(Path(folder).glob("*.wav")):
         clip_id = sheet_clip_id(wav.name)
@@ -47,6 +48,7 @@ def build(folder: Path) -> list[dict]:
         if clip_id.endswith("_08"):
             notes.append("single take: card and follow-up answers in one clip, not the incremental flow")
         rows.append({"clip_id": clip_id, "wav": wav.name, "reference": p["reference"], "gold_id": p["gold_id"],
+                     "split": split[p["gold_id"]],
                      "device": "phone", "mic": "phone built-in", "speaker": p["speaker"], "mode": p["mode"],
                      "language": p["language"], "condition": p["condition"], "tone": TONE.get(p["condition"], "calm"),
                      "noise": NOISE.get(p["condition"], "quiet"), "captured_at": "", "duration_s": duration,

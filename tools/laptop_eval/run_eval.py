@@ -92,6 +92,14 @@ def llama_server(url: str, max_tokens: int, schema: dict | None, enable_thinking
     return complete
 
 
+def select_items(items: list[dict], split: str, confirm_holdout: bool) -> list[dict]:
+    """The held-out 13 are spent (A/027): holdout or all only with an explicit confirm flag."""
+    if split in ("holdout", "all") and not confirm_holdout:
+        raise SystemExit("refusing --split {}: the held-out set is spent (A/027); pass --confirm-holdout to "
+                         "run it anyway and disclose the extra look".format(split))
+    return items if split == "all" else [i for i in items if i["split"] == split]
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True, help="label for the run, e.g. qwen3-1.7b-q4_0")
@@ -99,6 +107,7 @@ def main() -> None:
     ap.add_argument("--gold", default=str(REPO / "app/src/main/assets/eval/gold_v1.jsonl"))
     ap.add_argument("--prompt", default=str(HERE / "prompts/chat_json_system.txt"))
     ap.add_argument("--split", choices=["dev", "holdout", "all"], default="dev")
+    ap.add_argument("--confirm-holdout", action="store_true", help="required for --split holdout|all (held-out is spent)")
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--grammar", action="store_true", help="constrain decoding with prompts/update_report.schema.json")
     ap.add_argument("--no-think", action="store_true", help="Qwen3: append /no_think and disable thinking")
@@ -108,8 +117,7 @@ def main() -> None:
     args = ap.parse_args()
 
     items = [json.loads(l) for l in Path(args.gold).read_text(encoding="utf-8").splitlines() if l.strip()]
-    if args.split != "all":
-        items = [i for i in items if i["split"] == args.split]
+    items = select_items(items, args.split, args.confirm_holdout)
     if args.limit:
         items = items[:args.limit]
     schema = json.loads((HERE / "prompts/update_report.schema.json").read_text()) if args.grammar else None

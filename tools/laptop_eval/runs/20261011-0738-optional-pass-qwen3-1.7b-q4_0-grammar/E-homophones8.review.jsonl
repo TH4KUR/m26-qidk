@@ -1,0 +1,4 @@
+{"id": "h01", "field": "equipment_asset", "verdict": "false_alarm", "pred": "ceiling", "gold": "MISSING", "text": "It happened last week, the ceiling in Conference Room 2 started dripping water onto the floor."}
+{"id": "h02", "field": "immediate_actions", "verdict": "false_alarm", "pred": "water is all over the floor", "gold": "MISSING", "text": "It's a minor leak from the RO plant in the Main Canteen, water is all over the floor."}
+{"id": "h03", "field": "immediate_actions", "verdict": "false_alarm", "pred": "went off", "gold": "MISSING", "text": "The fire alarm went off in the Research Block at around 9 PM. Nobody was hurt."}
+{"id": "h06", "field": "immediate_actions", "verdict": "false_alarm", "pred": "fell over", "gold": "MISSING", "text": "Two chairs were broken in Lab C4 this morning when a shelf fell over."}

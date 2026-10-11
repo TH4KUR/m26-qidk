@@ -6,7 +6,7 @@ Owner: E · Branch `e/data-eval` · 2026-10-11. Code: `tools/laptop_eval/` (Pyth
 
 | File | What |
 |---|---|
-| `app/src/main/assets/eval/gold_v1.jsonl` | 40 gold items. **Generated** from `tools/laptop_eval/build_gold.py`: edit there, then run `python3 build_gold.py`. |
+| `app/src/main/assets/eval/gold_v1.jsonl` | 40 gold items. **Generated** from `tools/laptop_eval/build_gold.py`: edit there, then run `python3 build_gold.py --confirm-overwrite` (the held-out split is spent, A/027: changing it needs a disclosed reason). |
 | `app/src/main/assets/eval/manifest.jsonl` | One line per recorded clip (section 5). |
 | `core/src/test/resources/fixtures/eval/scorer_cases.jsonl` | Hand-computed scoring cases shared by both scorers. |
 | `tools/laptop_eval/runs/<run_id>/` | `raw.jsonl` (every model output), `predictions.jsonl`, `summary.json`, `summary.md`. |
@@ -34,7 +34,7 @@ Owner: E · Branch `e/data-eval` · 2026-10-11. Code: `tools/laptop_eval/` (Pyth
 1. **Label what was said, not what is true.** If the speaker says "Conference Room to", the gold is still the canonical "Conference Room 2" (that is what the suggestion layer is scored on), with spelling variants in `alts`.
 2. **Incident type** is always labelled when it can be inferred. If two types are defensible, the first is `value`, the others go in `alts` (for example, a stabbing: `security`, alt `injury`).
 3. **Severity** only when the speaker states it ("minor", "it's serious" → `severe`). Words like "badly" or "a lot of blood" are not a stated severity: `MISSING`. Keyword-rule severity is a suggestion in the app and never counts as filled.
-4. **Location** is the place phrase as specific as said ("third floor of Vindhya"), with shorter accepted forms in `alts`.
+4. **Location** is the place phrase as specific as said ("third floor of South Block"), with shorter accepted forms in `alts`.
 5. **Date and time** as parts: `date_offset_days` (0 today, -1 yesterday, **null when no day word was said**: C keeps the date missing rather than guessing), `time` (`HH:MM`, 24 h), `part_of_day` (morning, afternoon, evening, night) when no clock time was said, `minutes_ago` for "N minutes ago", and `text` as spoken.
 6. **Persons involved** = **named** people the incident happened to or who caused it. The speaker ("I") and unnamed people ("a student") are not labelled. **Witnesses** = named people who saw it. "Rahul was there but didn't see it" → not a witness (negation).
 7. **"Nobody was hurt" / "no injuries"** → `persons_involved: EXPLICIT_NONE`, unless a named person was involved (g14: Suresh put the fire out, unhurt → `REPORTED ["Suresh"]`, tagged `named_but_unhurt`). "Nobody saw it" → `witnesses: EXPLICIT_NONE`.

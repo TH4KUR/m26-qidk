@@ -40,3 +40,26 @@ def test_manifest_and_transcripts_join_on_clip_id(tmp_path):
     assert out["by_device"]["kit"]["clips"] == 1          # clip without a typed reference is skipped
     assert out["by_condition"]["noise"]["errors"] == 1
     assert out["skipped_no_reference"] == ["S1_03"]
+
+
+# ---- Indic text (A/033 item 1): vowel signs are letters' marks, not punctuation --------------
+
+from wer import score_transcripts  # noqa: E402
+
+
+def test_normalize_keeps_telugu_and_hindi_words_whole():
+    assert normalize("అవుతోంది, సరే!") == ["అవుతోంది", "సరే"]
+    assert normalize("आग लगी है।") == ["आग", "लगी", "है"]
+
+
+def test_one_changed_telugu_word_is_one_word_error():
+    assert wer_counts("అవుతోంది", "అవుతుంది") == (1, 1)
+
+
+def test_indic_languages_report_cer_next_to_wer(tmp_path):
+    m = tmp_path / "m.jsonl"
+    m.write_text('{"clip_id":"t1","reference":"అవుతోంది","language":"te","device":"phone","condition":"clean"}\n'
+                 '{"clip_id":"e1","reference":"water leak","language":"en","device":"phone","condition":"clean"}\n', encoding="utf-8")
+    out = score_transcripts(m, {"t1": "అవుతుంది", "e1": "water leak"})
+    assert out["by_language"]["te"]["cer"] is not None and out["by_language"]["te"]["cer"] > 0
+    assert out["by_language"]["en"].get("cer") is None

@@ -1,0 +1,27 @@
+{
+ "equipment_asset": {
+  "correct_empty": 6,
+  "exact": 15,
+  "false_alarm": 2,
+  "wrong": 2,
+  "contains": 2
+ },
+ "immediate_actions": {
+  "exact": 16,
+  "wrong": 2,
+  "false_alarm": 6,
+  "miss": 3
+ },
+ "persons_involved": {
+  "correct_empty": 19,
+  "exact": 5,
+  "miss": 2,
+  "false_alarm": 1
+ },
+ "witnesses": {
+  "correct_empty": 24,
+  "exact": 1,
+  "false_alarm": 1,
+  "miss": 1
+ }
+}

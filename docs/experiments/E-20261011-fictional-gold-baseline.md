@@ -18,7 +18,7 @@
 Location recall: dev grammar 16/19; homophones clean 7/8, mis-heard 2/8.
 
 ## Findings
-- Same picture as before the rename: **grammar mode is required** for this model (valid calls 6/20 → 20/20, recall 28/98 → 76/98) and it **raises hallucination** (3/62 → 17/62), mostly persons and witnesses, which grounding is meant to catch.
+- Same picture as before the rename: **grammar mode is required** for this model (valid calls 6/20 → 20/20, recall 28/98 → 76/98) and it **raises hallucination** (3/62 → 17/62): severity 6, persons 4, witnesses 3, equipment 2, location 1, date_time 1 (from the saved `summary.json`; corrected after A/033, the earlier text said "mostly persons and witnesses"). Grounding is meant to catch the persons and witnesses; severity is only filled when stated.
 - On mis-heard text the model still copies sound-alikes; place recall falls from 7/8 to 2/8. The gazetteer has to repair places.
 - **Not predictive of the app's primary model:** the lead's pick is Qwen3-4B-Instruct-2507 as a QAIRT bundle, which has **no grammar mode**; its output is checked by the validator after the fact. These are shortlist numbers for the 1.7B fallback only.
 

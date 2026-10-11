@@ -1,8 +1,9 @@
 """Word and character error rates for recorded clips.
 
-normalize() and the edit distance are the same as B's tools/accent_contest/contest.py (NFKC, casefold,
-punctuation to spaces), so our WER and B's accent table agree. Aggregates are micro-averaged:
-total errors / total reference words, never a mean of per-clip rates.
+normalize() follows B's tools/accent_contest/contest.py (NFKC, casefold, punctuation to spaces), so English WER
+agrees with B's accent table. Punctuation is removed by Unicode category (letters, combining marks and digits are
+kept): Python's regex word class drops Indic vowel signs and would split Hindi/Telugu words into consonants (A/033). Hindi and
+Telugu also get a character error rate. Aggregates are micro-averaged: total errors / total reference units.
 
     python3 wer.py --manifest app/src/main/assets/eval/manifest.jsonl --hyp transcripts.jsonl
     (transcripts.jsonl: one {"clip_id": ..., "text": ...} per line)
@@ -12,15 +13,17 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import unicodedata
 from pathlib import Path
 
 
+INDIC = {"hi", "te"}
+
+
 def normalize(text: str) -> list[str]:
     text = unicodedata.normalize("NFKC", text).casefold()
-    text = re.sub(r"[^\w\s]", " ", text, flags=re.UNICODE)
-    return text.split()
+    kept = (ch if ch.isspace() or unicodedata.category(ch)[0] in "LMN" else " " for ch in text)
+    return "".join(kept).split()
 
 
 def edit_distance(reference: list, hypothesis: list) -> int:
@@ -38,11 +41,16 @@ def wer_counts(reference: str, hypothesis: str) -> tuple[int, int]:
     return edit_distance(ref, normalize(hypothesis)), len(ref)
 
 
-def cer(reference: str, hypothesis: str) -> float:
-    """Character error rate over NFC code points with whitespace removed (used for Hindi/Telugu)."""
+def cer_counts(reference: str, hypothesis: str) -> tuple[int, int]:
+    """Character edits and reference characters over NFC code points, whitespace removed (Hindi/Telugu)."""
     ref = list(unicodedata.normalize("NFC", "".join(reference.split())))
     hyp = list(unicodedata.normalize("NFC", "".join(hypothesis.split())))
-    return edit_distance(ref, hyp) / len(ref) if ref else 0.0
+    return edit_distance(ref, hyp), len(ref)
+
+
+def cer(reference: str, hypothesis: str) -> float:
+    errors, chars = cer_counts(reference, hypothesis)
+    return errors / chars if chars else 0.0
 
 
 def aggregate(pairs) -> dict:
@@ -62,7 +70,14 @@ def score_transcripts(manifest_path, hypotheses: dict) -> dict:
     def group(key):
         out = {}
         for value in sorted({r.get(key, "") for r in usable}):
-            out[value] = aggregate([(r["reference"], hypotheses[r["clip_id"]]) for r in usable if r.get(key, "") == value])
+            pairs = [(r["reference"], hypotheses[r["clip_id"]]) for r in usable if r.get(key, "") == value]
+            out[value] = aggregate(pairs)
+            if key == "language" and value in INDIC:
+                errors = chars = 0
+                for ref, hyp in pairs:
+                    e, n = cer_counts(ref, hyp)
+                    errors, chars = errors + e, chars + n
+                out[value]["cer"] = errors / chars if chars else None
         return out
 
     return {"all": aggregate([(r["reference"], hypotheses[r["clip_id"]]) for r in usable]),
