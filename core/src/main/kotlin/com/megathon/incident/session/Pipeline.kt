@@ -25,6 +25,8 @@ object Pipeline {
         zone: ZoneId = ZoneId.of("Asia/Kolkata"),
         prompts: PromptBuilder = PromptBuilder.default(),
         suggestions: SuggestionEngine? = null,
+        /** Cross-questioning about tools or items, people and witnesses after the mandatory answers; off keeps the mandatory-only flow. */
+        askOptional: Boolean = true,
     ): ReportSession {
         val tam = TamDetector(TamCueLists.loadDefault())
         val extractor = UrgencyFeatureExtractor(HazardLexicon.loadDefault(), tam)
@@ -35,7 +37,7 @@ object Pipeline {
             validator = PayloadValidator(tam, TemporalResolver(zone)),
             severityHints = SeveritySuggester(extractor),
             newAdvisor = { PriorityAdvisor(extractor, strategy) },
-            planner = QuestionPlanner(),
+            planner = QuestionPlanner(askOptional),
             prompts = prompts,
             store = store,
             clock = clock,

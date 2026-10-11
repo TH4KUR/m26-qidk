@@ -160,11 +160,19 @@ class ReportSession(
     /** The reporter tapped a ready-made answer. The model is not involved. */
     fun answer(reply: QuickReply) {
         remember()
-        val value = when (reply.field) {
-            Field.DATE_TIME -> FieldValue(dateAnswer(reply), ValueStatus.USER_CONFIRMED, "tapped ${reply.label}")
-            else -> FieldValue(reply.value, ValueStatus.USER_CONFIRMED, "tapped ${reply.label}")
+        when (reply.value) {
+            // "Skip" records nothing: the field stays as it was and, being in the asked history, is not asked again.
+            QuickReply.SKIP -> Unit
+            // "None" / "No one" is an answer: the field is explicitly empty, so it is never asked again either.
+            QuickReply.NONE -> setByReporter(reply.field, FieldValue.explicitNone("tapped ${reply.label}"), "tapped ${reply.label}")
+            else -> {
+                val value = when (reply.field) {
+                    Field.DATE_TIME -> FieldValue(dateAnswer(reply), ValueStatus.USER_CONFIRMED, "tapped ${reply.label}")
+                    else -> FieldValue(reply.value, ValueStatus.USER_CONFIRMED, "tapped ${reply.label}")
+                }
+                setByReporter(reply.field, value, "tapped ${reply.label}")
+            }
         }
-        setByReporter(reply.field, value, "tapped ${reply.label}")
         if (state is SessionState.Asking) advance(prefix = null) else publish()
     }
 
@@ -284,7 +292,7 @@ class ReportSession(
             // questions that changed nothing is not, so the report goes to review rather than the worker being nagged.
             val open = planner.open(report, clarify, advisor.lane()).toSet()
             if (open != lastOpen) { asked.clear(); lastOpen = open }
-            planner.next(report, clarify, advisor.lane(), asked)
+            planner.next(report, clarify, advisor.lane(), asked, heard = transcripts.joinToString(" "), candidates = itemCandidates())
         }
         if (q != null) {
             if (!q.key) asked += q.asks.map { it.field }.toSet()
@@ -382,6 +390,11 @@ class ReportSession(
     }
 
     private fun chipState() = ReportState(report, chipDecisions)
+
+    /** A tool or item a chip already proposes: the planner turns it into a yes or no instead of an open question. */
+    private fun itemCandidates(): Map<Field, String> =
+        chips().filter { it.field == Field.EQUIPMENT_ASSET && it.original.isEmpty() }
+            .groupBy { it.field }.mapValues { (_, c) -> c.first().proposed }
 
     /**
      * Recomputed from the report each time (chips are never stored). Severity is left to its own suggestion

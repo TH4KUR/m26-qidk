@@ -14,17 +14,30 @@ import com.megathon.incident.domain.ValueStatus
  * exceeded, and a worker is never handed two questions in one breath). A field already in `askedBefore` is not asked again:
  * the session clears that history whenever the open fields change (an answer made progress), so a field is asked again
  * only after progress, and when a whole round gets nowhere the report goes to review with the gap flagged.
- * The lane's extra optional fields (LOW) are deliberately not asked: the spec's demo is exactly one follow-up.
+ * Once every mandatory field is answered, [OptionalAsks] may ask up to two more, in plain words, about tools or items,
+ * people and witnesses (never in an urgent lane).
  */
-class QuestionPlanner {
+class QuestionPlanner(private val askOptional: Boolean = true) {
     /** The mandatory fields the lane cares about that are still unanswered or need clarifying, in policy order. */
     fun open(report: IncidentReport, clarify: Set<Field>, lane: TriageLane): List<Field> = lane.mandatoryFields
         .filter { it in MANDATORY }
         .filter { f -> f in clarify || !report.isAnswered(f) }
 
-    fun next(report: IncidentReport, clarify: Set<Field>, lane: TriageLane, askedBefore: List<Set<Field>>): Question? {
+    /**
+     * [heard] is everything the reporter has said and [candidates] a tool or item (or other value) the chips already found:
+     * both only shape the optional questions, which come after the four mandatory answers.
+     */
+    fun next(
+        report: IncidentReport, clarify: Set<Field>, lane: TriageLane, askedBefore: List<Set<Field>>,
+        heard: String = "", candidates: Map<Field, String> = emptyMap(),
+    ): Question? {
+        val open = open(report, clarify, lane)
+        if (open.isEmpty()) {
+            if (!askOptional || lane.level >= Priority.HIGH) return null
+            return OptionalAsks.next(report, askedBefore, heard, candidates)
+        }
         val asked = askedBefore.flatten().toSet()
-        val needed = open(report, clarify, lane).filter { it !in asked }.take(minOf(1, lane.maxQuestionsPerTurn))
+        val needed = open.filter { it !in asked }.take(minOf(1, lane.maxQuestionsPerTurn))
         if (needed.isEmpty()) return null
 
         val urgent = lane.level >= Priority.HIGH
