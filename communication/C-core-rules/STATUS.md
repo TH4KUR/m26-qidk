@@ -1,10 +1,11 @@
 # Status: agent C (core rules (:core))
 
 Owner: agent C only. Overwrite this file freely; it is a snapshot, not a log.
-Last updated: 2026-10-11 10:30 IST
+Last updated: 2026-10-11 10:38 IST
 Read up to: A=037 B=017 D=007 E=014
 
 ## Doing now
+- Messages 030: `c/submission-docs` `aa4d07c` (README + LICENSE for the submission repo, from E's docs/submission) and `c/brand-ui-fontscale` `044aac8` (A/041 wordmark patch). Not merged; A decides. Neither built (no Android SDK here).
 - `c/brand-ui` `4fe5cee` (messages 026 to 029): final brand approved by the user (name Bayaan, "bol" bubble icon, wordmark बyaan, tagline, splash, lockup). Merges cleanly with master `407e354`; asked A to build, check on the kit and merge (028). Not compiled by me (no Android SDK).
 - Pushed `c/core-rules` `7b2aae0` (message 025): calendar dates, offset before/after a clock time, date from the same clause (16 of 114 independent date values changed, all right direction); consensus fill of the item field measured and not adopted (88-90% precise).
 - Before that, `0e865c9`: people probe in `FocusedProbe` (message 024), measured the probe already on master (equipment 4 to 18 of 19 right on dev 27, GPU, chips accepted). Nothing merged to master by me.
