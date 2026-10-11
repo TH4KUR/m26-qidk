@@ -53,11 +53,13 @@ class PromptBuilder(private val system: String) {
     )
 
     companion object {
-        fun default(): PromptBuilder {
-            val text = PromptBuilder::class.java.getResourceAsStream("/prompts/extract_v11.txt")
-                ?.bufferedReader()?.use { it.readText() }
-                ?: error("missing resource /prompts/extract_v11.txt")
-            return PromptBuilder(text.trim())
-        }
+        const val DEFAULT_RESOURCE = "/prompts/extract_v11.txt"
+
+        /** The exact bytes of the default prompt file: what a run's prompt hash is computed over. */
+        fun defaultSourceBytes(): ByteArray =
+            PromptBuilder::class.java.getResourceAsStream(DEFAULT_RESOURCE)?.use { it.readBytes() }
+                ?: error("missing resource $DEFAULT_RESOURCE")
+
+        fun default(): PromptBuilder = PromptBuilder(String(defaultSourceBytes(), Charsets.UTF_8).trim())
     }
 }

@@ -314,6 +314,58 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         }
     }
 
+    /**
+     * Debug builds only: the one way to run the held-out items. `--es holdout CONFIRM --es gold <file> --es run <name>`
+     * [`--es prompt <file>`]; never together with `--es eval`, and a second run of the same prompt on the same build is refused
+     * unless `--es holdout_again CONFIRM_AGAIN` is also given. The decision, the prompt hash, the build (APK hash), the gold
+     * hash and the item ids are logged (tag Incident, prefix "holdout") and the run is written to the ledger before the first
+     * model call, so an interrupted run still counts. Always the whole held-out set: no `only` filter.
+     */
+    fun debugHoldout(gold: String?, promptFile: String?, runName: String, holdout: String?, again: String?, devRequested: Boolean) {
+        if (!Engines.isDebuggable(getApplication())) return
+        val engine = llm ?: return
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val app = getApplication<Application>()
+            val promptBytes = promptFile?.let { java.io.File(it).readBytes() } ?: com.megathon.incident.session.PromptBuilder.defaultSourceBytes()
+            val promptHash = com.megathon.incident.eval.ShortHash.of(promptBytes)
+            val build = runCatching { com.megathon.incident.eval.ShortHash.of(java.io.File(app.applicationInfo.sourceDir).inputStream()) }.getOrDefault("unknown")
+            val ledgerFile = java.io.File(app.filesDir, "eval/holdout-ledger.jsonl")
+            val ledger = com.megathon.incident.eval.HoldoutLedger.parse(if (ledgerFile.exists()) ledgerFile.readText() else "")
+            val decision = com.megathon.incident.eval.HoldoutGuard.decide(holdout, again, devRequested, promptHash, build, ledger)
+            when (decision) {
+                is com.megathon.incident.eval.HoldoutDecision.NotRequested -> return@launch
+                is com.megathon.incident.eval.HoldoutDecision.Refused -> {
+                    android.util.Log.e(TAG, "holdout REFUSED: ${decision.reason}")
+                    return@launch
+                }
+                is com.megathon.incident.eval.HoldoutDecision.Allowed -> Unit
+            }
+            val goldFile = gold?.let { java.io.File(it) }
+            if (goldFile == null || !goldFile.isFile) {
+                android.util.Log.e(TAG, "holdout REFUSED: --es gold <file> is missing or not a file")
+                return@launch
+            }
+            val goldHash = com.megathon.incident.eval.ShortHash.of(goldFile.readBytes())
+            val repeat = (decision as com.megathon.incident.eval.HoldoutDecision.Allowed).repeat
+            android.util.Log.i(TAG, "holdout run $runName starting: prompt=$promptHash build=$build gold=$goldHash repeat=$repeat")
+            val prompts = promptFile?.let { com.megathon.incident.session.PromptBuilder(String(promptBytes, Charsets.UTF_8).trim()) }
+                ?: com.megathon.incident.session.PromptBuilder.default()
+            val warm: suspend () -> Long = { (engine as? GenieXLlmEngine)?.warmUp() ?: 0L }
+            val out = runCatching {
+                com.megathon.incident.eval.EvalRunner(app.filesDir, engine, warm).run(
+                    goldFile, prompts, runName, only = null, split = com.megathon.incident.eval.EvalSplit.HOLDOUT,
+                    onSelected = { ids ->
+                        android.util.Log.i(TAG, "holdout run $runName items (${ids.size}): ${ids.joinToString(",")}")
+                        ledgerFile.parentFile?.mkdirs()
+                        ledgerFile.appendText(com.megathon.incident.eval.HoldoutRun(promptHash, build, goldHash, ids, System.currentTimeMillis()).toLine() + "\n")
+                    },
+                )
+            }
+            out.onSuccess { android.util.Log.i(TAG, "holdout run $runName done: ${it.path}") }
+                .onFailure { android.util.Log.e(TAG, "holdout run $runName failed", it) }
+        }
+    }
+
     /** Debug builds only: run E's gold dev split through the real pipeline and write predictions for E's scorer. */
     fun debugEval(gold: String, promptFile: String?, runName: String, only: Set<String>?) {
         if (!Engines.isDebuggable(getApplication())) return

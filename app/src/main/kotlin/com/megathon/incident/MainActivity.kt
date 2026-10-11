@@ -37,8 +37,19 @@ class MainActivity : ComponentActivity() {
         // Debug builds: `--es wav <path in the app's files dir>` runs that WAV through the real speech path.
         intent.getStringExtra("wav")?.let { vm.debugTranscribeFile(it) }
         // Debug builds: `--es eval <gold file> [--es prompt <file>] --es run <name> [--es only g01,g02]` (dev split only).
-        intent.getStringExtra("eval")?.let { gold ->
-            vm.debugEval(gold, intent.getStringExtra("prompt"), intent.getStringExtra("run") ?: "run", intent.getStringExtra("only")?.split(',')?.toSet())
+        // Debug builds: the held-out items run ONLY through `--es holdout CONFIRM --es gold <file> --es run <name> [--es prompt <file>]`,
+        // never in the same launch as `--es eval` (the launch is refused and nothing runs); a second run of the same prompt on the same
+        // build also needs `--es holdout_again CONFIRM_AGAIN`. See AppViewModel.debugHoldout and HoldoutGuard.
+        val holdoutExtra = intent.getStringExtra("holdout")
+        if (holdoutExtra != null) {
+            vm.debugHoldout(
+                gold = intent.getStringExtra("gold"), promptFile = intent.getStringExtra("prompt"), runName = intent.getStringExtra("run") ?: "holdout",
+                holdout = holdoutExtra, again = intent.getStringExtra("holdout_again"), devRequested = intent.hasExtra("eval"),
+            )
+        } else {
+            intent.getStringExtra("eval")?.let { gold ->
+                vm.debugEval(gold, intent.getStringExtra("prompt"), intent.getStringExtra("run") ?: "run", intent.getStringExtra("only")?.split(',')?.toSet())
+            }
         }
         // Debug builds: `--es tts PIPER` speaks with Piper TTS (sherpa-onnx, CPU) instead of the Android voice, falling back to the
         // Android voice with a logged reason if the Piper files or library are missing. It is read by Engines.selection above.
@@ -59,7 +70,7 @@ class MainActivity : ComponentActivity() {
         }
         // Normal launches load the language model in the background now, so the first turn does not wait for it. The debug
         // eval, coexist and WAV paths time the load themselves and must not have it done for them.
-        val timedByDebugPath = Engines.isDebuggable(this) && listOf("eval", "coexist", "wav").any { intent.hasExtra(it) }
+        val timedByDebugPath = Engines.isDebuggable(this) && listOf("eval", "holdout", "coexist", "wav").any { intent.hasExtra(it) }
         if (!timedByDebugPath) vm.preloadModels()
         setContent { IncidentTheme { AppRoot(vm) } }
     }
