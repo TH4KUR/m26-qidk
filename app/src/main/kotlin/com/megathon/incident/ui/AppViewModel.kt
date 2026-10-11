@@ -1060,7 +1060,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
      * Says [text] aloud. In the Hindi lane with the Supertonic voice ready, the app's English sentences are spoken in Hindi
      * ([HindiPhrases]: the reporter's own words and Latin-script place names are kept as they are, an unknown sentence stays
      * English). Anything else, including a Supertonic voice that is not available, speaks the text exactly as before.
-     * The screen text is never changed: labels and questions stay English on screen.
+     * On screen the same text is shown in Hindi through HindiUiText / HindiLabels when the app language is Hindi.
      */
     private suspend fun speakAloud(text: String) {
         // The saved-report summary is rendered to audio first, so the reporter can pause and seek it. Only when that is not
