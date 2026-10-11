@@ -8,6 +8,8 @@ import com.megathon.incident.domain.Source
 import com.megathon.incident.domain.Suggestion
 import com.megathon.incident.llm.LlmEngine
 import com.megathon.incident.llm.LlmRequest
+import com.megathon.incident.suggest.EntryKind
+import com.megathon.incident.suggest.SiteDirectory
 import com.megathon.incident.tam.TamCueLists
 import com.megathon.incident.tam.TamDetector
 import kotlinx.coroutines.CancellationException
@@ -29,6 +31,7 @@ class FocusedProbe(
     private val llm: LlmEngine,
     private val tam: TamDetector = TamDetector(TamCueLists.loadDefault()),
     private val timeoutMs: Long = 8_000,
+    private val sites: SiteDirectory? = runCatching { SiteDirectory.loadDefault() }.getOrNull(),
     private val itemPrompt: String = resource("/prompts/probe_item_v1.txt"),
     private val actionPrompt: String = resource("/prompts/probe_action_v1.txt"),
 ) {
@@ -66,11 +69,15 @@ class FocusedProbe(
                 val lower = value.lowercase()
                 if (value.split(Regex("\\s+")).size > MAX_ITEM_WORDS || lower in INCIDENT_WORDS) return null
                 if (lower == report.value(Field.LOCATION).text?.lowercase()) return null
+                if (looksLikePlace(value)) return null
                 Suggestion(field, "", value, "I may have missed it: you said \"$quote\". Add \"$value\" as a tool or item?", Source.LLM)
             }
             else -> Suggestion(field, "", value, "I may have missed it: you said \"$quote\". Add \"$value\" as an action taken?", Source.LLM)
         }
     }
+
+    /** A campus PLACE (not an asset such as a projector) or something that ends in a place word is where it happened, never what it happened to. */
+    private fun looksLikePlace(value: String): Boolean = PLACE_NOUN.containsMatchIn(value) || sites?.lookup(value)?.kind == EntryKind.PLACE
 
     private fun parseObject(reply: String): JsonObject? {
         val start = reply.indexOf('{')
@@ -85,6 +92,7 @@ class FocusedProbe(
         private val ORDER = listOf(Field.EQUIPMENT_ASSET, Field.IMMEDIATE_ACTIONS)
         private const val MAX_CHARS = 1200
         private const val MAX_ITEM_WORDS = 4
+        private val PLACE_NOUN = Regex("(?i)\\b(room|hall|block|floor|hostel|building|canteen|library|gate|corridor|lobby|campus|ground|office|lab)\\b(?:\\s*[\\w-]{1,3})?$")
         private val INCIDENT_WORDS = setOf(
             "leak", "water leak", "fire", "smoke", "spill", "fall", "accident", "incident", "injury", "flood", "sparks", "spark", "sparked",
         )

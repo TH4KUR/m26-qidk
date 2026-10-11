@@ -65,6 +65,21 @@ class FocusedProbeTest {
         assertTrue(propose(ProbeLlm(item = """{"item":"the old drill press near the back wall","quote":"the old drill press near the back wall"}"""), transcript = "the old drill press near the back wall sparked").none { it.field == Field.EQUIPMENT_ASSET })
     }
 
+    @Test fun `a place or a known campus site is never proposed as a tool or item`() {
+        // Seen on the kit: "Actually it was Conference Room 3" came back as an item (a correction of the location).
+        val corrected = "There was a water leak near Conference Room 2 around 10 AM. Actually it was Conference Room 3."
+        listOf("Conference Room 3", "Seminar Hall 2", "main gate", "North Block", "second floor", "the canteen").forEach { place ->
+            val chips = propose(ProbeLlm(item = """{"item":"$place","quote":"$place"}"""), transcript = "Water everywhere near $place, I think it was $place")
+            assertTrue(chips.none { it.field == Field.EQUIPMENT_ASSET }, "$place -> $chips")
+        }
+        assertTrue(propose(ProbeLlm(item = """{"item":"Conference Room 3","quote":"it was Conference Room 3"}"""), transcript = corrected).none { it.field == Field.EQUIPMENT_ASSET })
+        // Real items that merely sit near a place word stay.
+        listOf("server rack", "fume hood", "projector", "meeting room projector").forEach { item ->
+            val chips = propose(ProbeLlm(item = """{"item":"$item","quote":"the $item caught fire"}"""), transcript = "Smoke, the $item caught fire in the building")
+            assertTrue(chips.any { it.field == Field.EQUIPMENT_ASSET && it.proposed == item }, "$item -> $chips")
+        }
+    }
+
     @Test fun `nothing, junk, a failing engine and a slow engine all give no chips and never throw`() {
         assertTrue(propose(ProbeLlm()).isEmpty())
         assertTrue(propose(ProbeLlm(item = "Sure! The item is a drill.", action = "no idea")).isEmpty())
