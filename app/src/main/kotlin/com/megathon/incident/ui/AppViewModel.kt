@@ -292,6 +292,9 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
      * request tries the lazy load again.
      */
     private fun warmUpModels() {
+        // Off unless live inference is on (the resident speech worker is the engine): without it the app loads models lazily at the
+        // first turn exactly as before, and no launch-time label or load appears (A/036 condition 2).
+        if (!liveInference) return
         val genie = llm as? GenieXLlmEngine
         val worker = speech as? ResidentSherpaSpeechEngine
         if (genie == null && worker == null) return
