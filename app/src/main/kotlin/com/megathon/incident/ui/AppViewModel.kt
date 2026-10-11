@@ -50,6 +50,7 @@ import com.megathon.incident.testing.FakeLlmEngine
 import com.megathon.incident.testing.SpeechEngine
 import com.megathon.incident.tts.HindiPhrases
 import com.megathon.incident.tts.RoutingSpeaker
+import com.megathon.incident.tts.TtsBackend
 import com.megathon.incident.tts.TtsKind
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -145,8 +146,17 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     private val recorder = MicRecorder(app)
     // Speech output: the Android voice always exists (it is the fallback); Piper only when asked for with `--es tts PIPER`.
     // The label on the proof strip comes from the engine that really spoke (RoutingSpeaker.last), never from the request.
+    private val configuredVoice: TtsBackend? =
+        if (selection.tts != TtsKind.ANDROID) runCatching { factory.tts(selection.tts) }.getOrNull() else null
+    // The Hindi lane speaks with Supertonic whenever its model is on the device, however the app was started (the Home switch
+    // changes the lane, not the launch extras). One instance: the launch extra's, when that was already Supertonic.
+    private val hindiVoice: TtsBackend? by lazy {
+        if (selection.tts == TtsKind.SUPERTONIC) configuredVoice else runCatching { factory.tts(TtsKind.SUPERTONIC) }.getOrNull()
+    }
+    /** Why the Hindi voice was not used on the last Hindi-lane utterance (shown with the proof note); null when it was used. */
+    @Volatile private var hindiVoiceNote: String? = null
     private val speaker = RoutingSpeaker(
-        primary = if (selection.tts != TtsKind.ANDROID) runCatching { factory.tts(selection.tts) }.getOrNull() else null,
+        primary = configuredVoice,
         fallback = factory.tts(TtsKind.ANDROID),
         language = { speechLanguage() },
     )
@@ -223,7 +233,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
                 val started = System.nanoTime()
                 speakAloud(say.text)
                 val used = speaker.last
-                local.update { it.copy(speaking = false, ttsOffline = used?.offline, ttsNote = used?.note()) }
+                local.update { it.copy(speaking = false, ttsOffline = used?.offline, ttsNote = used?.note() ?: hindiVoiceNote) }
                 used?.note()?.let { android.util.Log.w(TAG, "tts fallback: $it") }
                 val ms = (System.nanoTime() - started) / 1_000_000
                 session.recordStage(used?.toStage(ms) ?: StageRecord("Speak", AndroidTtsBackend.LABEL, Compute.CPU, ms))
@@ -654,14 +664,21 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
      * The screen text is never changed: labels and questions stay English on screen.
      */
     private suspend fun speakAloud(text: String) {
-        if (local.value.hindi && selection.tts == TtsKind.SUPERTONIC) {
-            val reason = speaker.primaryUnavailableReason("hi")
-            if (reason == null) {
+        if (local.value.hindi) {
+            val voice = hindiVoice
+            val reason = if (voice == null) "the Hindi voice could not be created" else voice.unavailableReason("hi")
+            if (voice != null && reason == null) {
+                hindiVoiceNote = null
+                speaker.usePrimary(voice)
                 speaker.speakAll(HindiPhrases.segments(text))
                 return
             }
+            hindiVoiceNote = "The Hindi voice is not available ($reason), so replies are spoken in English."
             android.util.Log.w(TAG, "tts: Hindi speech not used: $reason")
+        } else {
+            hindiVoiceNote = null
         }
+        speaker.usePrimary(configuredVoice)
         speaker.speak(text)
     }
 
@@ -698,6 +715,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     override fun onCleared() {
         recorder.cancel()
         speaker.shutdown()
+        if (hindiVoice !== configuredVoice) hindiVoice?.shutdown()
     }
 
     class Factory(private val app: Application, private val selection: EngineSelection) : ViewModelProvider.Factory {

@@ -77,6 +77,30 @@ class RoutingSpeakerTest {
     }
 
     @Test
+    fun theHindiLaneCanSwapInANeuralVoiceForAnAppThatStartedWithNone() = runBlocking {
+        val s = RoutingSpeaker(primary = null, fallback = android)
+        s.usePrimary(piper)
+        s.speak("यह कब हुआ था?", "hi")
+        assertEquals(listOf("hi" to "यह कब हुआ था?"), piper.spoken)
+        assertTrue(android.spoken.isEmpty())
+        s.usePrimary(null)
+        s.speak("When was that?", "en")
+        assertEquals(listOf("en" to "When was that?"), android.spoken)
+    }
+
+    @Test
+    fun swappingTheVoiceForgetsThatTheOldOneFailedForGood() = runBlocking {
+        val broken = FakeBackend(Compute.CPU, "Broken", failure = TtsBackendException("library missing", permanent = true))
+        val s = RoutingSpeaker(broken, android)
+        s.speak("one")
+        assertEquals("library missing", s.primaryUnavailableReason("en"))
+        s.usePrimary(piper)
+        assertEquals(null, s.primaryUnavailableReason("en"))
+        s.speak("two")
+        assertEquals(listOf("en" to "two"), piper.spoken)
+    }
+
+    @Test
     fun withoutAPrimaryTheFallbackSpeaksAndIsReported() = runBlocking {
         val s = RoutingSpeaker(primary = null, fallback = android)
         s.speak("Hello.")
