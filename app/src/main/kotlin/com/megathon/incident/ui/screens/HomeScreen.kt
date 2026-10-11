@@ -3,6 +3,10 @@ package com.megathon.incident.ui.screens
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.semantics.Role
 import com.megathon.incident.speech.HindiLaneNotice
+import com.megathon.incident.session.HindiSavedAt
+import com.megathon.incident.session.HindiUiText
+import com.megathon.incident.ui.i18n.isHindi
+import com.megathon.incident.ui.i18n.tr
 import android.content.res.Configuration
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
@@ -81,7 +85,7 @@ fun HomeScreen(ui: AppUi, vm: AppViewModel) {
     val c = Theme.colors
     Scaffold(
         containerColor = c.canvas,
-        topBar = { AppTopBar(stringResource(R.string.app_tagline), onProof = vm::openProof, brand = true, simulatedNote = ui.simulatedNote) },
+        topBar = { AppTopBar(tr(stringResource(R.string.app_tagline), "बोल दो, बयान हो गया।"), onProof = vm::openProof, brand = true, simulatedNote = ui.simulatedNote) },
         bottomBar = { if (!ui.listening && !ui.processing) AppTabs(selected = 0, onNewReport = {}, onReports = vm::openReports) },
     ) { pad ->
         Column(Modifier.fillMaxSize().padding(pad)) {
@@ -127,7 +131,7 @@ fun HomeScreen(ui: AppUi, vm: AppViewModel) {
 @Composable
 private fun Notices(ui: AppUi, vm: AppViewModel) {
     ui.blocked?.let { Blocked(it); Spacer(Modifier.height(Space.s3)) }
-    ui.message?.let { MessageCard(it, vm::dismissMessage); Spacer(Modifier.height(Space.s3)) }
+    ui.message?.let { MessageCard(if (isHindi()) HindiUiText.of(it) else it, vm::dismissMessage); Spacer(Modifier.height(Space.s3)) }
 }
 
 @Composable
@@ -141,14 +145,24 @@ private fun HomeCopy(ui: AppUi) {
     }, label = "capture copy") { state ->
         // One headline, one supporting line: the status under the microphone says the rest.
         Column(verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+            val first = when (state) {
+                1 -> tr("Your voice.\n", "आपकी आवाज़।\n")
+                2 -> tr("A little clarity.\n", "थोड़ी स्पष्टता।\n")
+                else -> tr("A moment.\n", "एक पल।\n")
+            }
+            val second = when (state) {
+                1 -> tr("Taking shape.", "आकार ले रही है।")
+                2 -> tr("Coming together.", "बात बन रही है।")
+                else -> tr("A clear report.", "एक साफ़ रिपोर्ट।")
+            }
             Text(buildAnnotatedString {
-                append(when (state) { 1 -> "Your voice.\n"; 2 -> "A little clarity.\n"; else -> "A moment.\n" })
-                withStyle(SpanStyle(color = c.accent)) { append(when (state) { 1 -> "Taking shape."; 2 -> "Coming together."; else -> "A clear report." }) }
+                append(first)
+                withStyle(SpanStyle(color = c.accent)) { append(second) }
             }, style = MaterialTheme.typography.displayMedium, modifier = Modifier.semantics { heading() })
             Text(when (state) {
-                1 -> "Tell it as it happened. Tap to finish when you’re ready."
-                2 -> "Organizing your words, right here on this device."
-                else -> "Tell it as it happened. We’ll take care of the structure."
+                1 -> tr("Tell it as it happened. Tap to finish when you’re ready.", "जैसा हुआ, वैसा बताइए। पूरा होने पर टैप करें।")
+                2 -> tr("Organizing your words, right here on this device.", "आपकी बात इसी डिवाइस पर व्यवस्थित हो रही है।")
+                else -> tr("Tell it as it happened. We’ll take care of the structure.", "जैसा हुआ, वैसा बताइए। ढाँचा हम संभाल लेंगे।")
             }, style = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge, color = c.ink2)
         }
     }
@@ -159,9 +173,9 @@ private fun StudioPanel(ui: AppUi, vm: AppViewModel, compact: Boolean = false) {
     val c = Theme.colors
     // A status line only while it carries news (a timer, work in progress). At rest the one instruction is enough.
     val status = when {
-        ui.listening -> "LISTENING  ·  ${formatClock(ui.elapsedMs)}"
-        ui.processing -> "SHAPING YOUR REPORT"
-        ui.readiness == Readiness.LOADING -> "MODEL WARMING UP"
+        ui.listening -> tr("LISTENING  ·  ${formatClock(ui.elapsedMs)}", "सुन रहे हैं  ·  ${HindiSavedAt.digits(formatClock(ui.elapsedMs))}")
+        ui.processing -> tr("SHAPING YOUR REPORT", "रिपोर्ट बन रही है")
+        ui.readiness == Readiness.LOADING -> tr("MODEL WARMING UP", "मॉडल तैयार हो रहा है")
         else -> null
     }
     val warming = ui.readiness == Readiness.LOADING && !ui.listening && !ui.processing
@@ -178,10 +192,10 @@ private fun StudioPanel(ui: AppUi, vm: AppViewModel, compact: Boolean = false) {
                 Spacer(Modifier.height(Space.s1))
             }
             Text(when {
-                ui.listening -> "Tap to finish your story"
-                ui.processing -> "A few details. One clear report."
-                warming -> "You can start while it warms up"
-                else -> "Tap to tell your story"
+                ui.listening -> tr("Tap to finish your story", "अपनी बात पूरी करने के लिए टैप करें")
+                ui.processing -> tr("A few details. One clear report.", "कुछ ब्यौरे। एक साफ़ रिपोर्ट।")
+                warming -> tr("You can start while it warms up", "तैयार होते समय भी आप शुरू कर सकते हैं")
+                else -> tr("Tap to tell your story", "अपनी बात बताने के लिए टैप करें")
             }, style = if (compact) MaterialTheme.typography.labelLarge else MaterialTheme.typography.titleMedium, color = c.ink)
             if (warming) {
                 Spacer(Modifier.height(Space.s2))
@@ -206,8 +220,9 @@ private fun LiveDetails(ui: AppUi) {
         Spacer(Modifier.height(Space.s3))
         TranscriptCard(
             transcripts = emptyList(), highlight = null, heardNow = ui.heardNow ?: ui.liveText, reading = true,
-            readingLabel = if (ui.heardNow == null) "Transcribing your recording…" else "Organizing the report…",
-            scriptNote = ui.scriptNote,
+            readingLabel = if (ui.heardNow == null) tr("Transcribing your recording…", "आपकी रिकॉर्डिंग लिखी जा रही है…") else tr("Organizing the report…", "रिपोर्ट व्यवस्थित हो रही है…"),
+            // The note says labels and questions stay English, which is not true while the whole app is in Hindi.
+            scriptNote = if (isHindi()) null else ui.scriptNote,
         )
     }
 }
@@ -223,13 +238,15 @@ private fun ExampleNote() {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                if (open) "No special format. Just say what happened." else "Not sure where to start? See a quick example",
+                if (open) tr("No special format. Just say what happened.", "कोई खास तरीका नहीं। बस बताइए क्या हुआ।")
+                else tr("Not sure where to start? See a quick example", "शुरू कैसे करें, पता नहीं? एक छोटा उदाहरण देखें"),
                 style = MaterialTheme.typography.labelLarge, color = c.ink2, modifier = Modifier.weight(1f),
             )
-            Icon(Icons.Rounded.KeyboardArrowDown, if (open) "Hide example" else "Show example", tint = c.accent)
+            Icon(Icons.Rounded.KeyboardArrowDown, if (open) tr("Hide example", "उदाहरण छिपाएँ") else tr("Show example", "उदाहरण दिखाएँ"), tint = c.accent)
         }
         AnimatedVisibility(open, enter = fadeIn(tween(if (reduce) 0 else Motion.standard)) + expandVertically(tween(if (reduce) 0 else Motion.standard)), exit = fadeOut(tween(if (reduce) 0 else Motion.quick)) + shrinkVertically(tween(if (reduce) 0 else Motion.standard))) {
-            Text("“${FakeLlmEngine.DECK_TRANSCRIPT}”", Modifier.padding(start = Space.s1, end = Space.s1, bottom = Space.s3), style = MaterialTheme.typography.bodyMedium, color = c.ink2)
+            val example = tr(FakeLlmEngine.DECK_TRANSCRIPT, "कॉन्फ़्रेंस रूम २ के पास सुबह लगभग १० बजे पानी का रिसाव हो गया। मेंटेनेंस ने वह जगह पहले ही बंद कर दी है।")
+            Text("“$example”", Modifier.padding(start = Space.s1, end = Space.s1, bottom = Space.s3), style = MaterialTheme.typography.bodyMedium, color = c.ink2)
         }
     }
 }
@@ -258,7 +275,7 @@ private fun HindiLaneSwitch(on: Boolean, onChange: (Boolean) -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Space.s3),
     ) {
-        Text(HindiLaneNotice.SWITCH_LABEL, style = MaterialTheme.typography.labelLarge, color = c.ink2, modifier = Modifier.weight(1f))
+        Text(tr(HindiLaneNotice.SWITCH_LABEL, "हिन्दी (प्रायोगिक)"), style = MaterialTheme.typography.labelLarge, color = c.ink2, modifier = Modifier.weight(1f))
         Switch(checked = on, onCheckedChange = null)
     }
 }
@@ -266,14 +283,17 @@ private fun HindiLaneSwitch(on: Boolean, onChange: (Boolean) -> Unit) {
 @Composable
 private fun Blocked(message: String) {
     val c = Theme.colors
+    // The reason is a sentence the app built. When it has no Hindi, the whole card stays English rather than mixing the two.
+    val inHindi = isHindi() && HindiUiText.of(message) != message
+    val reason = if (inHindi) HindiUiText.of(message) else message
     Column(
         Modifier.fillMaxWidth().background(c.dangerContainer, RoundedCornerShape(16.dp)).padding(Space.s4),
         verticalArrangement = Arrangement.spacedBy(Space.s2),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
             androidx.compose.material3.Icon(Icons.Rounded.Warning, contentDescription = null, tint = c.onDanger)
-            Text("This build can’t start", style = MaterialTheme.typography.titleMedium, color = c.onDanger, fontWeight = FontWeight.SemiBold)
+            Text(if (inHindi) "यह बिल्ड शुरू नहीं हो सकता" else "This build can’t start", style = MaterialTheme.typography.titleMedium, color = c.onDanger, fontWeight = FontWeight.SemiBold)
         }
-        Text(message, style = MaterialTheme.typography.bodyLarge, color = c.onDanger)
+        Text(reason, style = MaterialTheme.typography.bodyLarge, color = c.onDanger)
     }
 }

@@ -6,6 +6,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
+import com.megathon.incident.ui.i18n.tr
 import com.megathon.incident.ui.theme.Theme
 
 /**
@@ -23,12 +24,12 @@ fun AppTabs(selected: Int, onNewReport: () -> Unit, onReports: () -> Unit) {
         NavigationBarItem(
             selected = selected == 0, onClick = onNewReport, colors = colors,
             icon = { MicGlyph(if (selected == 0) c.onAccentContainer else c.ink3, size = 24.dp) },
-            label = { Text("New report") },
+            label = { Text(tr("New report", "नई रिपोर्ट")) },
         )
         NavigationBarItem(
             selected = selected == 1, onClick = onReports, colors = colors,
             icon = { ListGlyph(if (selected == 1) c.onAccentContainer else c.ink3, size = 24.dp) },
-            label = { Text("Reports") },
+            label = { Text(tr("Reports", "रिपोर्ट")) },
         )
     }
 }
