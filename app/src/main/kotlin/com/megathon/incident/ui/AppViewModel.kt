@@ -35,9 +35,13 @@ import com.megathon.incident.speech.GenieXLlmEngine
 import com.megathon.incident.speech.SenseVoiceSignalEngine
 import com.megathon.incident.speech.SherpaCliSpeechEngine
 import com.megathon.incident.speech.SignalReading
+import com.megathon.incident.speech.AndroidTtsBackend
+import com.megathon.incident.speech.PiperSpeaker
 import com.megathon.incident.speech.SystemTtsSpeaker
 import com.megathon.incident.testing.Compute
 import com.megathon.incident.testing.FakeLlmEngine
+import com.megathon.incident.tts.RoutingSpeaker
+import com.megathon.incident.tts.TtsKind
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -80,6 +84,8 @@ data class AppUi(
     val ttsOffline: Boolean?,
     val undoLabel: String?,
     val needsMicPermission: Boolean,
+    /** Why the Piper voice was asked for but not heard (files missing, library failed), in words; null when not applicable. */
+    val ttsNote: String? = null,
     /** The latest voice tags (emotion, sound event) SenseVoice read from the audio; null when none were read. */
     val voiceTags: SignalReading? = null,
     /** Why there are no voice tags, in words (the bundle is missing, or the last read failed); null when not a failure. */
@@ -101,6 +107,7 @@ private data class Local(
     val network: NetworkProof = NetworkProof(false, false, null),
     val showProof: Boolean = false,
     val ttsOffline: Boolean? = null,
+    val ttsNote: String? = null,
     val undoLabel: String? = null,
     val needsMicPermission: Boolean = false,
     val voiceTags: SignalReading? = null,
@@ -113,9 +120,20 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         isDebug = Engines.isDebuggable(app),
         speechProviders = mapOf(SpeechKind.FAKE to { demoSpeech }, SpeechKind.SHERPA_QNN to { SherpaCliSpeechEngine(app) }),
         llmProviders = mapOf(LlmKind.FAKE to { FakeLlmEngine(name = "DEMO REPLIES") }, LlmKind.GENIEX to { GenieXLlmEngine(app) }),
+        ttsProviders = mapOf(
+            TtsKind.ANDROID to { AndroidTtsBackend(SystemTtsSpeaker(app)) },
+            // Built only when PIPER is selected, and it loads nothing until it first speaks (the native library is lazy).
+            TtsKind.PIPER to { PiperSpeaker(app, requireVerified = !Engines.isDebuggable(app), language = { speechLanguage() }) },
+        ),
     )
     private val recorder = MicRecorder(app)
-    private val speaker = SystemTtsSpeaker(app)
+    // Speech output: the Android voice always exists (it is the fallback); Piper only when asked for with `--es tts PIPER`.
+    // The label on the proof strip comes from the engine that really spoke (RoutingSpeaker.last), never from the request.
+    private val speaker = RoutingSpeaker(
+        primary = if (selection.tts == TtsKind.PIPER) runCatching { factory.tts(TtsKind.PIPER) }.getOrNull() else null,
+        fallback = factory.tts(TtsKind.ANDROID),
+        language = { speechLanguage() },
+    )
     private val meter = NetworkMeter(app)
     private val mutex = Mutex()
 
@@ -144,7 +162,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             session = s, selected = l.selected, editing = l.editing, justFilled = l.justFilled, heardNow = l.heardNow,
             speaking = l.speaking, message = l.message, blocked = blocked,
             simulatedNote = simulatedNote(),
-            network = l.network, showProof = l.showProof, ttsOffline = l.ttsOffline, undoLabel = l.undoLabel,
+            network = l.network, showProof = l.showProof, ttsOffline = l.ttsOffline, ttsNote = l.ttsNote, undoLabel = l.undoLabel,
             needsMicPermission = l.needsMicPermission,
             voiceTags = l.voiceTags, voiceTagsNote = l.voiceTagsNote,
         )
@@ -163,8 +181,11 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
                 local.update { it.copy(speaking = true) }
                 val started = System.nanoTime()
                 speaker.speak(say.text)
-                local.update { it.copy(speaking = false, ttsOffline = speaker.offline) }
-                session.recordStage(StageRecord("Speak", "Android TTS (system voice)", Compute.CPU, (System.nanoTime() - started) / 1_000_000))
+                val used = speaker.last
+                local.update { it.copy(speaking = false, ttsOffline = used?.offline, ttsNote = used?.note()) }
+                used?.note()?.let { android.util.Log.w(TAG, "tts fallback: $it") }
+                val ms = (System.nanoTime() - started) / 1_000_000
+                session.recordStage(used?.toStage(ms) ?: StageRecord("Speak", AndroidTtsBackend.LABEL, Compute.CPU, ms))
             }
         }
     }
@@ -415,7 +436,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
         speaker.stop()
         session.reset()
         demoSpeech.restart()
-        local.update { Local(network = meter.read(), ttsOffline = it.ttsOffline) }
+        local.update { Local(network = meter.read(), ttsOffline = it.ttsOffline, ttsNote = it.ttsNote) }
     }
 
     fun openProof() = local.update { it.copy(showProof = true, network = meter.read()) }
@@ -423,6 +444,27 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     fun dismissMessage() = local.update { it.copy(message = null) }
 
     // ---- helpers -------------------------------------------------------------------------------------------------
+
+    /**
+     * The language the voice should speak. The app's recognition call is fixed to English in this build (the EN/HI/TE
+     * toggle is not in this branch), so this is English too. When the toggle lands, return its value here.
+     */
+    private fun speechLanguage(): String = "en"
+
+    /** Debug builds only: speak [text] with the selected engine and log which engine spoke, on what, and how long it took. */
+    fun debugSay(text: String) {
+        if (!Engines.isDebuggable(getApplication())) return
+        viewModelScope.launch {
+            val t0 = System.nanoTime()
+            speaker.speak(text)
+            val used = speaker.last
+            android.util.Log.i(
+                TAG,
+                "tts say engine=${used?.engine} compute=${used?.compute} offline=${used?.offline} " +
+                    "ms=${(System.nanoTime() - t0) / 1_000_000} fallback=${used?.fallbackReason ?: "none"}",
+            )
+        }
+    }
 
     private fun say(message: String) = local.update { it.copy(message = message) }
 
