@@ -20,7 +20,7 @@ object Labels {
         Field.DATE_TIME -> "When"
         Field.SEVERITY -> "How severe"
         Field.PERSONS_INVOLVED -> "People involved"
-        Field.EQUIPMENT_ASSET -> "Equipment"
+        Field.EQUIPMENT_ASSET -> "Tools / items"
         Field.IMMEDIATE_ACTIONS -> "What was done"
         Field.WITNESSES -> "Witnesses"
         Field.DESCRIPTION -> "Summary"

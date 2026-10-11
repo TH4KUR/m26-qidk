@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
+import com.megathon.incident.speech.HindiLaneNotice
 import com.megathon.incident.session.JournalEntry
 import com.megathon.incident.session.Labels
 import com.megathon.incident.session.StageRecord
@@ -70,6 +71,11 @@ fun ProofSheet(ui: AppUi, onClose: () -> Unit) {
             }
 
             item { Section("Where each step ran") { Stages(ui.session.stages, ui.ttsOffline, ui.ttsNote) } }
+
+            // Only when the experimental Hindi lane is on or was used: says plainly that nothing about its accuracy is measured.
+            if (ui.hindiLane || ui.session.stages.any { it.stage == "Hear" && it.engine.startsWith("Nemotron") }) {
+                item { Section("Hindi (experimental)") { Muted(HindiLaneNotice.TEXT) } }
+            }
 
             item { Section("Voice tags (suggestions only)") { VoiceTags(ui) } }
 

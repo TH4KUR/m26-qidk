@@ -10,36 +10,39 @@ import com.megathon.incident.domain.ValueStatus
 
 /**
  * Interim follow-up planner (the planner owner's version replaces it). Deterministic, not LLM discretion (spec D6):
- * asks only about the **four mandatory fields**, in policy order, at most the lane's cap per turn, and never the
- * same set twice in a row (then the report goes to review with the gap flagged).
- * The lane's extra optional fields (LOW) are deliberately not asked: the spec's demo is exactly one follow-up.
+ * asks only about the **four mandatory fields**, in policy order, **one question at a time** (the lane's cap is never
+ * exceeded, and a worker is never handed two questions in one breath). A field already in `askedBefore` is not asked again:
+ * the session clears that history whenever the open fields change (an answer made progress), so a field is asked again
+ * only after progress, and when a whole round gets nowhere the report goes to review with the gap flagged.
+ * Once every mandatory field is answered, [OptionalAsks] may ask up to two more, in plain words, about tools or items,
+ * people and witnesses (never in an urgent lane).
  */
-class QuestionPlanner {
-    fun next(report: IncidentReport, clarify: Set<Field>, lane: TriageLane, askedBefore: List<Set<Field>>): Question? {
-        val needed = lane.mandatoryFields
-            .filter { it in MANDATORY }
-            .filter { f -> f in clarify || !report.isAnswered(f) }
-            .take(lane.maxQuestionsPerTurn)
-        if (needed.isEmpty()) return witnessQuestion(report, lane, askedBefore)
-        if (askedBefore.lastOrNull() == needed.toSet()) return null
+class QuestionPlanner(private val askOptional: Boolean = true) {
+    /** The mandatory fields the lane cares about that are still unanswered or need clarifying, in policy order. */
+    fun open(report: IncidentReport, clarify: Set<Field>, lane: TriageLane): List<Field> = lane.mandatoryFields
+        .filter { it in MANDATORY }
+        .filter { f -> f in clarify || !report.isAnswered(f) }
+
+    /**
+     * [heard] is everything the reporter has said and [candidates] a tool or item (or other value) the chips already found:
+     * both only shape the optional questions, which come after the four mandatory answers.
+     */
+    fun next(
+        report: IncidentReport, clarify: Set<Field>, lane: TriageLane, askedBefore: List<Set<Field>>,
+        heard: String = "", candidates: Map<Field, String> = emptyMap(),
+    ): Question? {
+        val open = open(report, clarify, lane)
+        if (open.isEmpty()) {
+            if (!askOptional || lane.level >= Priority.HIGH) return null
+            return OptionalAsks.next(report, askedBefore, heard, candidates)
+        }
+        val asked = askedBefore.flatten().toSet()
+        val needed = open.filter { it !in asked }.take(minOf(1, lane.maxQuestionsPerTurn))
+        if (needed.isEmpty()) return null
 
         val urgent = lane.level >= Priority.HIGH
         val asks = needed.map { ask(it, report, clarify, urgent) }
         return Question(asks, asks.joinToString(" ") { it.prompt })
-    }
-
-    /**
-     * The one optional question: when every mandatory field is answered and a person is listed but nobody is recorded as
-     * having seen it, ask once ("Did anyone see it happen?"). Never on HIGH or URGENT lanes, never twice, never when the
-     * witnesses are filled or answered "no one". A person present but not listed is covered by the witness chip instead.
-     */
-    private fun witnessQuestion(report: IncidentReport, lane: TriageLane, askedBefore: List<Set<Field>>): Question? {
-        if (lane.level >= Priority.HIGH) return null
-        if (askedBefore.any { Field.WITNESSES in it }) return null
-        if (!report.isFilled(Field.PERSONS_INVOLVED)) return null
-        if (report.isAnswered(Field.WITNESSES)) return null
-        val ask = Ask(Field.WITNESSES, "Did anyone see it happen?", listOf(QuickReply("No one", Field.WITNESSES, NO_ONE)))
-        return Question(listOf(ask), ask.prompt)
     }
 
     private fun ask(field: Field, report: IncidentReport, clarify: Set<Field>, urgent: Boolean): Ask = when (field) {
@@ -63,9 +66,6 @@ class QuestionPlanner {
     }
 
     companion object {
-        /** The value of the "No one" quick reply; the session records it as an explicit "none", not as text. */
-        const val NO_ONE = "none"
-
         val MANDATORY: Set<Field> = setOf(Field.INCIDENT_TYPE, Field.LOCATION, Field.DATE_TIME, Field.SEVERITY)
 
         val TYPE_CHOICES: List<Pair<String, IncidentType>> = listOf(

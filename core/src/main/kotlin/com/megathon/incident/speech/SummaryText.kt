@@ -18,7 +18,7 @@ object SummaryText {
     private val LABELS = mapOf(
         Field.INCIDENT_TYPE to "What happened", Field.LOCATION to "Where", Field.DATE_TIME to "When",
         Field.SEVERITY to "Severity", Field.PERSONS_INVOLVED to "People involved",
-        Field.EQUIPMENT_ASSET to "Equipment", Field.IMMEDIATE_ACTIONS to "What was done",
+        Field.EQUIPMENT_ASSET to "Tools or items", Field.IMMEDIATE_ACTIONS to "What was done",
         Field.WITNESSES to "Witnesses",
     )
 
@@ -26,7 +26,7 @@ object SummaryText {
     private val MISSING_WORDS = mapOf(
         Field.INCIDENT_TYPE to "what happened", Field.LOCATION to "where", Field.DATE_TIME to "when",
         Field.SEVERITY to "how severe it is", Field.PERSONS_INVOLVED to "who was involved",
-        Field.EQUIPMENT_ASSET to "which equipment", Field.IMMEDIATE_ACTIONS to "what was done",
+        Field.EQUIPMENT_ASSET to "which tool or item", Field.IMMEDIATE_ACTIONS to "what was done",
         Field.WITNESSES to "who saw it",
     )
 

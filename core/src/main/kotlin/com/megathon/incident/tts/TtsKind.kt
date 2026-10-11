@@ -4,15 +4,17 @@ package com.megathon.incident.tts
 enum class TtsKind {
     ANDROID,
     PIPER,
+    SUPERTONIC,
     ;
 
     companion object {
         /**
-         * Reads the debug switch (`--es tts PIPER`). Anything else, including `check` (the existing voice probe, which
+         * Reads the debug switch (`--es tts PIPER` or `--es tts SUPERTONIC`). Anything else, including `check` (the existing voice probe, which
          * shares the extra), means ANDROID.
          */
         fun parse(value: String?): TtsKind = when (value?.trim()?.uppercase()) {
             "PIPER" -> PIPER
+            "SUPERTONIC" -> SUPERTONIC
             else -> ANDROID
         }
     }

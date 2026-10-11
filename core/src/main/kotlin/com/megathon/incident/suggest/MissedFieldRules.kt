@@ -43,7 +43,7 @@ internal class MissedFieldRules(private val tam: TamDetector) {
             if (nouns.isNotEmpty()) {
                 chips += Suggestion(
                     Field.EQUIPMENT_ASSET, "", nouns.joinToString(", "),
-                    "The speaker mentioned ${nouns.joinToString(" and ") { "\"$it\"" }}; add it as equipment?", Source.RULE,
+                    "The speaker mentioned ${nouns.joinToString(" and ") { "\"$it\"" }}; add it as a tool or item?", Source.RULE,
                 )
             }
         }
