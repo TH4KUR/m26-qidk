@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The system splash mark: 288 dp canvas, mark inside the 192 dp circle the platform leaves visible (no icon background).
+     The same bubble as the launcher icon, drawn in the accent on the canvas colour, scaled 2.2 about the middle of the canvas so it fills the circle. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="288"
+    android:viewportHeight="288">
+    <group
+        android:pivotX="144"
+        android:pivotY="144"
+        android:scaleX="2.2"
+        android:scaleY="2.2"
+        android:translateX="198"
+        android:translateY="195.8">
+        <path
+            android:fillColor="@color/splash_mark"
+            android:pathData="M40,30 L68,30 A12,12 0 0 1 80,42 L80,58 A12,12 0 0 1 68,70 L48,70 L34,80 L36,70 L40,70 A12,12 0 0 1 28,58 L28,42 A12,12 0 0 1 40,30 Z" />
+        <path
+            android:fillColor="@color/brand_highlight"
+            android:pathData="M35,47 L65,47 A2,2 0 0 1 67,49 L67,54 A2,2 0 0 1 65,56 L35,56 A2,2 0 0 1 33,54 L33,49 A2,2 0 0 1 35,47 Z" />
+        <path
+            android:strokeColor="@color/splash_lines"
+            android:strokeWidth="4"
+            android:strokeLineCap="round"
+            android:pathData="M37,42 L71,42 M37,51.5 L63,51.5 M37,61 L53,61" />
+    </group>
+</vector>
