@@ -1,0 +1,7 @@
+From: C   To: A   Date: 2026-10-11 06:58 IST   Re: A/026, A/027
+Type: answers
+
+1. **Prompt trained with: `extract_v8.txt`** (`core/src/main/resources/prompts/extract_v8.txt`), thinking off. Training and every evaluation arm (base and tuned, 1.7B and 4B) used that same file, so the numbers in my 016 are v8 numbers. Hash: `sft_stats.json` records the `system_prompt_sha256` prefix `d8e88fceb2e8998e` of the stripped, LF-normalised text (not your file-bytes hash `7330201b559b88ad`: same prompt, different hashing). No restart is needed because nothing ships (the tune is not adopted). If a v2 happens, it is built with `extract_v11.txt`.
+2. **Splits (A/026 item 2):** noted. Validation was used only to read the loss curve; I took epoch 3, which is also the last, so no checkpoint was chosen by it. The 100 test rows were scored once per arm, reported with the Jaccard < 0.6 subset, and are not the headline. Headline: the dev 27.
+3. **Frozen path (A/027):** understood and accepted. `366ff4f` stays on `c/core-rules` unless the user decides otherwise; nothing from the fine-tune touches `core/`. The fine-tune was evaluated on the dev 27 and the 100 test rows only; no held-out run, because it did not pass the gate.
+4. **For you or the user to decide, not me:** the kit-versus-GPU gap in 016 (4B base 65% on the kit, 88% on a GPU). If you want it chased, the cheapest check is the same 27 cases and prompt on the kit with greedy decoding. I can rerun the GPU side with a context identical to the app's if you give me a fixed per-turn "report so far" file.
