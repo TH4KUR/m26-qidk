@@ -32,6 +32,7 @@ import com.megathon.incident.tam.TamCueLists
 import com.megathon.incident.tam.TamHedgeDetector
 import com.megathon.incident.speech.DemoSpeechEngine
 import com.megathon.incident.speech.GenieXLlmEngine
+import com.megathon.incident.speech.HindiTranscript
 import com.megathon.incident.speech.SenseVoiceSignalEngine
 import com.megathon.incident.speech.NemotronHindiSpeechEngine
 import com.megathon.incident.speech.RecognitionEngine
@@ -296,12 +297,14 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
                 finishTurn(before, journalBefore, "I couldn't hear that: ${e.message?.take(160) ?: "the speech engine failed"}")
                 return@withLock
             }
-            android.util.Log.i(TAG, "heard [${heard.compute}] in ${heard.elapsedMs} ms: ${heard.text}")
+            // Hindi: hour words become digits ("दस बजे" to "10 बजे") so the time logic can read them. English is untouched.
+            val said = if (lane.engine == RecognitionEngine.NEMOTRON_HINDI) heard.copy(text = HindiTranscript.normalize(heard.text)) else heard
+            android.util.Log.i(TAG, "heard [${said.compute}] in ${said.elapsedMs} ms: ${said.text}")
             runCatching { factory.checkResult(heard.compute) }.onFailure { blocked = explain(it) }
-            local.update { it.copy(heardNow = heard.text.ifBlank { null }) }
-            val tags = if (heard.text.isBlank()) null else readVoiceTags(pcm)
+            local.update { it.copy(heardNow = said.text.ifBlank { null }) }
+            val tags = if (said.text.isBlank()) null else readVoiceTags(pcm)
             tags?.let { session.recordStage(StageRecord("Tags", "SenseVoice (sherpa-onnx, QNN)", it.compute, it.elapsedMs)) }
-            session.onUtterance(heard.text, StageRecord("Hear", engine.name, heard.compute, heard.elapsedMs), tags?.signals.orEmpty(), capturedAt)
+            session.onUtterance(said.text, StageRecord("Hear", engine.name, said.compute, said.elapsedMs), tags?.signals.orEmpty(), capturedAt)
             finishTurn(before, journalBefore, null)
         }
     }

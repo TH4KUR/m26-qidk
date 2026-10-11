@@ -1,5 +1,6 @@
 package com.megathon.incident.session
 
+import com.megathon.incident.speech.HindiTranscript
 import com.megathon.incident.domain.ExtractionPayload
 import com.megathon.incident.domain.Field
 import com.megathon.incident.domain.FieldValue
@@ -151,7 +152,7 @@ class ReportSession(
      */
     private fun withNowPhrase(payload: ExtractionPayload, said: String): ExtractionPayload {
         if (!payload.date_time_text.isNullOrBlank() || report.isFilled(Field.DATE_TIME)) return payload
-        val phrase = NOW_PHRASE.find(said)?.value ?: return payload
+        val phrase = NOW_PHRASE.find(said)?.value ?: HindiTranscript.timePhrase(said) ?: return payload
         return payload.copy(date_time_text = phrase, evidence = payload.evidence + ("date_time_text" to phrase))
     }
 

@@ -65,6 +65,16 @@ class ReportSessionTest {
         assertEquals(listOf("update_report", "ask_user"), s.ui.value.toolLog.map { it.tool })
     }
 
+    @Test fun aHindiTimeTheModelMissedIsStillReadFromTheWordsSoTheDayIsNotAskedAgain() {
+        val reply = """{"tool":"update_report","arguments":{"incident_type":"water_leak_flood","location":"कमरे","evidence":{"incident_type":"पानी लीक","location":"कमरे"}}}"""
+        val s = session(Scripted(reply))
+        s.say("आज सुबह 10 बजे कमरे में पानी लीक हो गया")
+        assertEquals(UiStatus.HEARD, s.field(Field.DATE_TIME).status)
+        assertTrue("10" in s.field(Field.DATE_TIME).value.orEmpty(), s.field(Field.DATE_TIME).value.orEmpty())
+        val asked = (s.ui.value.state as? SessionState.Asking)?.question?.asks?.map { it.field }.orEmpty()
+        assertTrue(Field.DATE_TIME !in asked, "the time was said, so it is not asked: $asked")
+    }
+
     @Test fun severityIsOnlySuggestedUntilTheReporterAnswers() {
         val s = session()
         s.say(slide)
