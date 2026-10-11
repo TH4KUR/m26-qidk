@@ -157,7 +157,7 @@ class PayloadValidator(
         val piece = pieceFor(clauses, evidence) ?: miss?.let { pieceFor(clauses, it.heard) }
         // "no power since 9 PM" does not negate "electrical": only a negation right at the quoted words does.
         val negated = when (field) {
-            Field.INCIDENT_TYPE -> evidence?.let { negatedNear(piece?.text ?: transcript, it) } == true
+            Field.INCIDENT_TYPE -> typeNegated(wire, evidence, piece, transcript)
             Field.SEVERITY -> severityNegated(wire, evidence, piece, transcript)
             else -> piece?.tam?.modality == Modality.NEGATED
         }
@@ -180,6 +180,19 @@ class PayloadValidator(
     }
 
     /**
+     * A type is negated by a negation in front of its own cue ("no fire"). A negation elsewhere in the quote ("lost
+     * consciousness without an injury") says something else. With no cue of the type in the quote, a negation inside it
+     * or right before it still counts.
+     */
+    private fun typeNegated(wire: String, evidence: String?, piece: TamClause?, transcript: String): Boolean {
+        val quote = evidence?.takeIf { it.isNotBlank() } ?: return false
+        val text = piece?.text ?: transcript
+        val type = IncidentType.fromWire(wire)
+        val cue = type?.let { EnumNormalizer.typeCuesIn(it, quote).firstOrNull() }
+        return if (cue != null) negatedBefore(text, cue) else negatedNear(text, quote)
+    }
+
+    /**
      * A severity is negated only by a negation in front of its own cue ("not severe", "not none"). The cue words of "none"
      * and "not serious" contain negation words themselves, and "nobody was hurt" in the same clause says nothing about a
      * severity stated next to it, so the clause as a whole does not decide.
@@ -199,17 +212,17 @@ class PayloadValidator(
         if (at < 0) return false
         val before = lower.substring(0, at).trimEnd().split(Regex("\\s+")).takeLast(3).joinToString(" ")
         if (before.isBlank()) return false
-        return tam.lists.negated.any { Regex("(?<![\\p{L}\\p{N}])" + Regex.escape(it) + "(?![\\p{L}\\p{N}])").containsMatchIn(before) }
+        return tam.lists.negated.any { Regex("(?<![\\p{L}\\p{N}])" + Regex.escape(it) + "(?![\\p{L}\\p{N}])").containsMatchIn(tam.maskStatedStates(before)) }
     }
 
     /** True when a negation word sits inside [phrase] or within three words before it, in the first place [phrase] occurs in [text]. */
-    private fun negatedNear(text: String, phrase: String): Boolean {
+    private fun negatedNear(text: String, phrase: String, wordsBefore: Int = 3): Boolean {
         val lower = text.lowercase().replace('’', '\'')
         val at = lower.indexOf(phrase.lowercase().trim())
         if (at < 0) return false
-        val before = lower.substring(0, at).trimEnd().split(Regex("\\s+")).takeLast(3).joinToString(" ")
+        val before = lower.substring(0, at).trimEnd().split(Regex("\\s+")).takeLast(wordsBefore).joinToString(" ")
         val window = "$before ${phrase.lowercase()}"
-        return tam.lists.negated.any { Regex("(?<![\\p{L}\\p{N}])" + Regex.escape(it) + "(?![\\p{L}\\p{N}])").containsMatchIn(window) }
+        return tam.lists.negated.any { Regex("(?<![\\p{L}\\p{N}])" + Regex.escape(it) + "(?![\\p{L}\\p{N}])").containsMatchIn(tam.maskStatedStates(window)) }
     }
 
     private fun verbatim(field: Field, raw: String?, evidence: String?, transcript: String, clauses: List<TamClause>) {
@@ -221,7 +234,8 @@ class PayloadValidator(
         // A place or a thing is not negated by its clause ("no power on the third floor"), only by a negation right at
         // the quoted words ("not in Room 2"). An action or a person is negated by its whole clause.
         val placeOrThing = field == Field.LOCATION || field == Field.EQUIPMENT_ASSET
-        val negated = if (placeOrThing) negatedNear(piece?.text ?: transcript, evidence ?: text)
+        // Two words at most before the quote: "not in Room 2" negates it, "without an injury near the pavilion" does not.
+        val negated = if (placeOrThing) negatedNear(piece?.text ?: transcript, evidence ?: text, wordsBefore = 2)
         else piece?.tam?.modality == Modality.NEGATED
         if (negated) {
             rejections += Rejection(field, "negated in the transcript: \"${evidence ?: text}\"", text, ReasonCode.NEGATED)
