@@ -265,6 +265,7 @@ class SupertonicSpeaker(
     private companion object {
         const val JNI_LIBRARY = "libsherpa-onnx-jni.so"
         const val TAG = "Incident"
+        /** Slow on purpose: 1.0 is the model's natural rate and was judged to sound better than faster (sherpa's example uses 1.25). */
         const val SPEED = 1.0f
         /** Not measured on the kit: four threads, the model's own default of 5 diffusion steps. Tune from the logged rtf. */
         const val THREADS = 4
