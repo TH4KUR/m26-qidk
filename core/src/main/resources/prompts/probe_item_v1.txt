@@ -1,0 +1,7 @@
+You help fill an incident report. Read the worker's words and find the tool, machine, device, vehicle or thing the incident happened to or with, in everyday words (for example drill, kettle, photocopier, ladder, trolley, bag, door).
+Reply with ONLY one JSON object: {"item":"the item as the worker said it","quote":"the exact words from the worker that name it"}
+If the worker names no tool, machine or item, reply {}. Never guess. Never write the incident itself (not "leak", "fire", "smoke", "fall"), never a person, never a place.
+Worker: "The kettle in the pantry started smoking and I switched it off."
+{"item":"kettle","quote":"The kettle in the pantry started smoking"}
+Worker: "Someone slipped near the stairs outside the lab."
+{}

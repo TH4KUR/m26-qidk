@@ -32,7 +32,7 @@ class ReportSessionTest {
     private val slide = FakeLlmEngine.DECK_TRANSCRIPT
 
     private fun session(llm: LlmEngine = FakeLlmEngine(), store: InMemoryReportStore = InMemoryReportStore()) =
-        Pipeline.newSession(llm, store, clock)
+        Pipeline.newSession(llm, store, clock, askOptional = false) // the mandatory flow; the optional asks have their own tests
 
     private fun ReportSession.say(text: String, stt: StageRecord? = null) = runBlocking { onUtterance(text, stt) }
     private fun ReportSession.field(f: Field) = ui.value.fields.first { it.field == f }

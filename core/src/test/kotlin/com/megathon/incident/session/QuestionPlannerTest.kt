@@ -12,7 +12,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class QuestionPlannerTest {
-    private val planner = QuestionPlanner()
+    private val planner = QuestionPlanner(askOptional = false) // the mandatory flow; OptionalAsksTest covers the rest
     private val low = TriageLanes.forLevel(Priority.LOW)
 
     private fun heard(f: Field, t: String) = FieldValue(t, ValueStatus.REPORTED, t)
