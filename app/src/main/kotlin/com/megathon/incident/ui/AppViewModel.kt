@@ -185,6 +185,10 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     private var live: Live? = null
     private var warm: Job? = null
 
+    // Latency evidence for the kit comparison (batch vs live): monotonic time from the Stop tap to the finished turn, logged once per turn.
+    private var turnStartNs = 0L
+    private var turnMode = ""
+
     private class Live(val id: Long, val coordinator: LiveInferenceCoordinator, val scheduler: PreviewScheduler)
 
     fun debugSetLiveInference(on: Boolean) {
@@ -270,6 +274,8 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             timer?.cancel()
             val l = live // taken before waiting: a second Stop (the 30 s limit racing a tap) must not commit the same recording twice
             live = null
+            turnStartNs = System.nanoTime()
+            turnMode = if (l != null) "live" else "batch"
             val pcm = recorder.stop()
             val capturedAt = java.time.Instant.now() // the device clock at the moment the reporter stopped speaking
             if (l != null) processLive(l, capturedAt) else process(pcm, capturedAt)
@@ -456,6 +462,10 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     }
 
     private fun finishTurn(before: List<com.megathon.incident.session.FieldView>, journalBefore: Int, error: String?) {
+        if (turnStartNs != 0L) {
+            android.util.Log.i(TAG, "latency mode=$turnMode stop_to_ready_ms=${(System.nanoTime() - turnStartNs) / 1_000_000} ok=${error == null}")
+            turnStartNs = 0L
+        }
         val s = session.ui.value
         // A spoken correction replaced a value: say what changed and offer undo, as for a tap.
         s.journal.drop(journalBefore).lastOrNull()?.let { j ->
