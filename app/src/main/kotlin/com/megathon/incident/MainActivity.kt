@@ -35,7 +35,7 @@ class MainActivity : ComponentActivity() {
             return
         }
         // Debug builds: `--es wav <path in the app's files dir>` runs that WAV through the real speech path.
-        intent.getStringExtra("wav")?.let { vm.debugTranscribeFile(it) }
+        intent.getStringExtra("wav")?.let { vm.debugTranscribeFile(it, thenSend = intent.getStringExtra("submit") == "1") }
         // Debug builds: `--es eval <gold file> [--es prompt <file>] --es run <name> [--es only g01,g02]` (dev split only).
         // Debug builds: the held-out items run ONLY through `--es holdout CONFIRM --es gold <file> --es run <name> [--es prompt <file>]`,
         // never in the same launch as `--es eval` (the launch is refused and nothing runs); a second run of the same prompt on the same

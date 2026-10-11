@@ -457,13 +457,14 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     }
 
     /** Debug builds only: run a 16 kHz mono PCM16 WAV through the same path as the microphone. */
-    fun debugTranscribeFile(path: String) {
+    fun debugTranscribeFile(path: String, thenSend: Boolean = false) {
         if (!Engines.isDebuggable(getApplication())) return
         viewModelScope.launch {
             val pcm = runCatching { readWav(java.io.File(path)) }.getOrElse {
                 android.util.Log.e(TAG, "cannot read $path", it); say("Can't read that file: ${it.message}"); return@launch
             }
             process(pcm)
+            if (thenSend) send() // `--es submit 1`: the saved-report summary is spoken right after the clip, for hearing it
         }
     }
 
