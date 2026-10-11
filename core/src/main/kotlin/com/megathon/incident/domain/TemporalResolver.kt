@@ -38,26 +38,83 @@ data class TemporalValue(
  */
 class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
 
+    /**
+     * Resolves a time phrase or a whole report sentence. A sentence with two time clauses resolves the one attached to the
+     * incident (the first one that is not a response: called / informed / reported / bulaya / bataya / phone kiya), and a clause in
+     * the future (hoga, karunga, will, tomorrow) is not an incident time. Tense also settles "kal" / "parso" / "narso" when it is
+     * past (tha, hua, gaya, ne ...); with no tense they stay ambiguous, as before.
+     */
     fun resolve(text: String, capturedAt: Instant): TemporalValue? {
-        val t = spokenHoursAsDigits(EnumNormalizer.normalize(text) ?: return null)
+        val t = canonical(text) ?: return null
+        val clauses = TemporalLexicon.clauses(t)
+        if (clauses.size > 1) {
+            val timed = clauses.indices.mapNotNull { i ->
+                resolveOne(clauses[i], text, capturedAt, TemporalLexicon.tenseAt(clauses, i))?.let { clauses[i] to it }
+            }
+            val strong = timed.filterNot { (c, _) -> isNow(c) && !TemporalLexicon.strongNow(c) }.ifEmpty { timed }
+            if (strong.size >= 2 && strong.any { (c, _) -> TemporalLexicon.isResponse(c) }) {
+                return (strong.firstOrNull { (c, _) -> !TemporalLexicon.isResponse(c) } ?: strong.first()).second
+            }
+            // Two times and no response: the first clause is the incident when it is a whole clause (it has its own tense marker);
+            // a fragment ("yesterday evening, around 7 PM") is read together with the rest.
+            if (strong.size >= 2 && TemporalLexicon.tenseOf(strong.first().first) != ClauseTense.NONE) return strong.first().second
+            if (strong.size == 1 && timed.size > 1) return strong[0].second
+            val tense = clauses.indexOfFirst { c -> timed.any { it.first == c } }.let { i -> if (i >= 0) TemporalLexicon.tenseAt(clauses, i) else TemporalLexicon.tenseOf(t) }
+            return resolveOne(t, text, capturedAt, tense)
+        }
+        return resolveOne(t, text, capturedAt, TemporalLexicon.tenseOf(t))
+    }
+
+    /** Like [resolve] for a [phrase] the model (or [findTimePhrase]) took out of [sentence]: the tense comes from the sentence. */
+    fun resolveInContext(phrase: String, sentence: String, capturedAt: Instant): TemporalValue? {
+        val p = canonical(phrase) ?: return null
+        val s = canonical(sentence)
+        val tense = if (s == null) ClauseTense.NONE else {
+            val clauses = TemporalLexicon.clauses(s)
+            val i = clauses.indexOfFirst { it.contains(p) }
+            if (i >= 0) TemporalLexicon.tenseAt(clauses, i) else TemporalLexicon.tenseOf(s)
+        }
+        return resolveOne(p, phrase, capturedAt, tense)
+    }
+
+    private fun canonical(text: String): String? {
+        val normalized = EnumNormalizer.normalize(text) ?: return null
+        return spokenHoursAsDigits(TemporalLexicon.canonicalize(normalized))
+    }
+
+    private fun resolveOne(t: String, text: String, capturedAt: Instant, tense: ClauseTense): TemporalValue? {
         val now = capturedAt.atZone(zone)
+        if (tense == ClauseTense.FUTURE && !TemporalLexicon.hasPastAnchor(t)) return null
 
         relativeOffset(t)?.let { minutes ->
             val then = now.minusMinutes(minutes)
-            return TemporalValue(then.toLocalDate(), then.toLocalTime().truncatedTo(ChronoUnit.MINUTES), null, false, false, text)
+            return TemporalValue(then.toLocalDate(), then.toLocalTime().truncatedTo(ChronoUnit.MINUTES), null, isApproximate(t), false, text)
         }
+        if (TemporalLexicon.shortWhileAgo(t)) return TemporalValue(now.toLocalDate(), null, null, true, false, text)
         if (isNow(t)) {
             return TemporalValue(now.toLocalDate(), now.toLocalTime().truncatedTo(ChronoUnit.MINUTES), null, false, false, text)
         }
 
         val today = now.toLocalDate()
+        val past = tense == ClauseTense.PAST
         val lastNight = has(t, "last night")
         val tonight = has(t, "tonight")
         val day = when {
+            has(t, "day before yesterday") -> Day.DAY_BEFORE
             has(t, "yesterday") || lastNight -> Day.YESTERDAY
             has(t, "today") || has(t, "aaj") || has(t, "आज") || has(t, "this morning") ||
                 has(t, "this afternoon") || has(t, "this evening") || tonight -> Day.TODAY
             has(t, "kal") || has(t, "कल") -> Day.KAL
+            has(t, "parso") -> Day.PARSO
+            has(t, "narso") -> Day.NARSO
+            else -> null
+        }
+        // "3 days ago" and a weekday name ("on Tuesday", "pichhle shukravaar") each name one calendar date.
+        val daysAgo = TemporalLexicon.daysAgo(t)
+        val weekday = if (day == null && daysAgo == null) TemporalLexicon.weekday(t) else null
+        val namedDate: LocalDate? = when {
+            daysAgo != null -> today.minusDays(daysAgo)
+            weekday != null -> weekdayDate(weekday, t, today)
             else -> null
         }
         val partOfDay = when {
@@ -71,7 +128,7 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
         val clock = clockTime(t)
 
         // A week is a range, not a day; an explicit day word wins over it.
-        val week = if (day == null) weekRange(t, today) else null
+        val week = if (day == null && namedDate == null) weekRange(t, today) else null
         if (week != null) {
             val time = clock?.let { c ->
                 val (hour, ambiguousClock) = to24h(c, partOfDay)
@@ -84,21 +141,47 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
         }
 
         // A part of day on its own ("the night guard") is not a time.
-        if (clock == null && day == null) return null
+        if (clock == null && day == null && namedDate == null) return null
 
-        val date = when (day) {
+        var date = when (day) {
             Day.YESTERDAY -> today.minusDays(1)
             Day.TODAY -> today
-            Day.KAL, null -> null
+            Day.DAY_BEFORE -> today.minusDays(2)
+            // "kal" / "parso" / "narso" point backwards or forwards; only a past-tense clause settles which.
+            Day.KAL -> if (past) today.minusDays(1) else null
+            Day.PARSO -> if (past) today.minusDays(2) else null
+            Day.NARSO -> if (past) today.minusDays(3) else null
+            null -> namedDate
         }
-        var ambiguous = day == Day.KAL
+        var ambiguous = (day == Day.KAL || day == Day.PARSO || day == Day.NARSO) && !past
         var time: LocalTime? = null
         if (clock != null) {
             val (hour, ambiguousClock) = to24h(clock, partOfDay)
             time = LocalTime.of(hour, clock.minute)
             ambiguous = ambiguous || ambiguousClock
+            // "aaj 10 baje" said at 13:30: 22:00 has not happened yet, so only 10:00 can be meant.
+            if (ambiguousClock && day == Day.TODAY && partOfDay == null && clock.meridiem == null && clock.hour in 1..12) {
+                val candidates = listOf(clock.hour % 12, clock.hour % 12 + 12).map { LocalTime.of(it, clock.minute) }.filter { !it.isAfter(now.toLocalTime()) }
+                if (candidates.size == 1) { time = candidates[0]; ambiguous = false }
+            }
         }
+        // "last night at 1 am" / "kal raat ek baje" / "after midnight" is the early hours of the next calendar day.
+        val lastNightish = day == Day.YESTERDAY || (day == Day.KAL && past)
+        if (lastNightish && partOfDay == PartOfDay.NIGHT && date != null &&
+            ((time != null && time.hour < 6) || (time == null && TemporalLexicon.afterMidnight(t)))
+        ) date = date.plusDays(1)
         return TemporalValue(date, time, partOfDay, approximate = isApproximate(t), ambiguous = ambiguous, sourceText = text)
+    }
+
+    /** The date a weekday name points at: the most recent such day before today, or that day of last / this week when said. */
+    private fun weekdayDate(dow: DayOfWeek, t: String, today: LocalDate): LocalDate {
+        val monday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        val inWeek = when {
+            LAST_WEEK.any { has(t, it) } -> monday.minusWeeks(1).with(TemporalAdjusters.nextOrSame(dow))
+            THIS_WEEK.any { has(t, it) } -> monday.with(TemporalAdjusters.nextOrSame(dow))
+            else -> null
+        }
+        return inWeek?.takeIf { !it.isAfter(today) } ?: today.with(TemporalAdjusters.previous(dow))
     }
 
     /**
@@ -115,17 +198,30 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
     }
 
     private fun firstPhraseIn(text: String): String? {
-        for (sentence in text.split(Regex("(?<=[.!?;])\\s+"))) {
+        for (sentence in text.split(Regex("(?<=[.!?;।])\\s+"))) {
             var s = sentence
             CORRECTION.findAll(s.lowercase()).lastOrNull()?.let { s = s.substring(it.range.last + 1) }
             val lower = s.lowercase()
-            val spans = FINDERS.flatMap { r -> r.findAll(lower).map { it.range }.toList() }
-            if (spans.isEmpty()) continue
+            // The incident clause first: a clause about a response (called / informed / bulaya) only when there is no other, and a
+            // clause in the future (hoga, will, tomorrow) never.
+            val ranges = TemporalLexicon.clauseRanges(lower)
+            val texts = ranges.map { lower.substring(it) }
+            val found = ranges.indices.mapNotNull { i ->
+                val main = ALL_FINDERS.flatMap { r -> r.findAll(texts[i]).map { it.range }.toList() }
+                // A trailing "at night" / "after midnight" completes a time that was found; it never starts one.
+                val first = main.minOfOrNull { it.first }
+                val spans = if (first == null) main else main + TemporalLexicon.MODIFIER_FINDERS
+                    .flatMap { r -> r.findAll(texts[i]).map { it.range }.toList() }
+                    .filter { m -> main.any { f -> m.first - (f.last + 1) in 0..8 } }
+                val future = TemporalLexicon.tenseAt(texts, i) == ClauseTense.FUTURE && !TemporalLexicon.hasPastAnchor(texts[i])
+                if (spans.isEmpty() || future) null else Triple(i, ranges[i].first, spans)
+            }
+            val (_, offset, spans) = found.firstOrNull { !TemporalLexicon.isResponse(texts[it.first]) } ?: found.firstOrNull() ?: continue
             val first = spans.minOf { it.first }
             // Join neighbours that are part of the same expression ("8:30" + "tonight"), not a later sentence part.
             val joined = spans.filter { it.first - first <= 30 }
-            val start = joined.minOf { it.first }
-            val end = joined.maxOf { it.last }
+            val start = offset + joined.minOf { it.first }
+            val end = offset + joined.maxOf { it.last }
             return s.substring(start, end + 1).trim(' ', ',', '.')
         }
         return null
@@ -135,12 +231,12 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
     private fun spokenHoursAsDigits(t: String): String =
         HOUR_WORDS.replace(t) { m -> (HOUR_NUMBER[m.groupValues[1]] ?: m.groupValues[1]).toString() + " " + m.groupValues[2] }
 
-    private enum class Day { YESTERDAY, TODAY, KAL }
+    private enum class Day { YESTERDAY, TODAY, KAL, DAY_BEFORE, PARSO, NARSO }
 
     private data class Clock(val hour: Int, val minute: Int, val meridiem: Meridiem?, val explicit24h: Boolean)
     private enum class Meridiem { AM, PM }
 
-    private fun has(text: String, phrase: String) = EnumNormalizer.containsPhrase(text, phrase)
+    private fun has(text: String, phrase: String) = TemporalLexicon.hasWord(text, phrase)
 
     private fun isNow(t: String): Boolean {
         if (has(t, "abhi bhi") || has(t, "अभी भी")) return false
@@ -238,7 +334,7 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
         val HOUR_WORDS = Regex(
             "(?<![\\p{L}])(" + HOUR_NUMBER.keys.joinToString("|") + ")\\s*(a\\.?m\\.?|p\\.?m\\.?|o'clock|oclock|baje|बजे)",
         )
-        val APPROX = listOf("around", "about", "approximately", "approx", "roughly", "lagbhag", "kareeb", "करीब", "लगभग", "तकरीबन")
+        val APPROX = listOf("around", "about", "approximately", "approx", "roughly", "lagbhag", "kareeb", "करीब", "लगभग", "तकरीबन", "aaspaas", "taqriban")
 
         val HOUR_UNITS = setOf("hour", "hours", "hr", "hrs", "ghante", "ghanta", "ghantey", "ghanto", "घंटे", "घंटा")
 
@@ -291,14 +387,16 @@ class TemporalResolver(private val zone: ZoneId = ZoneId.of("Asia/Kolkata")) {
                 Regex(NB + DAYWORD + "(?![\\p{L}])"),
             )
         }
+        val ALL_FINDERS: List<Regex> by lazy { FINDERS + Regex(BARE_HOUR.pattern) + TemporalLexicon.FINDERS }
         val HALF_PAST = Regex(NB + "half past (\\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)(?![\\p{L}\\p{N}])")
         // "11 this morning", "8 tonight", "9 at night"; never "2 night guards" or "3 morning shift workers".
         val NUMBER_PART_OF_DAY = Regex(
             NB + "(\\d{1,2})\\s+(?:this\\s+(?:morning|afternoon|evening|night)|tonight|in\\s+the\\s+(?:morning|afternoon|evening)|at\\s+night)(?![\\p{L}])",
         )
         val BARE_HOUR = Regex(
-            "(?<![\\p{L}\\p{N}])(?:at|around|about|approximately|approx|roughly)\\s+(\\d{1,2})(?![\\p{N}:])" +
-                "(?!\\s*(?:hours?|minutes?|mins?|people|persons|pm|am))",
+            "(?<![\\p{L}\\p{N}])(?:at|around|about|approximately|approx|roughly)\\s+(\\d{1,2})(?![\\p{L}\\p{N}:])" +
+                "(?!\\s*(?:hours?|minutes?|mins?|people|persons|pm|am|met(?:er|re)s?|m\\b|km|cm|mm|feet|foot|ft|inch(?:es)?|kgs?|kilos?|tons?|tonnes?|" +
+                "degrees?|percent|%|bars?|psi|volts?|amps?|lit(?:er|re)s?|workers|students|employees|times|floors?|storeys?|units?))",
         )
     }
 }
