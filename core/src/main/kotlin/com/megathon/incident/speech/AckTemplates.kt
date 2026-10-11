@@ -56,7 +56,7 @@ object AckTemplates {
                 Field.DATE_TIME -> text
                 Field.SEVERITY -> "severity $text"
                 Field.PERSONS_INVOLVED -> "$text involved"
-                Field.EQUIPMENT_ASSET -> "equipment $text"
+                Field.EQUIPMENT_ASSET -> "tool or item: $text"
                 Field.IMMEDIATE_ACTIONS -> "action taken: $text"
                 Field.WITNESSES -> "witnesses $text"
                 else -> null

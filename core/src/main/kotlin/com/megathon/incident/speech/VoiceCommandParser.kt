@@ -40,6 +40,8 @@ object VoiceCommandParser {
         "persons involved" to Field.PERSONS_INVOLVED, "people involved" to Field.PERSONS_INVOLVED,
         "persons" to Field.PERSONS_INVOLVED, "people" to Field.PERSONS_INVOLVED,
         "equipment" to Field.EQUIPMENT_ASSET, "asset" to Field.EQUIPMENT_ASSET, "equipment asset" to Field.EQUIPMENT_ASSET,
+        "tool" to Field.EQUIPMENT_ASSET, "tools" to Field.EQUIPMENT_ASSET, "item" to Field.EQUIPMENT_ASSET, "items" to Field.EQUIPMENT_ASSET,
+        "thing" to Field.EQUIPMENT_ASSET, "tool or item" to Field.EQUIPMENT_ASSET, "tools or items" to Field.EQUIPMENT_ASSET,
         "description" to Field.DESCRIPTION,
         "immediate actions" to Field.IMMEDIATE_ACTIONS, "actions taken" to Field.IMMEDIATE_ACTIONS,
         "actions" to Field.IMMEDIATE_ACTIONS,
