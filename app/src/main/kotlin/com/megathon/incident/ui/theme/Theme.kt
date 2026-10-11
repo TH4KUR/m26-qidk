@@ -57,9 +57,18 @@ private val AppShapes = Shapes(
     large = RoundedCornerShape(28.dp),
 )
 
+/**
+ * [hindi] switches the whole palette to the burgundy one (HindiLightColors / HindiDarkColors) and rebuilds the Material colour
+ * scheme from it. It is a plain parameter, so the caller passes the live Hindi state and the app re-themes without a restart.
+ */
 @Composable
-fun IncidentTheme(darkTheme: Boolean = true, content: @Composable () -> Unit) {
-    val c = if (darkTheme) DarkColors else LightColors
+fun IncidentTheme(darkTheme: Boolean = true, hindi: Boolean = false, content: @Composable () -> Unit) {
+    val c = when {
+        hindi && darkTheme -> HindiDarkColors
+        hindi -> HindiLightColors
+        darkTheme -> DarkColors
+        else -> LightColors
+    }
     val scheme = if (darkTheme) {
         darkColorScheme(
             primary = c.accent, onPrimary = c.onAccent, primaryContainer = c.accentContainer, onPrimaryContainer = c.onAccentContainer,

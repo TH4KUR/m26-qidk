@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.util.Log
 import com.megathon.incident.speech.TtsVoiceCheck
 import kotlinx.coroutines.launch
@@ -83,6 +84,10 @@ class MainActivity : ComponentActivity() {
         // eval, coexist and WAV paths time the load themselves and must not have it done for them.
         val timedByDebugPath = Engines.isDebuggable(this) && listOf("eval", "holdout", "coexist", "wav").any { intent.hasExtra(it) }
         if (!timedByDebugPath) vm.preloadModels()
-        setContent { IncidentTheme { AppRoot(vm) } }
+        setContent {
+            // The theme follows the Hindi switch live: burgundy palette when it is on, the English palette when it is off.
+            val hindi = vm.ui.collectAsStateWithLifecycle().value.hindiLane
+            IncidentTheme(hindi = hindi) { AppRoot(vm) }
+        }
     }
 }
