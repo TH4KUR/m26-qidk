@@ -253,6 +253,15 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             tags?.let { session.recordStage(StageRecord("Tags", "SenseVoice (sherpa-onnx, QNN)", it.compute, it.elapsedMs)) }
             session.onUtterance(heard.text, StageRecord("Hear", engine.name, heard.compute, heard.elapsedMs), tags?.signals.orEmpty(), capturedAt)
             finishTurn(before, journalBefore, null)
+            // The focused second look at empty tool/item and action fields: after the turn is on screen, while the reply is spoken,
+            // holding the model lock so a new turn simply waits for it. Failure costs the chips, never the turn.
+            try {
+                session.probeMissing()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.w(TAG, "probe failed", e)
+            }
         }
     }
 
@@ -367,7 +376,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     }
 
     /** Debug builds only: run E's gold dev split through the real pipeline and write predictions for E's scorer. */
-    fun debugEval(gold: String, promptFile: String?, runName: String, only: Set<String>?) {
+    fun debugEval(gold: String, promptFile: String?, runName: String, only: Set<String>?, probe: Boolean = false) {
         if (!Engines.isDebuggable(getApplication())) return
         val engine = llm ?: return
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -376,7 +385,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             val warm: suspend () -> Long = { (engine as? GenieXLlmEngine)?.warmUp() ?: 0L }
             android.util.Log.i(TAG, "eval $runName starting")
             val out = runCatching {
-                com.megathon.incident.eval.EvalRunner(getApplication<Application>().filesDir, engine, warm).run(java.io.File(gold), prompts, runName, only)
+                com.megathon.incident.eval.EvalRunner(getApplication<Application>().filesDir, engine, warm).run(java.io.File(gold), prompts, runName, only, probe = probe)
             }
             out.onSuccess { android.util.Log.i(TAG, "eval $runName done: ${it.path}") }
                 .onFailure { android.util.Log.e(TAG, "eval $runName failed", it) }
