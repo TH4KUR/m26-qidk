@@ -121,6 +121,8 @@ class LiveInferenceCoordinatorTest {
         assertEquals("the pump is leaking in room three", done.text)
         assertEquals(pcm.size, done.pcm.size)
         assertEquals(2, engine.calls.size)
+        assertEquals(2L, done.decodeMs, "every decode's engine time is summed, previews included")
+        assertEquals(Compute.SIMULATED, done.compute, "the proof strip reads where it really ran from the engine's own answer")
         val again = c.finish()
         assertEquals(2, engine.calls.size, "finishing twice must not decode again")
         assertEquals(done.text, again.text)

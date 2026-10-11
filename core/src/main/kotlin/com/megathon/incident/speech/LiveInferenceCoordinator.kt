@@ -1,6 +1,8 @@
 package com.megathon.incident.speech
 
+import com.megathon.incident.testing.Compute
 import com.megathon.incident.testing.SpeechEngine
+import com.megathon.incident.testing.Transcript
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -50,6 +52,9 @@ class LiveInferenceCoordinator(
         val fullPass: Boolean,
         /** Every engine call made for this recording, previews and final together. */
         val decodeCalls: Int,
+        /** Engine time summed over every call (previews and final), and where the engine said it ran; null when nothing was decoded. */
+        val decodeMs: Long,
+        val compute: Compute?,
     )
 
     private val lock = Any()
@@ -71,6 +76,8 @@ class LiveInferenceCoordinator(
     private var previewFailed = false
     private var windows = 0
     private var calls = 0
+    private var decodeMs = 0L
+    private var compute: Compute? = null
     private var stopping = false
     private var cancelled = false
     private var result: Final? = null
@@ -112,7 +119,7 @@ class LiveInferenceCoordinator(
                 Window(start, end, pcm.copyOfRange(start, end))
             }
             val heard = try {
-                engine.transcribe(job.pcm, language).text
+                counted(engine.transcribe(job.pcm, language))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -121,7 +128,6 @@ class LiveInferenceCoordinator(
             }
             val snapshot = synchronized(lock) {
                 if (cancelled) return
-                calls++
                 windows++
                 val words = heard.trim().split(Regex("\\s+")).count { it.isNotEmpty() }
                 val tail = Math.ceil(words * overlapSamples.toDouble() / (job.end - job.start)).toInt().coerceAtLeast(1)
@@ -132,6 +138,15 @@ class LiveInferenceCoordinator(
             }
             snapshot?.let(onSnapshot)
         }
+    }
+
+    private fun counted(t: Transcript): String {
+        synchronized(lock) {
+            calls++
+            decodeMs += t.elapsedMs
+            compute = t.compute
+        }
+        return t.text
     }
 
     /** Stop was tapped: decode what is left and return the final transcript. Safe to call twice; the second call decodes nothing. */
@@ -149,7 +164,7 @@ class LiveInferenceCoordinator(
                 Plan.Whole -> whole()
             }
             val out = synchronized(lock) {
-                Final(text, pcm.copyOf(total), plan == Plan.Whole || fellBack, calls)
+                Final(text, pcm.copyOf(total), plan == Plan.Whole || fellBack, calls, decodeMs, compute)
             }
             result = out
             out
@@ -177,14 +192,13 @@ class LiveInferenceCoordinator(
     private suspend fun tail(plan: Plan.Tail): String {
         val (audio, overlapped) = synchronized(lock) { pcm.copyOfRange(plan.start, plan.end) to (decodedEnd > 0) }
         val heard = try {
-            engine.transcribe(audio, language).text
+            counted(engine.transcribe(audio, language))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             return whole()
         }
         return synchronized(lock) {
-            calls++
             transcript.addWindow(heard, overlapped, maxOverlapWords)
             transcript.finish()
             if (transcript.ambiguous) null else transcript.text
@@ -193,11 +207,8 @@ class LiveInferenceCoordinator(
 
     private suspend fun whole(): String {
         val all = synchronized(lock) { pcm.copyOf(total) }
-        val heard = engine.transcribe(all, language).text.trim()
-        synchronized(lock) {
-            calls++
-            fellBack = true
-        }
+        val heard = counted(engine.transcribe(all, language)).trim()
+        synchronized(lock) { fellBack = true }
         return heard
     }
 
