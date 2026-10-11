@@ -440,4 +440,25 @@ class ReportSessionTest {
         runBlocking { s.onUtterance("There's a massive fire in a sh2 right now.", capturedAt = stopped) }
         assertEquals("Today, Sun 11 Oct · 3:06 PM", s.field(Field.DATE_TIME).value)
     }
+
+    // ---- the optional witness question ------------------------------------------------------------------------------
+
+    private val withPerson = """{"tool":"update_report","arguments":{"incident_type":"water_leak_flood","severity":"minor","location":"Conference Room 2","date_time_text":"yesterday at about 10 AM","persons_involved":["Rahul"],"evidence":{"incident_type":"water leak","severity":"minor","location":"Conference Room 2","date_time_text":"yesterday at about 10 AM","persons_involved":"Rahul"}}}"""
+    private val saidWithPerson = "Water leak at Conference Room 2 yesterday at about 10 AM, it is minor. My friend Rahul was with me when it happened."
+
+    @Test fun witnessQuestionIsAskedOnceWhenAPersonIsListedAndNoOneIsRecordedAsSeeingIt() {
+        val s = session(Scripted(withPerson))
+        s.say(saidWithPerson)
+        val q = assertIs<SessionState.Asking>(s.ui.value.state).question
+        assertEquals(listOf(Field.WITNESSES), q.asks.map { it.field })
+        assertEquals("Did anyone see it happen?", q.spoken)
+    }
+
+    @Test fun tappingNoOneRecordsAnExplicitNoneAndMovesToReview() {
+        val s = session(Scripted(withPerson))
+        s.say(saidWithPerson)
+        s.tap(Field.WITNESSES, "No one")
+        assertEquals(UiStatus.NONE, s.field(Field.WITNESSES).status)
+        assertEquals(SessionState.Review, s.ui.value.state)
+    }
 }

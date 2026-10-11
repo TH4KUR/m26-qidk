@@ -115,4 +115,33 @@ class QuestionPlannerTest {
         val r = full().with(Field.SEVERITY, FieldValue(null, ValueStatus.UNKNOWN, "I don't know"))
         assertNull(planner.next(r, emptySet(), low, emptyList()))
     }
+
+    // ---- one optional witness question, only when nothing mandatory is left ----------------------------------------
+
+    private fun complete() = full().with(Field.SEVERITY, FieldValue("minor", ValueStatus.USER_CONFIRMED))
+        .with(Field.PERSONS_INVOLVED, heard(Field.PERSONS_INVOLVED, "Rahul"))
+
+    @Test fun whenAPersonIsListedAndNoOneWasAskedAboutSeeingItTheWitnessQuestionIsAskedOnce() {
+        val q = planner.next(complete(), emptySet(), low, emptyList())!!
+        assertEquals(listOf(Field.WITNESSES), q.asks.map { it.field })
+        assertEquals("Did anyone see it happen?", q.spoken)
+        assertEquals(listOf("No one"), q.asks.single().replies.map { it.label })
+        assertNull(planner.next(complete(), emptySet(), low, listOf(setOf(Field.WITNESSES))), "asked once, never again")
+    }
+
+    @Test fun theWitnessQuestionWaitsForTheMandatoryFields() {
+        val r = complete().with(Field.SEVERITY, FieldValue(null, ValueStatus.MISSING))
+        assertEquals(listOf(Field.SEVERITY), planner.next(r, emptySet(), low, emptyList())!!.asks.map { it.field })
+    }
+
+    @Test fun noWitnessQuestionWhenWitnessesAreAnsweredOrNobodyIsListed() {
+        assertNull(planner.next(complete().with(Field.WITNESSES, heard(Field.WITNESSES, "Priya")), emptySet(), low, emptyList()))
+        assertNull(planner.next(complete().with(Field.WITNESSES, FieldValue.explicitNone("nobody saw it")), emptySet(), low, emptyList()))
+        assertNull(planner.next(full().with(Field.SEVERITY, FieldValue("minor", ValueStatus.USER_CONFIRMED)), emptySet(), low, emptyList()))
+    }
+
+    @Test fun noWitnessQuestionOnUrgentOrHighLanes() {
+        assertNull(planner.next(complete(), emptySet(), TriageLanes.forLevel(Priority.URGENT), emptyList()))
+        assertNull(planner.next(complete(), emptySet(), TriageLanes.forLevel(Priority.HIGH), emptyList()))
+    }
 }

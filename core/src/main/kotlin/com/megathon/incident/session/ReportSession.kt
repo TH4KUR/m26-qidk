@@ -160,6 +160,10 @@ class ReportSession(
         remember()
         val value = when (reply.field) {
             Field.DATE_TIME -> FieldValue(dateAnswer(reply), ValueStatus.USER_CONFIRMED, "tapped ${reply.label}")
+            // "No one": an answered question with no value, not the text "none" (spec: EXPLICIT_NONE is answered, not filled).
+            Field.WITNESSES, Field.PERSONS_INVOLVED ->
+                if (reply.value == QuestionPlanner.NO_ONE) FieldValue.explicitNone("tapped ${reply.label}")
+                else FieldValue(reply.value, ValueStatus.USER_CONFIRMED, "tapped ${reply.label}")
             else -> FieldValue(reply.value, ValueStatus.USER_CONFIRMED, "tapped ${reply.label}")
         }
         setByReporter(reply.field, value, "tapped ${reply.label}")

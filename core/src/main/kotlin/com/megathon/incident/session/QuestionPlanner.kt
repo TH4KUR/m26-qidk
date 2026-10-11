@@ -20,12 +20,26 @@ class QuestionPlanner {
             .filter { it in MANDATORY }
             .filter { f -> f in clarify || !report.isAnswered(f) }
             .take(lane.maxQuestionsPerTurn)
-        if (needed.isEmpty()) return null
+        if (needed.isEmpty()) return witnessQuestion(report, lane, askedBefore)
         if (askedBefore.lastOrNull() == needed.toSet()) return null
 
         val urgent = lane.level >= Priority.HIGH
         val asks = needed.map { ask(it, report, clarify, urgent) }
         return Question(asks, asks.joinToString(" ") { it.prompt })
+    }
+
+    /**
+     * The one optional question: when every mandatory field is answered and a person is listed but nobody is recorded as
+     * having seen it, ask once ("Did anyone see it happen?"). Never on HIGH or URGENT lanes, never twice, never when the
+     * witnesses are filled or answered "no one". A person present but not listed is covered by the witness chip instead.
+     */
+    private fun witnessQuestion(report: IncidentReport, lane: TriageLane, askedBefore: List<Set<Field>>): Question? {
+        if (lane.level >= Priority.HIGH) return null
+        if (askedBefore.any { Field.WITNESSES in it }) return null
+        if (!report.isFilled(Field.PERSONS_INVOLVED)) return null
+        if (report.isAnswered(Field.WITNESSES)) return null
+        val ask = Ask(Field.WITNESSES, "Did anyone see it happen?", listOf(QuickReply("No one", Field.WITNESSES, NO_ONE)))
+        return Question(listOf(ask), ask.prompt)
     }
 
     private fun ask(field: Field, report: IncidentReport, clarify: Set<Field>, urgent: Boolean): Ask = when (field) {
@@ -49,6 +63,9 @@ class QuestionPlanner {
     }
 
     companion object {
+        /** The value of the "No one" quick reply; the session records it as an explicit "none", not as text. */
+        const val NO_ONE = "none"
+
         val MANDATORY: Set<Field> = setOf(Field.INCIDENT_TYPE, Field.LOCATION, Field.DATE_TIME, Field.SEVERITY)
 
         val TYPE_CHOICES: List<Pair<String, IncidentType>> = listOf(
