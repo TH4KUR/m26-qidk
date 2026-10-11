@@ -1,9 +1,15 @@
 package com.megathon.incident.ui.components
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.State
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -39,8 +45,9 @@ import com.megathon.incident.ui.theme.Size
 import com.megathon.incident.ui.theme.Theme
 
 /**
- * The microphone. Three honest states: ready (accent), listening (red, with a ring that follows how loud it is),
- * working (a quiet static report mark). The listening ring follows real audio levels; the working state never loops.
+ * The microphone. Three honest states: ready (accent), listening (red, a ring that follows how loud it is and breathes
+ * gently so a quiet room still reads as alive), working (a progress ring that turns while the device works).
+ * Nothing moves at rest, and nothing moves when the system animator scale is zero.
  */
 @Composable
 fun MicButton(
@@ -54,10 +61,18 @@ fun MicButton(
     val c = Theme.colors
     val reduce = LocalReduceMotion.current
     val ringScale = animateFloatAsState(
-        targetValue = if (listening && !reduce) 1f + 0.4f * level else 1f,
+        targetValue = if (listening && !reduce) 1f + 0.4f * visualLevel(level) else 1f,
         animationSpec = tween(if (reduce) 0 else 90),
         label = "ring",
     )
+    // Only while listening: a slow breath on top of the level, so the ring is alive even when the room is quiet.
+    val breath: State<Float>? = if (listening && !reduce) {
+        rememberInfiniteTransition(label = "listening breath").animateFloat(
+            initialValue = 0f, targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(1100, easing = Motion.enter), RepeatMode.Reverse),
+            label = "breath",
+        )
+    } else null
     val interaction = remember { MutableInteractionSource() }
     val fill by animateColorAsState(when {
         listening -> c.danger
@@ -82,7 +97,10 @@ fun MicButton(
         if (listening) {
             Box(
                 Modifier.size(diameter)
-                    .graphicsLayer { scaleX = ringScale.value; scaleY = ringScale.value }
+                    .graphicsLayer {
+                        val s = ringScale.value + .08f * (breath?.value ?: 0f)
+                        scaleX = s; scaleY = s
+                    }
                     .background(c.danger.copy(alpha = 0.22f), CircleShape),
             )
         }
@@ -95,17 +113,9 @@ fun MicButton(
             }, label = "recorder symbol") { state ->
             when (state) {
                 2 -> {
-                    Canvas(Modifier.size(diameter * 0.42f)) {
-                        val stroke = 3.dp.toPx()
-                        val left = size.width * 0.18f
-                        val right = size.width * 0.82f
-                        val top = size.height * 0.25f
-                        val gap = size.height * 0.26f
-                        repeat(3) { row ->
-                            val y = top + gap * row
-                            drawLine(c.accent, Offset(left, y), Offset(right - if (row == 1) size.width * 0.2f else 0f, y), stroke, androidx.compose.ui.graphics.StrokeCap.Round)
-                        }
-                    }
+                    // The ring that turns while the device works; a still two-thirds ring when motion is off.
+                    if (reduce) CircularProgressIndicator(progress = { 0.66f }, color = c.accent, strokeWidth = 3.dp, modifier = Modifier.size(diameter * 0.5f))
+                    else CircularProgressIndicator(color = c.accent, strokeWidth = 3.dp, modifier = Modifier.size(diameter * 0.5f))
                 }
                 1 -> StopGlyph(onFill, size = diameter * 0.42f)
                 else -> MicGlyph(onFill, size = diameter * 0.46f)
@@ -126,7 +136,8 @@ fun LevelBars(levels: List<Float>, modifier: Modifier = Modifier, count: Int = 2
         horizontalArrangement = Arrangement.spacedBy(3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        padded.forEach { lv ->
+        padded.forEach { raw ->
+            val lv = visualLevel(raw)
             Box(
                 Modifier
                     .width(4.dp)

@@ -158,13 +158,21 @@ fun FieldRow(
                         color = if (view.status == UiStatus.NONE || view.status == UiStatus.UNKNOWN) c.ink2 else c.ink,
                     )
                     view.status == UiStatus.NEEDED -> Text("Needed", style = MaterialTheme.typography.bodyLarge, color = c.onAttention)
-                    else -> Text("Not mentioned", style = MaterialTheme.typography.bodyLarge, color = c.ink3)
+                    else -> Text("Not mentioned", style = MaterialTheme.typography.bodyMedium, color = c.ink3)
                 }
                 if (view.status == UiStatus.NEEDED) view.hint?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.ink2) }
             }
 
+            // A guessed value is never left looking like an answer: it sits in its own box with Accept and Decline.
+            if (view.status == UiStatus.SUGGESTED && !view.writtenByAssistant && valueText != null && !editing) {
+                SuggestedValueBox(
+                    label = view.label, value = valueText, onAccept = onAccept, onDecline = onEdit,
+                    modifier = Modifier.padding(start = Space.s1, end = Space.s1),
+                )
+            }
+
             if (chips.isNotEmpty() && !editing) {
-                Column(Modifier.padding(start = Space.s4, end = Space.s4, bottom = Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+                Column(Modifier.padding(start = Space.s1, end = Space.s1, bottom = Space.s2), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
                     chips.forEach { chip -> SuggestionChipRow(chip, onAccept = { onAcceptChip(chip) }, onDismiss = { onDismissChip(chip) }) }
                 }
             }
@@ -175,7 +183,6 @@ fun FieldRow(
                 exit = fadeOut(tween(if (reduce) 0 else Motion.quick, easing = Motion.exit)) + shrinkVertically(tween(if (reduce) 0 else Motion.quick, easing = Motion.exit)),
             ) {
                 Column(Modifier.bringIntoViewRequester(requester).padding(start = Space.s4, end = Space.s4, bottom = Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
-                    if (view.status == UiStatus.SUGGESTED) Text("Suggested from your story. Confirm it or choose a different answer.", style = MaterialTheme.typography.bodyMedium, color = c.ink2)
                     if (view.writtenByAssistant) {
                         Text("Written by the assistant from what you said. Edit it if it is not right.", style = MaterialTheme.typography.bodyMedium, color = c.ink2)
                     } else if (view.evidence != null) {
@@ -195,9 +202,6 @@ fun FieldRow(
                         }
                     } else {
                         Row(horizontalArrangement = Arrangement.spacedBy(Space.s2), verticalAlignment = Alignment.CenterVertically) {
-                            if (view.status == UiStatus.SUGGESTED && !view.writtenByAssistant) {
-                                SecondaryButton("Use this", onAccept, Modifier.defaultMinSize(minHeight = 48.dp))
-                            }
                             TextAction(if (valueText == null) "Add" else "Edit", onEdit, flush = true)
                         }
                     }

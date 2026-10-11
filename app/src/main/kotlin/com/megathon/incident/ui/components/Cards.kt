@@ -106,9 +106,7 @@ fun TranscriptCard(
             if (scriptNote != null) Text(scriptNote, style = MaterialTheme.typography.bodyMedium, color = c.ink2)
             if (reading) {
                 Row(Modifier.semantics { liveRegion = LiveRegionMode.Polite }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
-                    androidx.compose.foundation.layout.Box(
-                        Modifier.size(width = 20.dp, height = 3.dp).background(c.accent, RoundedCornerShape(2.dp)),
-                    )
+                    WorkingBar(width = 40.dp)
                     Text(readingLabel, style = MaterialTheme.typography.bodyMedium, color = c.ink2)
                 }
             }
@@ -243,7 +241,7 @@ fun PriorityBanner(
         Priority.LOW -> "Routine"
     } + if (advice.overriddenByUser) " (set by you)" else ""
     Card(modifier, container = container) {
-        Column(Modifier.padding(Space.s4), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+        Column(Modifier.padding(start = Space.s4, end = Space.s2, top = Space.s3, bottom = Space.s1), verticalArrangement = Arrangement.spacedBy(Space.s1)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
                 Icon(Icons.Rounded.Warning, contentDescription = null, tint = onC, modifier = Modifier.size(20.dp))
                 Text(title, style = MaterialTheme.typography.titleMedium, color = onC, modifier = Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite })

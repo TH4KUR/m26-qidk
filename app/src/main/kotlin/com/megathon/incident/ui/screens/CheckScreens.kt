@@ -37,7 +37,8 @@ import com.megathon.incident.session.SessionState
 import com.megathon.incident.session.UiStatus
 import com.megathon.incident.ui.AppUi
 import com.megathon.incident.ui.AppViewModel
-import com.megathon.incident.ui.components.StageTrack
+import com.megathon.incident.ui.components.Panel
+import com.megathon.incident.ui.components.SummaryPlayerCard
 import com.megathon.incident.ui.components.Reveal
 import com.megathon.incident.ui.components.RecorderAura
 import com.megathon.incident.ui.components.AppTopBar
@@ -80,7 +81,6 @@ fun CheckScreen(ui: AppUi, vm: AppViewModel) {
         if (isWide()) {
             Row(Modifier.fillMaxSize().padding(pad).padding(horizontal = Size.gutter, vertical = Space.s2), horizontalArrangement = Arrangement.spacedBy(Space.s6)) {
                 Column(Modifier.weight(.4f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
-                    StageTrack(2)
                     Text("One last look.", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
                     Text("Your report stays on this device. Check the details before saving.", style = MaterialTheme.typography.bodyMedium, color = c.ink2)
                     Text("Assistant-written details are labelled.", style = MaterialTheme.typography.labelSmall, color = c.ink3)
@@ -105,21 +105,8 @@ fun CheckScreen(ui: AppUi, vm: AppViewModel) {
         ) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(Space.s4)) {
-                    StageTrack(2)
                     Text("One last look.", style = MaterialTheme.typography.displayMedium, modifier = Modifier.semantics { heading() })
-                    Text("Your report stays on this device. You decide when it’s ready.", style = MaterialTheme.typography.bodyLarge, color = c.ink2)
-                }
-            }
-            item {
-                Row(
-                    Modifier.fillMaxWidth().padding(Space.s4),
-                    horizontalArrangement = Arrangement.spacedBy(Space.s3), verticalAlignment = Alignment.Top,
-                ) {
-                    Icon(Icons.Rounded.Info, contentDescription = null, tint = c.onInfo, modifier = Modifier.size(20.dp))
-                    Text(
-                        "Built from your words. Check the details before saving.",
-                        style = MaterialTheme.typography.bodyLarge, color = c.ink2,
-                    )
+                    Text("Built from your words and kept on this device. Check the details, then save.", style = MaterialTheme.typography.bodyLarge, color = c.ink2)
                 }
             }
             if (missing.isNotEmpty()) {
@@ -134,8 +121,19 @@ fun CheckScreen(ui: AppUi, vm: AppViewModel) {
                 }
             }
             item {
-                Card {
-                    ui.session.fields.forEachIndexed { i, v -> if (i > 0) Hairline(); SummaryRow(v) }
+                // Fields with an answer (and the essentials, even when empty) get a row; the rest are one quiet line.
+                val shown = ui.session.fields.filter { it.value != null || it.mandatory }
+                val empty = ui.session.fields.filter { it.value == null && !it.mandatory }
+                Panel("Your report") {
+                    shown.forEachIndexed { i, v -> if (i > 0) Hairline(); SummaryRow(v) }
+                    if (empty.isNotEmpty()) {
+                        Hairline()
+                        Text(
+                            "Not mentioned: " + empty.joinToString(", ") { it.label.lowercase() },
+                            style = MaterialTheme.typography.bodyMedium, color = c.ink3,
+                            modifier = Modifier.padding(horizontal = Space.s1, vertical = Space.s3),
+                        )
+                    }
                 }
             }
             item { Spacer(Modifier.height(Space.s4)) }
@@ -147,10 +145,10 @@ fun CheckScreen(ui: AppUi, vm: AppViewModel) {
 @Composable
 private fun SummaryRow(v: FieldView) {
     val c = Theme.colors
-    Column(Modifier.fillMaxWidth().padding(horizontal = Space.s4, vertical = Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s1)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = Space.s1, vertical = Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s1)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(v.label, style = MaterialTheme.typography.labelMedium, color = c.ink2, modifier = Modifier.weight(1f))
-            if (v.writtenByAssistant) Text("Assistant-written", style = MaterialTheme.typography.labelSmall, color = c.onAttention) else StatusChip(v.status)
+            if (v.writtenByAssistant) Pill("Assistant-written", c.infoContainer, c.onInfo, icon = androidx.compose.material.icons.Icons.Rounded.Info) else StatusChip(v.status)
         }
         Text(
             v.value ?: if (v.status == UiStatus.NEEDED) "Needed" else "Not mentioned",
@@ -171,28 +169,30 @@ fun SentScreen(ui: AppUi, vm: AppViewModel) {
                 Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Size.gutter),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Spacer(Modifier.height(Space.s6))
+                Spacer(Modifier.height(Space.s4))
+                // A compact confirmation: the player and the report are what the reporter came to this screen for.
                 Reveal {
-                    Box(Modifier.size(112.dp).background(c.accentContainer, CircleShape), contentAlignment = Alignment.Center) {
-                        Box(Modifier.size(80.dp).background(c.accent, CircleShape), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Rounded.Check, null, tint = c.onAccent, modifier = Modifier.size(48.dp))
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s4)) {
+                        Box(Modifier.size(56.dp).background(c.accent, CircleShape), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Rounded.Check, null, tint = c.onAccent, modifier = Modifier.size(32.dp))
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(Space.s1)) {
+                            Text("Report saved.", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
+                            Text("Saved on this device. Nothing was sent anywhere.", style = MaterialTheme.typography.bodyMedium, color = c.ink2)
                         }
                     }
                 }
                 Spacer(Modifier.height(Space.s6))
-                Reveal(delayMillis = 120) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s3)) {
-                        Text("All set.\nReport saved.", style = MaterialTheme.typography.displayMedium.copy(fontSize = 36.sp, lineHeight = 40.sp), textAlign = TextAlign.Center, modifier = Modifier.semantics { heading() })
-                        Text("Saved on this device. Nothing was sent anywhere.", style = MaterialTheme.typography.bodyLarge, color = c.ink2, textAlign = TextAlign.Center)
-                    }
-                }
+                val audio = ui.summaryAudio
+                if (audio != null) SummaryPlayerCard(audio, vm::toggleSummary, vm::seekSummary)
+                else if (ui.speaking) TextAction("Stop speaking", vm::stopSpeaking) else TextAction("Hear it again", vm::hearAgain)
                 Spacer(Modifier.height(Space.s6))
-                Card {
+                Panel("Your report") {
                     ui.session.fields.filter { it.mandatory }.forEachIndexed { i, v -> if (i > 0) Hairline(); SummaryRow(v) }
                 }
-                Spacer(Modifier.height(Space.s4))
-                if (ui.speaking) TextAction("Stop speaking", vm::stopSpeaking) else TextAction("Hear it again", vm::hearAgain)
+                Spacer(Modifier.height(Space.s3))
                 sent?.let { Text("Reference ${it.reportId.takeLast(8)}", style = MaterialTheme.typography.labelSmall, color = c.ink3) }
+                Spacer(Modifier.height(Space.s4))
             }
             Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Size.gutter, vertical = Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s3)) {
                 PrimaryButton("New report", vm::newReport, Modifier.fillMaxWidth())

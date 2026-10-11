@@ -1,5 +1,6 @@
 package com.megathon.incident.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,7 +9,6 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
@@ -39,8 +39,9 @@ fun suggestionQuestion(s: Suggestion): String = when {
 }
 
 /**
- * A suggestion under the field it is about. It is labelled "Suggested" with an icon and a word, never colour alone, and it
- * changes nothing by itself: Accept and Dismiss are both 48 dp targets. Hint of why comes from the rule that made it.
+ * A suggestion under the field it is about, in its own box so it cannot be mistaken for an answer. It is labelled
+ * "Suggested" with an icon and a word, never colour alone, and it changes nothing by itself: Accept and Decline are both
+ * 48 dp targets. The hint of why comes from the rule that made it.
  */
 @Composable
 fun SuggestionChipRow(suggestion: Suggestion, onAccept: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
@@ -49,26 +50,56 @@ fun SuggestionChipRow(suggestion: Suggestion, onAccept: () -> Unit, onDismiss: (
     Column(
         modifier
             .fillMaxWidth()
-            .padding(vertical = Space.s2)
+            .padding(vertical = Space.s1)
+            .background(c.attentionContainer, RoundedCornerShape(12.dp))
+            .padding(Space.s3)
             .semantics(mergeDescendants = false) { contentDescription = "Suggested. $question ${suggestion.reason}" },
         verticalArrangement = Arrangement.spacedBy(Space.s2),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s1)) {
-            Icon(Icons.Rounded.Info, null, tint = c.onAttention, modifier = Modifier.size(14.dp))
-            Text("Suggested change", style = MaterialTheme.typography.labelSmall, color = c.onAttention)
-        }
-        Text(question, style = MaterialTheme.typography.bodyLarge, color = c.ink)
-        Text(suggestion.reason, style = MaterialTheme.typography.bodyMedium, color = c.ink2)
-        Row(horizontalArrangement = Arrangement.spacedBy(Space.s2), verticalAlignment = Alignment.CenterVertically) {
-            TextAction("Accept", onAccept, flush = true)
-            TextButton(
-                onDismiss, Modifier.defaultMinSize(minHeight = Size.touch),
-                colors = ButtonDefaults.textButtonColors(contentColor = c.onAttention),
-            ) {
-                Icon(Icons.Rounded.Close, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.padding(end = Space.s1))
-                Text("Dismiss", style = MaterialTheme.typography.labelLarge)
-            }
+        Pill("Suggested", c.canvas, c.onAttention, icon = Icons.Rounded.Info)
+        Text(question, style = MaterialTheme.typography.bodyLarge, color = c.onAttention)
+        Text(suggestion.reason, style = MaterialTheme.typography.bodyMedium, color = c.onAttention)
+        AcceptDeclineRow(onAccept = onAccept, onDecline = onDismiss, declineLabel = "Decline")
+    }
+}
+
+/**
+ * A value the app only guessed (for example the severity), shown as a box with the guess in it and two clear choices.
+ * Accept keeps it; Decline opens the field so the reporter can give the right answer. Nothing is kept silently.
+ */
+@Composable
+fun SuggestedValueBox(label: String, value: String, onAccept: () -> Unit, onDecline: () -> Unit, modifier: Modifier = Modifier) {
+    val c = Theme.colors
+    Column(
+        modifier
+            .fillMaxWidth()
+            .padding(top = Space.s1, bottom = Space.s2)
+            .background(c.attentionContainer, RoundedCornerShape(12.dp))
+            .padding(Space.s3)
+            .semantics(mergeDescendants = false) { contentDescription = "Suggested $label: $value. Accept or decline." },
+        verticalArrangement = Arrangement.spacedBy(Space.s2),
+    ) {
+        Pill("Suggested", c.canvas, c.onAttention, icon = Icons.Rounded.Info)
+        Text("I guessed “$value” from your story. Is that right?", style = MaterialTheme.typography.bodyLarge, color = c.onAttention)
+        AcceptDeclineRow(onAccept = onAccept, onDecline = onDecline, declineLabel = "Decline")
+    }
+}
+
+@Composable
+private fun AcceptDeclineRow(onAccept: () -> Unit, onDecline: () -> Unit, declineLabel: String) {
+    val c = Theme.colors
+    Row(horizontalArrangement = Arrangement.spacedBy(Space.s2), verticalAlignment = Alignment.CenterVertically) {
+        SecondaryButton(
+            "Accept", onAccept, Modifier.defaultMinSize(minHeight = 48.dp),
+            leading = { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp)); Spacer(Modifier.padding(end = Space.s1)) },
+        )
+        TextButton(
+            onDecline, Modifier.defaultMinSize(minHeight = Size.touch),
+            colors = ButtonDefaults.textButtonColors(contentColor = c.onAttention),
+        ) {
+            Icon(Icons.Rounded.Close, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.padding(end = Space.s1))
+            Text(declineLabel, style = MaterialTheme.typography.labelLarge)
         }
     }
 }

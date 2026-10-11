@@ -58,6 +58,9 @@ import com.megathon.incident.testing.FakeLlmEngine
 import com.megathon.incident.testing.SpeechEngine
 import com.megathon.incident.tts.HindiPhrases
 import com.megathon.incident.tts.HindiSummary
+import com.megathon.incident.tts.EnglishSummary
+import com.megathon.incident.tts.SpokenSegment
+import com.megathon.incident.audio.SummaryPlayer
 import com.megathon.incident.tts.RoutingSpeaker
 import com.megathon.incident.tts.TtsBackend
 import com.megathon.incident.tts.TtsKind
@@ -83,6 +86,15 @@ enum class Screen { HOME, REPORT, CHECK, SENT }
 
 /** Whether the on-device models (language model and, with the resident worker, speech) are loaded. Loading moves earlier (at launch); it is not removed. */
 enum class Readiness { NOT_NEEDED, LOADING, READY, FAILED }
+
+/** Where the spoken summary of the saved report is: being rendered, playing, paused, or not available as audio. */
+enum class SummaryPhase { PREPARING, PLAYING, PAUSED, UNAVAILABLE }
+
+/**
+ * The spoken summary of the saved report as audio the reporter can pause and seek. [text] is exactly what is spoken, so the
+ * screen can show the same words. Positions are in milliseconds; both are 0 until the audio exists.
+ */
+data class SummaryAudio(val phase: SummaryPhase, val text: String, val positionMs: Int = 0, val durationMs: Int = 0)
 
 /** Everything the screens draw. The report itself lives in [SessionUi]. */
 data class AppUi(
@@ -122,6 +134,8 @@ data class AppUi(
     val hindiLane: Boolean = false,
     /** One short line when a transcript in Devanagari sits next to English labels and replies; null otherwise. */
     val scriptNote: String? = null,
+    /** The saved report's spoken summary as pausable, seekable audio; null until a report has been saved. */
+    val summaryAudio: SummaryAudio? = null,
 )
 
 private data class Local(
@@ -147,6 +161,7 @@ private data class Local(
     val liveText: String? = null,
     val readiness: Readiness = Readiness.NOT_NEEDED,
     val hindi: Boolean = false,
+    val summaryAudio: SummaryAudio? = null,
 )
 
 class AppViewModel(app: Application, private val selection: EngineSelection) : AndroidViewModel(app) {
@@ -237,6 +252,7 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
             needsMicPermission = l.needsMicPermission,
             voiceTags = l.voiceTags, voiceTagsNote = l.voiceTagsNote, liveText = l.liveText, readiness = l.readiness,
             hindiLane = l.hindi,
+            summaryAudio = l.summaryAudio,
             scriptNote = TranscriptScriptNote.forTexts(s.transcripts + listOfNotNull(l.heardNow)),
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, AppUi(
@@ -783,8 +799,92 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
 
     fun stopSpeaking() { speaker.stop(); local.update { it.copy(speaking = false) } }
 
+    // --- The saved report's spoken summary as pausable, seekable audio ---------------------------------------------------
+
+    private val summaryPlayer = SummaryPlayer()
+    private var summaryTicker: Job? = null
+
+    /** The words of the summary, in the language of the lane: one connected chain, English or Hindi. */
+    private fun summarySegments(ui: SessionUi): List<SpokenSegment> {
+        val today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata"))
+        return if (local.value.hindi) HindiSummary.compose(ui.report, ui.priority, today)
+        else listOf(SpokenSegment(EnglishSummary.compose(ui.report, ui.priority, today), "en"))
+    }
+
+    /**
+     * Renders the summary to a WAV file with the voice for this lane and starts playing it. Returns true when the audio is
+     * playing (the caller must not also speak it); false leaves the caller to speak it the old way.
+     */
+    private suspend fun playSummary(ui: SessionUi): Boolean {
+        val segments = summarySegments(ui)
+        val shown = segments.joinToString(" ") { it.text }
+        val hindi = local.value.hindi
+        summaryTicker?.cancel()
+        summaryPlayer.release()
+        speaker.stop()
+        local.update { it.copy(summaryAudio = SummaryAudio(SummaryPhase.PREPARING, shown)) }
+        val file = java.io.File(getApplication<Application>().cacheDir, "summary.wav")
+        val lang = if (hindi) "hi" else "en"
+        val neural = hindiVoice as? SupertonicSpeaker
+        val android = configuredVoice as? AndroidTtsBackend
+        val rendered = withContext(Dispatchers.IO) {
+            val neuralFirst = hindi || configuredVoice === neural || android == null
+            suspend fun withNeural() = neural != null && neural.unavailableReason(lang) == null && neural.renderToWav(segments, file)
+            suspend fun withAndroid() = !hindi && android != null && android.renderToWav(shown, file)
+            if (neuralFirst) withNeural() || withAndroid() else withAndroid() || withNeural()
+        }
+        if (!rendered || !summaryPlayer.load(file) { onSummaryCompleted() }) {
+            local.update { it.copy(summaryAudio = SummaryAudio(SummaryPhase.UNAVAILABLE, shown)) }
+            return false
+        }
+        local.update { it.copy(summaryAudio = SummaryAudio(SummaryPhase.PLAYING, shown, 0, summaryPlayer.durationMs)) }
+        summaryPlayer.play()
+        startSummaryTicker()
+        return true
+    }
+
+    private fun startSummaryTicker() {
+        summaryTicker?.cancel()
+        summaryTicker = viewModelScope.launch {
+            while (true) {
+                delay(200)
+                local.update { cur ->
+                    val a = cur.summaryAudio ?: return@update cur
+                    if (a.phase == SummaryPhase.PREPARING || a.phase == SummaryPhase.UNAVAILABLE) return@update cur
+                    cur.copy(summaryAudio = a.copy(positionMs = summaryPlayer.positionMs()))
+                }
+            }
+        }
+    }
+
+    private fun onSummaryCompleted() {
+        summaryPlayer.seekTo(0)
+        local.update { cur -> cur.summaryAudio?.let { cur.copy(summaryAudio = it.copy(phase = SummaryPhase.PAUSED, positionMs = 0)) } ?: cur }
+    }
+
+    /** Play or pause the summary. After it has finished, play starts it again from the beginning. */
+    fun toggleSummary() {
+        val a = local.value.summaryAudio ?: return
+        when (a.phase) {
+            SummaryPhase.PLAYING -> { summaryPlayer.pause(); local.update { it.copy(summaryAudio = a.copy(phase = SummaryPhase.PAUSED, positionMs = summaryPlayer.positionMs())) } }
+            SummaryPhase.PAUSED -> { summaryPlayer.play(); local.update { it.copy(summaryAudio = a.copy(phase = SummaryPhase.PLAYING)) } }
+            SummaryPhase.UNAVAILABLE -> hearAgain()
+            SummaryPhase.PREPARING -> Unit
+        }
+    }
+
+    /** Moves the summary to [ms]. Playing continues from there; a paused summary stays paused. */
+    fun seekSummary(ms: Int) {
+        val a = local.value.summaryAudio ?: return
+        if (a.phase != SummaryPhase.PLAYING && a.phase != SummaryPhase.PAUSED) return
+        summaryPlayer.seekTo(ms)
+        local.update { it.copy(summaryAudio = a.copy(positionMs = ms.coerceIn(0, a.durationMs))) }
+    }
+
     fun newReport() {
         speaker.stop()
+        summaryTicker?.cancel()
+        summaryPlayer.release()
         session.reset()
         demoSpeech.restart()
         local.update { Local(network = meter.read(), ttsOffline = it.ttsOffline, ttsNote = it.ttsNote, hindi = it.hindi, readiness = it.readiness) }
@@ -858,6 +958,10 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
      * The screen text is never changed: labels and questions stay English on screen.
      */
     private suspend fun speakAloud(text: String) {
+        // The saved-report summary is rendered to audio first, so the reporter can pause and seek it. Only when that is not
+        // possible does it fall through to being spoken straight away, as every other line is.
+        val saved = session.ui.value
+        if (saved.spokenSummary != null && text == saved.spokenSummary && playSummary(saved)) return
         if (local.value.hindi) {
             val voice = hindiVoice
             val reason = if (voice == null) "the Hindi voice could not be created" else voice.unavailableReason("hi")
@@ -915,6 +1019,8 @@ class AppViewModel(app: Application, private val selection: EngineSelection) : A
     }
 
     override fun onCleared() {
+        summaryTicker?.cancel()
+        summaryPlayer.release()
         live?.let(::abandon)
         (speech as? ResidentSherpaSpeechEngine)?.release()
         recorder.cancel()

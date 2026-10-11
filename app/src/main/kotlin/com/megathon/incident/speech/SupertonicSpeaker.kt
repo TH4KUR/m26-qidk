@@ -18,6 +18,7 @@ import com.megathon.incident.tts.SupertonicVoice
 import com.megathon.incident.tts.SupertonicVoices
 import com.megathon.incident.tts.TtsBackend
 import com.megathon.incident.tts.TtsBackendException
+import com.megathon.incident.tts.SpokenSegment
 import com.megathon.incident.tts.TtsChunker
 import com.megathon.incident.tts.TtsPcm
 import com.megathon.incident.tts.TtsTextNormalizer
@@ -164,6 +165,51 @@ class SupertonicSpeaker(
                     "synthMs=$synthMs audioMs=$audioMs rtf=${if (audioMs > 0) "%.2f".format(synthMs.toDouble() / audioMs) else "n/a"} " +
                     "threads=$THREADS steps=$NUM_STEPS rate=$rate",
             )
+        }
+    }
+
+    /**
+     * Renders [segments], each in its own language, into one WAV file without playing anything, so the saved-report summary can
+     * be paused and sought. Returns false, and writes nothing, when the voice does not cover a segment, the model is missing,
+     * or synthesis fails; the caller then falls back to speaking it.
+     */
+    suspend fun renderToWav(segments: List<SpokenSegment>, out: File): Boolean = withContext(Dispatchers.Default) {
+        if (segments.isEmpty() || segments.any { !voice.supports(it.language) }) return@withContext false
+        val modelFiles = (withContext(Dispatchers.IO) { locate() } as? SupertonicLocation.Found)?.files ?: return@withContext false
+        interrupt()
+        try {
+            val rate = lock.withLock { engineFor(modelFiles).sampleRate() }
+            val parts = mutableListOf<ShortArray>()
+            for ((index, seg) in segments.withIndex()) {
+                val lang = languageCode(seg.language)
+                for (chunk in TtsChunker.split(TtsTextNormalizer.normalize(seg.text, lang))) {
+                    if (!currentCoroutineContext().isActive) return@withContext false
+                    val samples = lock.withLock {
+                        if (closed) return@withContext false
+                        engineFor(modelFiles).generateWithConfig(
+                            chunk,
+                            GenerationConfig(sid = sid, speed = speed, numSteps = NUM_STEPS, extra = mapOf("lang" to lang)),
+                        ).samples
+                    }
+                    if (samples.isNotEmpty()) parts += TtsPcm.toPcm16(samples)
+                }
+                if (index < segments.lastIndex) parts += ShortArray(rate * 3 / 10) // a short breath between segments
+            }
+            val total = parts.sumOf { it.size }
+            if (total == 0) return@withContext false
+            val pcm = ShortArray(total)
+            var at = 0
+            for (part in parts) { part.copyInto(pcm, at); at += part.size }
+            out.parentFile?.mkdirs()
+            out.writeBytes(com.megathon.incident.audio.WavWriter.encode(pcm, rate))
+            Log.i(TAG, "supertonic render segments=${segments.size} audioMs=${TtsPcm.durationMs(total, rate)} rate=$rate")
+            true
+        } catch (failure: LinkageError) {
+            libraryError = "the sherpa-onnx library does not match its Kotlin binding: ${failure.message}"
+            false
+        } catch (failure: Exception) {
+            Log.w(TAG, "supertonic render failed: ${failure.message}")
+            false
         }
     }
 

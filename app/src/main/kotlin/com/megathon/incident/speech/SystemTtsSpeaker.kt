@@ -50,6 +50,27 @@ class SystemTtsSpeaker(context: Context) : Speaker {
         synchronized(waiting) { waiting.remove(id) }
     }
 
+    /**
+     * Renders [text] with the system voice into a WAV file instead of speaking it, so it can be paused and sought.
+     * Returns false when the engine is not ready or wrote nothing.
+     */
+    suspend fun renderToWav(text: String, out: java.io.File): Boolean {
+        if (text.isBlank() || ready.await().not()) return false
+        val id = UUID.randomUUID().toString()
+        val done = CompletableDeferred<Unit>()
+        synchronized(waiting) { waiting[id] = done }
+        out.parentFile?.mkdirs()
+        out.delete()
+        val status = tts?.synthesizeToFile(text, null, out, id) ?: TextToSpeech.ERROR
+        if (status != TextToSpeech.SUCCESS) {
+            synchronized(waiting) { waiting.remove(id) }
+            return false
+        }
+        withTimeoutOrNull(60_000) { done.await() }
+        synchronized(waiting) { waiting.remove(id) }
+        return out.length() > 44
+    }
+
     fun stop() { tts?.stop() }
 
     fun shutdown() { tts?.shutdown(); tts = null }

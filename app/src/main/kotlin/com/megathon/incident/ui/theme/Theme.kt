@@ -35,10 +35,13 @@ object Theme {
         @Composable @ReadOnlyComposable get() = LocalColors.current
 }
 
-/** System typography: generous headings and compact, readable report details. */
+/**
+ * System typography: one screen headline (32), one section heading (24), then 17, 16, 14 and 12 for everything else.
+ * Hierarchy comes from weight and colour first and size second, so a screen reads at a glance without shouting.
+ */
 private val AppTypography = Typography(
-    displayMedium = TextStyle(fontSize = 44.sp, lineHeight = 48.sp, fontWeight = FontWeight.Medium, letterSpacing = (-1.5).sp),
-    headlineSmall = TextStyle(fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.SemiBold),
+    displayMedium = TextStyle(fontSize = 32.sp, lineHeight = 38.sp, fontWeight = FontWeight.Medium, letterSpacing = (-0.5).sp),
+    headlineSmall = TextStyle(fontSize = 24.sp, lineHeight = 30.sp, fontWeight = FontWeight.SemiBold),
     titleMedium = TextStyle(fontSize = 17.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold),
     bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.Normal),
     bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 21.sp, fontWeight = FontWeight.Normal),

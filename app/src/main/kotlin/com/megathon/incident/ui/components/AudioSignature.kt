@@ -28,7 +28,7 @@ fun AudioSignature(levels: List<Float>, listening: Boolean, modifier: Modifier =
             val historyIndex = index - missing
             val hasLevel = listening && historyIndex >= 0
             val value = when {
-                hasLevel -> live[historyIndex].coerceIn(0f, 1f)
+                hasLevel -> visualLevel(live[historyIndex]) // the same gentle curve as the rings: a quiet mic still moves
                 listening -> 0f
                 else -> {
                     val envelope = 0.18f + 0.82f * abs(sin(index * 0.17f + 0.6f))

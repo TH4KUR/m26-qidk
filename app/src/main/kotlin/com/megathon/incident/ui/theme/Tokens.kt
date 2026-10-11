@@ -84,7 +84,7 @@ val LightColors = IncidentColors(
 )
 
 val DarkColors = IncidentColors(
-    canvas = Color(0xFF0E1719), surface = Color(0xFF172426),
+    canvas = Color(0xFF0E1719), surface = Color(0xFF1D2E30),
     ink = Color(0xFFF2F5EE), ink2 = Color(0xFFB9C8C5), ink3 = Color(0xFF91A7A2), line = Color(0xFF344849),
     accent = Color(0xFFC3EFCB), onAccent = Color(0xFF14271C),
     accentContainer = Color(0xFF243D32), onAccentContainer = Color(0xFFD0F3D6),

@@ -120,32 +120,22 @@ fun Pill(text: String, container: Color, content: Color, modifier: Modifier = Mo
     }
 }
 
+/**
+ * Where a value came from, as a colour-coded pill that always has an icon and a word as well (never colour alone):
+ * green = heard from the reporter, solid green = confirmed, amber = suggested and waiting for a yes,
+ * red = still needed, blue = "not sure", grey = explicitly none.
+ */
 @Composable
 fun StatusChip(status: UiStatus, modifier: Modifier = Modifier) {
     val c = Theme.colors
-    val label = when (status) {
-        UiStatus.HEARD -> "Heard"
-        UiStatus.CONFIRMED -> "Confirmed"
-        UiStatus.SUGGESTED -> "Suggested"
-        UiStatus.NEEDED -> "Needed"
-        UiStatus.NONE -> "None"
-        UiStatus.UNKNOWN -> "Not sure"
-        UiStatus.EMPTY -> return
-    }
-    val color = when (status) {
-        UiStatus.CONFIRMED -> c.accent
-        UiStatus.SUGGESTED, UiStatus.NEEDED -> c.onAttention
-        else -> c.ink3
-    }
-    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s1)) {
-        when (status) {
-            UiStatus.CONFIRMED -> Icon(Icons.Rounded.Check, null, tint = color, modifier = Modifier.size(14.dp))
-            UiStatus.SUGGESTED -> Icon(Icons.Rounded.Info, null, tint = color, modifier = Modifier.size(14.dp))
-            UiStatus.NEEDED -> Icon(Icons.Rounded.Warning, null, tint = color, modifier = Modifier.size(14.dp))
-            UiStatus.HEARD -> MicGlyph(color, size = 14.dp)
-            else -> Unit
-        }
-        Text(label, style = MaterialTheme.typography.labelSmall, color = color)
+    when (status) {
+        UiStatus.HEARD -> Pill("Heard", c.accentContainer, c.onAccentContainer, modifier, glyph = { MicGlyph(c.onAccentContainer, size = 14.dp) })
+        UiStatus.CONFIRMED -> Pill("Confirmed", c.accent, c.onAccent, modifier, icon = Icons.Rounded.Check)
+        UiStatus.SUGGESTED -> Pill("Suggested", c.attentionContainer, c.onAttention, modifier, icon = Icons.Rounded.Info)
+        UiStatus.NEEDED -> Pill("Needed", c.dangerContainer, c.onDanger, modifier, icon = Icons.Rounded.Warning)
+        UiStatus.UNKNOWN -> Pill("Not sure", c.infoContainer, c.onInfo, modifier, icon = Icons.Rounded.Info)
+        UiStatus.NONE -> Pill("None", c.line.copy(alpha = 0.55f), c.ink, modifier)
+        UiStatus.EMPTY -> Unit
     }
 }
 

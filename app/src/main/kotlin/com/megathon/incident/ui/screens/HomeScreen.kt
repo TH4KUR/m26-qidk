@@ -64,7 +64,9 @@ import com.megathon.incident.ui.components.MicButton
 import com.megathon.incident.ui.components.PrivacyLine
 import com.megathon.incident.ui.components.ProvisionalCard
 import com.megathon.incident.ui.components.TranscriptCard
+import com.megathon.incident.ui.components.WorkingBar
 import com.megathon.incident.ui.components.formatClock
+import androidx.compose.foundation.layout.heightIn
 import com.megathon.incident.ui.theme.Size
 import com.megathon.incident.ui.theme.Space
 import com.megathon.incident.ui.theme.CapturePalette
@@ -91,7 +93,6 @@ fun HomeScreen(ui: AppUi, vm: AppViewModel) {
                         verticalArrangement = Arrangement.spacedBy(Space.s4, Alignment.CenterVertically),
                     ) {
                         Notices(ui, vm)
-                        StageTrack(0)
                         HomeCopy(ui)
                         if (!ui.listening && !ui.processing) ExampleNote()
                         LiveDetails(ui)
@@ -105,16 +106,14 @@ fun HomeScreen(ui: AppUi, vm: AppViewModel) {
                     Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Size.gutter),
                     horizontalAlignment = Alignment.Start,
                 ) {
-                    Spacer(Modifier.height(Space.s4))
+                    Spacer(Modifier.height(Space.s2))
                     Notices(ui, vm)
-                    StageTrack(0)
-                    Spacer(Modifier.height(Space.s8))
                     HomeCopy(ui)
-                    Spacer(Modifier.height(Space.s6))
-                    StudioPanel(ui, vm)
                     Spacer(Modifier.height(Space.s4))
+                    StudioPanel(ui, vm)
+                    Spacer(Modifier.height(Space.s2))
                     if (ui.listening || ui.processing) LiveDetails(ui) else ExampleNote()
-                    Spacer(Modifier.height(Space.s6))
+                    Spacer(Modifier.height(Space.s4))
                 }
             }
             Footer(ui, vm)
@@ -137,16 +136,16 @@ private fun HomeCopy(ui: AppUi) {
     AnimatedContent(mode, transitionSpec = {
         (fadeIn(tween(if (reduce) 0 else Motion.standard)) + slideInVertically(tween(if (reduce) 0 else Motion.standard)) { it / 8 }) togetherWith fadeOut(tween(if (reduce) 0 else Motion.quick))
     }, label = "capture copy") { state ->
-        Column(verticalArrangement = Arrangement.spacedBy(if (compact) Space.s2 else Space.s3)) {
-            if (!compact) Text("LESS FRICTION. MORE CLARITY.", style = MaterialTheme.typography.labelSmall, color = c.accent)
+        // One headline, one supporting line: the status under the microphone says the rest.
+        Column(verticalArrangement = Arrangement.spacedBy(Space.s2)) {
             Text(buildAnnotatedString {
                 append(when (state) { 1 -> "Your voice.\n"; 2 -> "A little clarity.\n"; else -> "A moment.\n" })
                 withStyle(SpanStyle(color = c.accent)) { append(when (state) { 1 -> "Taking shape."; 2 -> "Coming together."; else -> "A clear report." }) }
-            }, style = if (compact) MaterialTheme.typography.displayMedium.copy(fontSize = 32.sp, lineHeight = 36.sp) else MaterialTheme.typography.displayMedium, modifier = Modifier.semantics { heading() })
+            }, style = MaterialTheme.typography.displayMedium, modifier = Modifier.semantics { heading() })
             Text(when (state) {
                 1 -> "Tell it as it happened. Tap to finish when you’re ready."
                 2 -> "Organizing your words, right here on this device."
-                else -> "Tell it as it happened.\nWe’ll take care of the structure."
+                else -> "Tell it as it happened. We’ll take care of the structure."
             }, style = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge, color = c.ink2)
         }
     }
@@ -155,25 +154,36 @@ private fun HomeCopy(ui: AppUi) {
 @Composable
 private fun StudioPanel(ui: AppUi, vm: AppViewModel, compact: Boolean = false) {
     val c = Theme.colors
+    // A status line only while it carries news (a timer, work in progress). At rest the one instruction is enough.
     val status = when {
         ui.listening -> "LISTENING  ·  ${formatClock(ui.elapsedMs)}"
         ui.processing -> "SHAPING YOUR REPORT"
         ui.readiness == Readiness.LOADING -> "MODEL WARMING UP"
-        else -> "READY WHEN YOU ARE"
+        else -> null
     }
+    val warming = ui.readiness == Readiness.LOADING && !ui.listening && !ui.processing
     Reveal(delayMillis = 100) {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            RecorderAura(ui.listening, ui.levels.lastOrNull() ?: 0f, Modifier.then(if (compact) Modifier.size(140.dp) else Modifier)) {
-                MicButton(ui.listening, ui.processing, ui.levels.lastOrNull() ?: 0f, vm::onMicTapped, diameter = if (compact) 68.dp else 112.dp)
+            RecorderAura(
+                ui.listening, ui.levels.lastOrNull() ?: 0f,
+                busy = ui.processing || warming, diameter = if (compact) 140.dp else 208.dp,
+            ) {
+                MicButton(ui.listening, ui.processing, ui.levels.lastOrNull() ?: 0f, vm::onMicTapped, diameter = if (compact) 68.dp else 104.dp)
             }
-            Text(status, style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"), color = if (ui.listening) c.danger else c.accent)
-            Spacer(Modifier.height(if (compact) Space.s1 else Space.s2))
+            if (status != null) {
+                Text(status, style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"), color = if (ui.listening) c.danger else c.accent)
+                Spacer(Modifier.height(Space.s1))
+            }
             Text(when {
                 ui.listening -> "Tap to finish your story"
                 ui.processing -> "A few details. One clear report."
-                ui.readiness == Readiness.LOADING -> "You can start while it warms up"
+                warming -> "You can start while it warms up"
                 else -> "Tap to tell your story"
             }, style = if (compact) MaterialTheme.typography.labelLarge else MaterialTheme.typography.titleMedium, color = c.ink)
+            if (warming) {
+                Spacer(Modifier.height(Space.s2))
+                WorkingBar()
+            }
             if (ui.listening) AudioSignature(ui.levels, true, Modifier.fillMaxWidth(.65f).height(32.dp).padding(top = Space.s2))
         }
     }
@@ -205,15 +215,18 @@ private fun ExampleNote() {
     val reduce = LocalReduceMotion.current
     var open by remember { mutableStateOf(false) }
     Card {
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).clickable { open = !open }.padding(Space.s4), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.s1)) {
-                Text("Not sure where to start?", style = MaterialTheme.typography.labelLarge, color = c.ink)
-                Text(if (open) "No special format. Just say what happened." else "See a quick example", style = MaterialTheme.typography.bodyMedium, color = c.ink3)
-            }
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = Size.touch).clip(RoundedCornerShape(12.dp)).clickable { open = !open }.padding(horizontal = Space.s1),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                if (open) "No special format. Just say what happened." else "Not sure where to start? See a quick example",
+                style = MaterialTheme.typography.labelLarge, color = c.ink2, modifier = Modifier.weight(1f),
+            )
             Icon(Icons.Rounded.KeyboardArrowDown, if (open) "Hide example" else "Show example", tint = c.accent)
         }
         AnimatedVisibility(open, enter = fadeIn(tween(if (reduce) 0 else Motion.standard)) + expandVertically(tween(if (reduce) 0 else Motion.standard)), exit = fadeOut(tween(if (reduce) 0 else Motion.quick)) + shrinkVertically(tween(if (reduce) 0 else Motion.standard))) {
-            Text("“${FakeLlmEngine.DECK_TRANSCRIPT}”", Modifier.padding(start = Space.s4, end = Space.s4, bottom = Space.s4), style = MaterialTheme.typography.bodyLarge, color = c.ink2)
+            Text("“${FakeLlmEngine.DECK_TRANSCRIPT}”", Modifier.padding(start = Space.s1, end = Space.s1, bottom = Space.s3), style = MaterialTheme.typography.bodyMedium, color = c.ink2)
         }
     }
 }

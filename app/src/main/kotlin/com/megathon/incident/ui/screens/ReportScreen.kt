@@ -1,6 +1,10 @@
 package com.megathon.incident.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,7 +26,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
-import com.megathon.incident.ui.components.StageTrack
+import com.megathon.incident.ui.components.Panel
 import com.megathon.incident.ui.theme.LocalReduceMotion
 import com.megathon.incident.ui.theme.Motion
 import androidx.compose.ui.Alignment
@@ -54,8 +58,10 @@ import com.megathon.incident.ui.components.ProvisionalCard
 import com.megathon.incident.ui.components.Pill
 import com.megathon.incident.ui.components.PriorityBanner
 import com.megathon.incident.ui.components.PrimaryButton
-import com.megathon.incident.ui.components.QuestionDock
+import com.megathon.incident.ui.components.QuestionButton
+import com.megathon.incident.ui.components.QuestionSheet
 import com.megathon.incident.ui.components.SecondaryButton
+import com.megathon.incident.ui.components.WorkingBar
 import com.megathon.incident.ui.components.TextAction
 import com.megathon.incident.ui.components.TranscriptCard
 import com.megathon.incident.ui.components.VoiceButton
@@ -71,16 +77,36 @@ private const val WIDE_DP = 700
 fun ReportScreen(ui: AppUi, vm: AppViewModel) {
     val c = Theme.colors
     val wide = isWide()
+    // The open question lives on its own sheet, not as one more row of the form. A new question opens the sheet once;
+    // "Not now" closes it and the "!" button in the bottom bar brings it back.
+    val asking = (ui.session.state as? SessionState.Asking)?.question
+    val busy = ui.listening || ui.processing
+    val questionKey = asking?.let { "${it.key}|${it.spoken}|${it.asks.firstOrNull()?.prompt}" }
+    var sheetOpen by remember { mutableStateOf(false) }
+    var shownFor by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(questionKey, busy) {
+        if (questionKey == null || busy) sheetOpen = false
+        else if (shownFor != questionKey) { shownFor = questionKey; sheetOpen = true }
+    }
+    if (sheetOpen && asking != null && !busy) {
+        QuestionSheet(
+            question = asking, speaking = ui.speaking,
+            onReply = vm::reply, onKeyAnswer = vm::answerKeyQuestion,
+            onVoice = { sheetOpen = false; vm.onMicTapped() },
+            onStopSpeaking = vm::stopSpeaking,
+            onDismiss = { sheetOpen = false },
+        )
+    }
     Scaffold(
         containerColor = c.canvas,
         topBar = { AppTopBar("Shape your report", onProof = vm::openProof, simulatedNote = ui.simulatedNote) },
-        bottomBar = { ReportBottomBar(ui, vm) },
+        bottomBar = { ReportBottomBar(ui, vm, onQuestion = if (asking != null) ({ sheetOpen = true }) else null) },
     ) { pad ->
         if (wide) {
             Row(Modifier.fillMaxSize().padding(pad).padding(horizontal = Size.gutter), horizontalArrangement = Arrangement.spacedBy(Space.s6)) {
                 LazyColumn(Modifier.weight(0.42f), verticalArrangement = Arrangement.spacedBy(Space.s4), contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = Space.s4)) {
                     alerts(ui, vm)
-                    conversation(ui, vm, inlineQuestion = true)
+                    conversation(ui, vm)
                 }
                 LazyColumn(Modifier.weight(0.58f), verticalArrangement = Arrangement.spacedBy(Space.s4), contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = Space.s4)) {
                     if (!ui.listening && !ui.processing) fields(ui, vm)
@@ -125,11 +151,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.alerts(ui: AppUi, vm:
     }
  }
 
-private fun androidx.compose.foundation.lazy.LazyListScope.conversation(ui: AppUi, vm: AppViewModel, inlineQuestion: Boolean = false) {
-    val q = ui.session.state as? SessionState.Asking
-    if (inlineQuestion && q != null && !ui.processing && !ui.listening) {
-        item(key = "question") { QuestionDock(q.question, ui.speaking, vm::reply, vm::onMicTapped, vm::stopSpeaking, vm::goCheck, inline = true, onKeyAnswer = vm::answerKeyQuestion) }
-    }
+private fun androidx.compose.foundation.lazy.LazyListScope.conversation(ui: AppUi, vm: AppViewModel) {
     item(key = "transcript") {
         var expanded by remember { mutableStateOf(false) }
         val reduce = LocalReduceMotion.current
@@ -167,18 +189,15 @@ private fun androidx.compose.foundation.lazy.LazyListScope.fields(ui: AppUi, vm:
     val progress = if (mandatory.isEmpty()) 1f else resolved.toFloat() / mandatory.size
     item(key = "h-needed") {
         Column(verticalArrangement = Arrangement.spacedBy(Space.s2)) {
-            StageTrack(1)
-            if (!isWide()) Spacer(Modifier.height(Space.s3))
+            // No step timeline: the title bar already names the screen, and the bar below is the one progress there is.
             if (!isWide()) Text("Your story, organized.", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.s1)) {
-                    if (!isWide()) Text("KEY DETAILS", style = MaterialTheme.typography.labelSmall, color = Theme.colors.accent)
-                    Text("$resolved of ${mandatory.size} essentials ready", style = MaterialTheme.typography.bodyMedium, color = Theme.colors.ink2)
-                }
+                Text("$resolved of ${mandatory.size} essentials ready", style = MaterialTheme.typography.bodyMedium, color = Theme.colors.ink2, modifier = Modifier.weight(1f))
+                val c = Theme.colors
                 when {
-                    needed > 0 -> Text("$needed needed", style = MaterialTheme.typography.labelSmall, color = Theme.colors.onAttention)
-                    toConfirm > 0 -> Text("$toConfirm to confirm", style = MaterialTheme.typography.labelSmall, color = Theme.colors.onAttention)
-                    else -> Text("Ready to review", style = MaterialTheme.typography.labelSmall, color = Theme.colors.accent)
+                    needed > 0 -> Pill("$needed needed", c.dangerContainer, c.onDanger, icon = Icons.Rounded.Warning)
+                    toConfirm > 0 -> Pill("$toConfirm to confirm", c.attentionContainer, c.onAttention, icon = Icons.Rounded.Info)
+                    else -> Pill("Ready to review", c.accentContainer, c.onAccentContainer, icon = Icons.Rounded.Check)
                 }
             }
             val reduce = LocalReduceMotion.current
@@ -189,17 +208,9 @@ private fun androidx.compose.foundation.lazy.LazyListScope.fields(ui: AppUi, vm:
             )
         }
     }
-    item(key = "mandatory") { FieldGroup(all.filter { it.mandatory }, ui, vm) }
-    item(key = "details") {
-        var expanded by remember { mutableStateOf(false) }
-        val reduce = LocalReduceMotion.current
-        Column(verticalArrangement = Arrangement.spacedBy(Space.s2)) {
-            TextAction(if (expanded) "Hide additional details" else "Additional details  +", { expanded = !expanded }, color = Theme.colors.ink2)
-            AnimatedVisibility(expanded, enter = fadeIn(tween(if (reduce) 0 else Motion.standard)) + expandVertically(tween(if (reduce) 0 else Motion.standard)), exit = fadeOut(tween(if (reduce) 0 else Motion.quick)) + shrinkVertically(tween(if (reduce) 0 else Motion.standard))) {
-                FieldGroup(all.filter { !it.mandatory }, ui, vm)
-            }
-        }
-    }
+    // Two panels on their own surface. The extra details are always shown: they are part of the report, not a hidden extra.
+    item(key = "mandatory") { Panel("Essentials") { FieldGroup(all.filter { it.mandatory }, ui, vm) } }
+    item(key = "details") { Panel("More details") { FieldGroup(all.filter { !it.mandatory }, ui, vm) } }
     item(key = "spacer") { Spacer(Modifier.height(Space.s6)) }
 }
 
@@ -230,14 +241,13 @@ private fun FieldGroup(group: List<FieldView>, ui: AppUi, vm: AppViewModel) {
 }
 
 @Composable
-private fun ReportBottomBar(ui: AppUi, vm: AppViewModel) {
+private fun ReportBottomBar(ui: AppUi, vm: AppViewModel, onQuestion: (() -> Unit)?) {
     val c = Theme.colors
     val reduce = LocalReduceMotion.current
     val wide = isWide()
     val mode = when {
         ui.listening -> 0
         ui.processing -> 1
-        ui.session.state is SessionState.Asking && !wide -> 2
         else -> 3
     }
     Column(Modifier.fillMaxWidth().background(c.canvas).navigationBarsPadding()) {
@@ -252,18 +262,19 @@ private fun ReportBottomBar(ui: AppUi, vm: AppViewModel) {
             var previousUi by remember(activeMode) { mutableStateOf(ui) }
             if (activeMode == mode) SideEffect { previousUi = ui }
             val dockUi = if (activeMode == mode) ui else previousUi
-            if (activeMode == 2) {
-                // The live state wins over an outgoing animation snapshot: never retain a prompt during capture.
-                if (!ui.listening && !ui.processing) (dockUi.session.state as? SessionState.Asking)?.let { asking ->
-                    QuestionDock(asking.question, dockUi.speaking, vm::reply, vm::onMicTapped, vm::stopSpeaking, vm::goCheck, onKeyAnswer = vm::answerKeyQuestion)
-                }
-            } else Column(Modifier.padding(horizontal = Size.gutter, vertical = Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
+            Column(Modifier.padding(horizontal = Size.gutter, vertical = Space.s3), verticalArrangement = Arrangement.spacedBy(Space.s2)) {
                 when (activeMode) {
                     0 -> ListeningBar(dockUi, vm)
-                    1 -> Text("Shaping the details…", style = MaterialTheme.typography.bodyLarge, color = c.ink2, modifier = Modifier.padding(vertical = Space.s3))
+                    1 -> Row(Modifier.padding(vertical = Space.s3), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s3)) {
+                        WorkingBar(width = 40.dp)
+                        Text("Shaping the details…", style = MaterialTheme.typography.bodyLarge, color = c.ink2)
+                    }
                     else -> if (!ui.listening && !ui.processing) Row(Modifier.fillMaxWidth(if (wide) .58f else 1f).align(Alignment.End), horizontalArrangement = Arrangement.spacedBy(Space.s3), verticalAlignment = Alignment.CenterVertically) {
+                        if (onQuestion != null) QuestionButton(onQuestion)
                         VoiceButton(vm::onMicTapped)
-                        PrimaryButton("Review report", vm::goCheck, Modifier.weight(1f))
+                        // One filled button per screen: "Save now" leads whenever it is offered, and reviewing steps back.
+                        if (ui.session.canSubmitNow) SecondaryButton("Review report", vm::goCheck, Modifier.weight(1f))
+                        else PrimaryButton("Review report", vm::goCheck, Modifier.weight(1f))
                     }
                 }
             }

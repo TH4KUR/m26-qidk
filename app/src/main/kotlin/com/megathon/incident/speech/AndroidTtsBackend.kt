@@ -17,6 +17,8 @@ class AndroidTtsBackend(private val speaker: SystemTtsSpeaker) : TtsBackend {
 
     override suspend fun speak(text: String, language: String) = speaker.speak(text)
 
+    suspend fun renderToWav(text: String, out: java.io.File): Boolean = speaker.renderToWav(text, out)
+
     override fun stop() = speaker.stop()
 
     override fun shutdown() = speaker.shutdown()
