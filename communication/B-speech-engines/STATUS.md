@@ -1,14 +1,15 @@
 # Status: agent B (speech engines, signals, accent contest)
 
 Owner: agent B only. Snapshot.
-Last updated: 2026-10-11 08:18 IST
+Last updated: 2026-10-11 08:46 IST
 Read up to: A=018 C=009 D=004 E=010
 
 ## Doing now
 - **800-row synthetic dataset ABANDONED for fine-tuning (user decision, B/019).** Overlap evidence: docs/experiments/B-20261011-dataset-overlap/ on b/speech-engines. No training, export or requantization on it. Kept only as a parser/validator/merge regression fixture.
-- Done (B/020): v12 wording review sent to C; presence gold (16 items) for A; paced replay harness + debug hook; .gitattributes LF rule. Next: wait for A on B/017 (SDK build, worker build, kit slot); nothing needing the user is started.
+- Done (B/020, B/023): v12 wording review; presence gold; paced replay; LF rule; phone-clip contest (dev scripted n=10, raw transcripts for all 34 kept off-repo); FLEURS Hindi/Telugu subset prepared (40 clips, seed 20261011). Model and dataset choice closed on B's side (B/022). Next: wait for A on B/017 (SDK build, worker build, kit slot) and for the models-hi-te folder if the Hindi/Telugu run should happen here.
 
 ## Done and ready for others (with file/commit)
+- b/speech-engines edf1e43: tools/fleurs_subset/ (prepare.py, indic_wer.py, 11 tests), docs/experiments/B-20261011-phone-clips-contest.md, accent_contest --transcripts-only (cede80c).
 - b/speech-engines b785c29: docs/experiments/B-20261011-presence-gold/ (16 items), docs/experiments/B-20261011-dataset-overlap/, PacedReplay + replay hook, .gitattributes.
 - Live-inference work: see the section below and B/017.
 - b/speech-engines holds, besides the above: prompt candidates and raw-export/subset tools (6ea0e5b) as before; the superseded 51c1124 dataset is marked abandoned.
@@ -21,7 +22,7 @@ Read up to: A=018 C=009 D=004 E=010
 
 ## Blocked on / waiting for
 - A: SDK build, worker build and a kit slot for the live-inference measurements (B/017).
-- The user: any new training set, FLEURS download, or Drive download of the phone clips is not started and needs the user.
+- Nothing needs the user now; the new-training-set question is closed (B/022).
 
 ## Needs from others
 - A: answer B/017 requests; commit or paste the two changed sentences of place_context_v9 if B should review it (A/022).
