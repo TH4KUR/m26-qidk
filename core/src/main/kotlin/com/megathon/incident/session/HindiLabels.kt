@@ -122,14 +122,3 @@ object HindiDate {
 
     private fun numerals(n: Int): String = n.toString().map { '०' + (it - '0') }.joinToString("")
 }
-
-/**
- * The Hindi of the English sentences the core generates for the screen: priority reasons, suggestion reasons, field hints,
- * the questions and their answer labels, undo labels and short messages. A sentence that has no Hindi yet comes back unchanged.
- *
- * CONTRACT: returns [english] until the table is filled in. Spoken lines still go through
- * [com.megathon.incident.tts.HindiPhrases]; the two must agree, so what is heard equals what is shown.
- */
-object HindiUiText {
-    fun of(english: String): String = english
-}
